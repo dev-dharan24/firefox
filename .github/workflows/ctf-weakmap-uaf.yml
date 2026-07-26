@@ -1,4 +1,4 @@
-name: CTF WeakMap UAF Lab
+name: CTF WeakMap UAF Browser Lab
 
 on:
   pull_request:
@@ -12,75 +12,97 @@ permissions:
 
 jobs:
   reproduce:
-    name: ${{ matrix.kind }}
+    name: standard-asan-firefox-web
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - kind: asan-fuzzing
-            flags: "--asan --fuzzing"
-          - kind: asan-debug-fuzzing
-            flags: "--asan --debug --fuzzing"
+    timeout-minutes: 45
 
     steps:
-      - name: Fetch PoC from the pull request head
+      - name: Fetch ordinary web PoC from the pull request head
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euxo pipefail
+          mkdir -p site
           curl --fail --location --retry 4 \
-            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${HEAD_SHA}/ctf/weakmap_uaf.js" \
-            --output weakmap_uaf.js
-          sha256sum weakmap_uaf.js
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${HEAD_SHA}/ctf/weakmap_uaf.html" \
+            --output site/weakmap_uaf.html
+          sha256sum site/weakmap_uaf.html
 
-      - name: Install fuzzfetch
+      - name: Download official optimized ASan Firefox artifact
         run: |
           set -euxo pipefail
-          python3 -m pip install --upgrade pip
-          python3 -m pip install fuzzfetch
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.linux64-asan-opt/artifacts/public/build/target.tar.xz" \
+            --output firefox-asan.tar.xz
+          mkdir -p firefox-asan
+          tar -xJf firefox-asan.tar.xz -C firefox-asan
+          FIREFOX_BIN="$(find firefox-asan -type f -name firefox -perm -111 | head -n 1)"
+          test -n "$FIREFOX_BIN"
+          echo "FIREFOX_BIN=$FIREFOX_BIN" >> "$GITHUB_ENV"
+          "$FIREFOX_BIN" --version
+          ldd "$FIREFOX_BIN" | tee firefox-ldd.txt
+          if grep -q 'not found' firefox-ldd.txt; then
+            exit 1
+          fi
 
-      - name: Download latest ASan SpiderMonkey shell
-        env:
-          BUILD_FLAGS: ${{ matrix.flags }}
+      - name: Create isolated profile with product GC preferences
         run: |
           set -euxo pipefail
-          rm -rf shell
-          fuzzfetch --target js --branch central --build latest \
-            ${BUILD_FLAGS} --out shell
-          JS_BIN="$(find shell -type f -name js -perm -111 | head -n 1)"
-          test -n "$JS_BIN"
-          echo "JS_BIN=$JS_BIN" >> "$GITHUB_ENV"
-          "$JS_BIN" --version || true
-          find shell -maxdepth 5 -type f -name '*.fuzzmanagerconf' -print -exec cat {} \;
+          mkdir -p profile logs
+          cat > profile/user.js <<'EOF'
+          user_pref("browser.shell.checkDefaultBrowser", false);
+          user_pref("browser.startup.homepage_override.mstone", "ignore");
+          user_pref("browser.tabs.warnOnClose", false);
+          user_pref("datareporting.healthreport.uploadEnabled", false);
+          user_pref("datareporting.policy.dataSubmissionEnabled", false);
+          user_pref("toolkit.telemetry.enabled", false);
+          user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+          user_pref("app.update.enabled", false);
+          user_pref("javascript.options.mem.gc_incremental", true);
+          user_pref("javascript.options.mem.incremental_weakmap", true);
+          user_pref("javascript.options.mem.gc_incremental_slice_ms", 1);
+          user_pref("javascript.options.mem.gc_parallel_marking", true);
+          user_pref("javascript.options.mem.gc_parallel_marking_threshold_mb", 0);
+          user_pref("javascript.options.mem.gc_max_parallel_marking_threads", 2);
+          user_pref("javascript.options.mem.gc_experimental_concurrent_marking", true);
+          user_pref("dom.ipc.processCount", 1);
+          EOF
+          cat profile/user.js
 
-      - name: Exercise GC-state variants
+      - name: Run ordinary web JavaScript in standard ASan Firefox
         env:
           ASAN_OPTIONS: "abort_on_error=1:allocator_may_return_null=1:detect_leaks=0:handle_abort=1:symbolize=1"
           UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+          MOZ_CRASHREPORTER_DISABLE: "1"
+          MOZ_DISABLE_CONTENT_SANDBOX: "1"
+          MOZ_HEADLESS: "1"
         run: |
           set -uo pipefail
-          mkdir -p logs
-          echo "binary=$JS_BIN" | tee logs/build.txt
-          for mode in probe queue select weakref natural; do
-            echo "===== MODE: $mode =====" | tee "logs/${mode}.log"
-            set +e
-            timeout 240s "$JS_BIN" --no-baseline --no-ion \
-              weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
-            status=${PIPESTATUS[0]}
-            set -e
-            echo "exit_status=$status" | tee -a "logs/${mode}.log"
-          done
-          echo "===== SIGNAL SCAN ====="
-          grep -RniE 'heap-use-after-free|use-after-free|AddressSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{|flag\{' logs || true
+          python3 -m http.server 8000 --bind 127.0.0.1 --directory site \
+            > logs/http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          sleep 1
 
-      - name: Upload reproduction logs
+          set +e
+          timeout --signal=TERM --kill-after=30s 900s \
+            "$FIREFOX_BIN" --headless --no-remote --profile "$PWD/profile" \
+            "http://127.0.0.1:8000/weakmap_uaf.html" \
+            > logs/firefox.log 2>&1
+          status=$?
+          set -e
+          echo "exit_status=$status" | tee logs/status.txt
+
+          echo "===== PAGE PROGRESS ====="
+          grep -E 'GET /log\?' logs/http.log | tail -n 200 || true
+          echo "===== SANITIZER / FLAG SCAN ====="
+          grep -RniE 'heap-use-after-free|use-after-free|use-after-poison|AddressSanitizer|UndefinedBehaviorSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{|flag\{' logs || true
+
+      - name: Upload browser and page logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: weakmap-uaf-${{ matrix.kind }}
+          name: weakmap-uaf-standard-asan-firefox
           path: logs
           if-no-files-found: warn
           retention-days: 3
