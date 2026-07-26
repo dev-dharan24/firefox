@@ -10,41 +10,25 @@ permissions:
   contents: read
 
 jobs:
-  fetch-asan:
+  fetch-debug-shell:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - name: Download latest Linux ASan builds
+      - name: Download latest Linux ASan debug SpiderMonkey shell
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p browser shell
-
+          mkdir -p shell
           curl --fail --location --retry 4 --retry-delay 3 \
-            'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.linux64-asan-opt/artifacts/public/build/target.tar.xz' \
-            --output browser/firefox-asan-opt.tar.xz
-
-          curl --fail --location --retry 4 --retry-delay 3 \
-            'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.sm-linux64-asan-opt/artifacts/public/build/target.jsshell.zip' \
-            --output shell/jsshell-asan-opt.zip
-
-          sha256sum browser/* > browser/SHA256SUMS
+            'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.sm-linux64-asan-debug/artifacts/public/build/target.jsshell.zip' \
+            --output shell/jsshell-asan-debug.zip
           sha256sum shell/* > shell/SHA256SUMS
-          du -h browser/* shell/*
+          du -h shell/*
 
-      - name: Upload Firefox ASan browser
+      - name: Upload SpiderMonkey ASan debug shell
         uses: actions/upload-artifact@v4
         with:
-          name: firefox-asan-browser
-          path: browser/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
-      - name: Upload SpiderMonkey ASan shell
-        uses: actions/upload-artifact@v4
-        with:
-          name: jsshell-asan
+          name: jsshell-asan-debug
           path: shell/
           if-no-files-found: error
           compression-level: 0
