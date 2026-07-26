@@ -19,34 +19,128 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Probe vulnerable JS shell builds
+      - name: Resolve vulnerable JS shell artifacts
         shell: bash
         run: |
           set +e
           exec 3>&1 4>&2
           exec >probe-output.txt 2>&1
 
-          echo "=== environment ==="
-          date -u
-          uname -a
-          python --version
+          python -m pip install --upgrade requests fuzzfetch
+          python - <<'PY'
+          import json
+          import requests
+          from itertools import product
 
-          echo "=== install fuzzfetch ==="
-          python -m pip install --upgrade pip fuzzfetch
-          fuzzfetch --version || true
+          session = requests.Session()
+          session.headers["User-Agent"] = "authorized-ctf-artifact-probe/1.0"
 
-          probe() {
-            echo
-            echo "=== probe: $* ==="
-            fuzzfetch --target js --branch autoland --build d231b93a7357 "$@" --dry-run
-            echo "exit=$?"
+          endpoints = {
+              "autoland": "https://hg.mozilla.org/integration/autoland/json-rev/d231b93a7357",
+              "central": "https://hg.mozilla.org/mozilla-central/json-rev/75a922e0691c",
+              "mapper": "https://mapper.mozilla-releng.net/gecko-dev/rev/git/9d00a4d920e3385a5f0d9479aaa8199f6630c432",
           }
 
-          probe --asan --debug --fuzzing
-          probe --asan --fuzzing
-          probe --debug --fuzzing
-          probe --debug
-          probe --asan
+          nodes = {}
+          for name, url in endpoints.items():
+              print(f"\n=== {name}: {url} ===")
+              try:
+                  r = session.get(url, timeout=30)
+                  print("status", r.status_code)
+                  print(r.text[:10000])
+                  if name in {"autoland", "central"} and r.ok:
+                      data = r.json()
+                      nodes[name] = data.get("node")
+              except Exception as exc:
+                  print(type(exc).__name__, exc)
+
+          print("\n=== resolved nodes ===")
+          print(json.dumps(nodes, indent=2, sort_keys=True))
+
+          suffixes = [
+              "sm-linux64-fuzzing-asan-debug",
+              "sm-linux64-fuzzing-asan-opt",
+              "sm-linux64-fuzzing-debug",
+              "sm-linux64-fuzzing-opt",
+              "sm-linux64-asan-debug",
+              "sm-linux64-asan-opt",
+              "sm-linux64-debug",
+              "linux64-fuzzing-asan-debug",
+              "linux64-fuzzing-asan-opt",
+              "linux64-fuzzing-debug",
+              "linux64-asan-debug",
+              "linux64-asan-opt",
+              "linux64-debug",
+          ]
+
+          found = []
+          for logical, node in nodes.items():
+              if not node:
+                  continue
+              branch = "autoland" if logical == "autoland" else "mozilla-central"
+              for shippable, suffix in product((False, True), suffixes):
+                  middle = "shippable.revision" if shippable else "revision"
+                  namespace = f"gecko.v2.{branch}.{middle}.{node}.firefox.{suffix}"
+                  url = "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/" + namespace
+                  try:
+                      r = session.get(url, timeout=20)
+                  except Exception as exc:
+                      print("REQUEST_ERROR", namespace, type(exc).__name__, exc)
+                      continue
+                  if r.status_code == 200:
+                      data = r.json()
+                      task_id = data.get("taskId")
+                      print("FOUND", namespace, "taskId", task_id, "rank", data.get("rank"))
+                      found.append((namespace, task_id))
+                  elif r.status_code not in (404, 405):
+                      print("INDEX_STATUS", r.status_code, namespace, r.text[:500])
+
+          print("\n=== artifact inventories ===")
+          for namespace, task_id in found:
+              url = f"https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/{task_id}/artifacts"
+              try:
+                  r = session.get(url, timeout=30)
+                  print("TASK", task_id, "status", r.status_code, namespace)
+                  if r.ok:
+                      names = [a.get("name") for a in r.json().get("artifacts", [])]
+                      for name in names:
+                          if name and ("jsshell" in name or name.endswith(".json") or "mozinfo" in name):
+                              print("  ", name)
+                  else:
+                      print(r.text[:1000])
+              except Exception as exc:
+                  print("ARTIFACT_ERROR", task_id, type(exc).__name__, exc)
+          PY
+
+          echo
+          echo "=== fuzzfetch full revision dry-runs ==="
+          for branch_rev in \
+            "autoland:$(python - <<'PY'
+          import requests
+          print(requests.get('https://hg.mozilla.org/integration/autoland/json-rev/d231b93a7357').json().get('node',''))
+          PY
+          )" \
+            "central:$(python - <<'PY'
+          import requests
+          print(requests.get('https://hg.mozilla.org/mozilla-central/json-rev/75a922e0691c').json().get('node',''))
+          PY
+          )"
+          do
+            branch="${branch_rev%%:*}"
+            rev="${branch_rev#*:}"
+            [ -n "$rev" ] || continue
+            echo "--- $branch $rev ---"
+            for args in \
+              "--asan --debug --fuzzing" \
+              "--asan --fuzzing" \
+              "--debug --fuzzing" \
+              "--debug" \
+              "--asan"
+            do
+              fuzzfetch --target js --branch "$branch" --build "$rev" $args --dry-run
+              echo "exit=$? args=$args"
+            done
+          done
 
           exec 1>&3 2>&4
 
@@ -78,12 +172,6 @@ jobs:
             -pkeyopt rsa_padding_mode:oaep \
             -pkeyopt rsa_oaep_md:sha256 \
             -in key.bin -out key.enc
-
-          echo "CTF_ENCRYPTED_BEGIN"
-          echo "KEY=$(base64 -w0 key.enc)"
-          echo "IV=$(base64 -w0 iv.bin)"
-          echo "DATA=$(base64 -w0 probe-output.enc)"
-          echo "CTF_ENCRYPTED_END"
 
       - name: Upload encrypted diagnostics
         uses: actions/upload-artifact@v4
