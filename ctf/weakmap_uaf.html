@@ -11,15 +11,16 @@
 
   const state = {
     nextId: 1,
-    cycle: 0,
-    weakCandidates: [],
-    strongCandidates: [],
-    activeCandidates: [],
+    round: 0,
+    strong: [],
+    active: [],
     byId: new Map(),
     pressureBuffers: [],
-    pressureObjects: [],
-    finalized: 0,
+    pressureGraphs: [],
+    finalizedExpected: 0,
+    finalizedLive: 0,
     touches: 0,
+    checksum: 0,
   };
 
   function report(message) {
@@ -62,45 +63,57 @@
     };
   }
 
-  const registry = new FinalizationRegistry(id => {
-    state.finalized++;
-    report(`FINALIZATION-REGISTRY value=${id} finalized=${state.finalized}`);
+  function touchCandidate(candidate, why, aggressive) {
+    state.touches++;
 
+    try {
+      const value = candidate.map.get(candidate.key);
+      if (value === undefined) {
+        report(`touch-missing id=${candidate.id} kind=${candidate.kind} why=${why}`);
+        return false;
+      }
+
+      const length = value.length;
+      const byteLength = value.byteLength;
+      let checksum = 0;
+      for (let i = 0; i < Math.min(length, 256); i++) {
+        checksum = (checksum + value[i]) | 0;
+      }
+      state.checksum = (state.checksum + checksum + length + byteLength) | 0;
+      value[0] ^= 0xff;
+      value[1] = (value[1] + 1) & 0xff;
+
+      if (aggressive) {
+        value.fill(0x5a, 2, Math.min(length, 1024));
+        const copy = value.slice(0, Math.min(length, 2048));
+        const clone = structuredClone(value);
+        report(`touch-aggressive-ok id=${candidate.id} why=${why} copy=${copy.length} clone=${clone.length}`);
+      }
+      return true;
+    } catch (error) {
+      report(`touch-js-exception id=${candidate.id} kind=${candidate.kind} why=${why} error=${error && error.stack || error}`);
+      return false;
+    }
+  }
+
+  const registry = new FinalizationRegistry(id => {
     const candidate = state.byId.get(id);
-    if (!candidate || !candidate.map) {
-      report(`finalized value=${id} has no live map handle`);
+    if (!candidate || !candidate.expectedLive || !candidate.map) {
+      state.finalizedExpected++;
+      if ((state.finalizedExpected % 250) === 0) {
+        report(`expected-finalizers=${state.finalizedExpected}`);
+      }
       return;
     }
 
-    // Correct WeakMap semantics require this value to remain alive while both
-    // the map and key are live. Reaching this callback is already a liveness
-    // violation. Reading the entry immediately exercises the stale edge while
-    // the finalized cell is still poisoned in an ASan build.
-    touchCandidate(candidate, "finalization-callback");
+    state.finalizedLive++;
+    report(`FINALIZATION-REGISTRY-LIVE-VALUE id=${id} kind=${candidate.kind} violations=${state.finalizedLive}`);
+
+    // Correct WeakMap semantics require this target to remain alive while the
+    // map and key are strongly reachable. Reading the entry immediately after
+    // finalization exercises the stale edge while ASan poisoning is fresh.
+    touchCandidate(candidate, "finalization-callback", true);
   });
-
-  function makeWeakCandidate() {
-    const id = state.nextId++;
-    const key = makeKey(id);
-    let map = new WeakMap();
-    let value = makeValue(id);
-    map.set(key, value);
-    registry.register(value, id);
-
-    const candidate = {
-      id,
-      key,
-      ref: new WeakRef(map),
-      map: null,
-      activatedAt: -1,
-      kind: "weakref-injected",
-    };
-    state.byId.set(id, candidate);
-    state.weakCandidates.push(candidate);
-
-    map = null;
-    value = null;
-  }
 
   function makeStrongCandidate() {
     const id = state.nextId++;
@@ -115,76 +128,80 @@
       key,
       map,
       ref: null,
-      activatedAt: 0,
+      expectedLive: true,
       kind: "strong-mark-boundary",
     };
     state.byId.set(id, candidate);
-    state.strongCandidates.push(candidate);
+    state.strong.push(candidate);
     value = null;
   }
 
-  function activateCandidate(candidate, round) {
-    if (candidate.map) {
-      return true;
-    }
+  function makeWeakBatch(count) {
+    const batch = new Array(count);
+    for (let i = 0; i < count; i++) {
+      const id = state.nextId++;
+      const key = makeKey(id);
+      let map = new WeakMap();
+      let value = makeValue(id);
+      map.set(key, value);
+      registry.register(value, id);
 
+      const candidate = {
+        id,
+        key,
+        map: null,
+        ref: new WeakRef(map),
+        expectedLive: false,
+        kind: "weakref-read-barrier",
+      };
+      state.byId.set(id, candidate);
+      batch[i] = candidate;
+      map = null;
+      value = null;
+    }
+    return batch;
+  }
+
+  function activate(candidate) {
     const map = candidate.ref.deref();
     if (map === undefined) {
       state.byId.delete(candidate.id);
       return false;
     }
 
-    // WeakRef.deref performs the normal engine read barrier. If incremental
-    // marking is active, marking this WeakMap places it on the deferred-map
-    // list. Keeping the returned map strongly reachable makes its entry
-    // semantically live without reading or otherwise exposing the value.
+    // WeakRef.deref uses the normal weak-pointer read barrier. During an
+    // incremental collection this marks the WeakMap black and moves its entries
+    // to the deferred-map list. We retain the map and key without reading the
+    // value, so the value is logically live solely through the WeakMap edge.
     candidate.map = map;
-    candidate.activatedAt = round;
-    state.activeCandidates.push(candidate);
+    candidate.expectedLive = true;
+    state.active.push(candidate);
     return true;
   }
 
-  function touchCandidate(candidate, why) {
-    state.touches++;
-    report(`touch-begin id=${candidate.id} kind=${candidate.kind} why=${why}`);
-
-    try {
-      const value = candidate.map.get(candidate.key);
-      if (value === undefined) {
-        report(`touch-missing id=${candidate.id} why=${why}`);
-        return;
-      }
-
-      // Exercise the object header, typed-array slots, backing store and writes.
-      const length = value.length;
-      const byteLength = value.byteLength;
-      let checksum = 0;
-      const limit = Math.min(length, 512);
-      for (let i = 0; i < limit; i++) {
-        checksum = (checksum + value[i]) | 0;
-      }
-      value[0] ^= 0xff;
-      value.fill(0x5a, 1, Math.min(length, 512));
-      const copy = value.slice(0, Math.min(length, 1024));
-      const cloned = structuredClone(value);
-      report(`touch-ok id=${candidate.id} len=${length} bytes=${byteLength} checksum=${checksum} copy=${copy.length} clone=${cloned.length}`);
-    } catch (error) {
-      report(`touch-js-exception id=${candidate.id} why=${why} error=${error && error.stack || error}`);
+  function trimActiveWindow(limit) {
+    while (state.active.length > limit) {
+      const candidate = state.active.shift();
+      candidate.expectedLive = false;
+      candidate.map = null;
+      candidate.key = null;
+      candidate.ref = null;
+      state.byId.delete(candidate.id);
     }
   }
 
   function allocatePressure(round) {
-    // Malloc pressure triggers major collections, while the object graph keeps
-    // the GC heap busy enough for incremental/parallel marking.
-    for (let i = 0; i < 6; i++) {
-      const buffer = new Uint8Array(2 * MiB);
+    // Malloc pressure requests major collections. The retained object graphs
+    // keep incremental marking non-trivial while staying within CI memory limits.
+    for (let i = 0; i < 8; i++) {
+      const buffer = new Uint8Array(MiB);
       for (let page = 0; page < buffer.length; page += 4096) {
         buffer[page] = (round + i + page) & 0xff;
       }
       state.pressureBuffers.push(buffer);
     }
 
-    const graph = new Array(3000);
+    const graph = new Array(1800);
     for (let i = 0; i < graph.length; i++) {
       graph[i] = {
         round,
@@ -193,118 +210,98 @@
         right: [i, i + 1, i + 2, {z: i * 3}],
       };
     }
-    state.pressureObjects.push(graph);
+    state.pressureGraphs.push(graph);
 
-    while (state.pressureBuffers.length > 72) {
+    while (state.pressureBuffers.length > 96) {
       state.pressureBuffers.shift();
     }
-    while (state.pressureObjects.length > 14) {
-      state.pressureObjects.shift();
+    while (state.pressureGraphs.length > 16) {
+      state.pressureGraphs.shift();
     }
 
-    if ((round & 15) === 15) {
-      state.pressureBuffers.splice(0, 24);
-      state.pressureObjects.splice(0, 5);
+    if ((round & 31) === 31) {
+      state.pressureBuffers.splice(0, 32);
+      state.pressureGraphs.splice(0, 6);
     }
   }
 
-  async function runCycle(cycle) {
-    state.cycle = cycle;
-    state.weakCandidates = [];
-    state.strongCandidates = [];
-    state.activeCandidates = [];
-    state.byId.clear();
+  async function main() {
+    report("ordinary-web-js-reproducer start; no shell, gczeal, selectforgc, enqueueMark, or fuzzing APIs");
+    report(`ua=${navigator.userAgent}`);
 
-    report(`cycle=${cycle} setup-begin ua=${navigator.userAgent}`);
-
-    // Strongly live maps exercise the ordinary parallel-marking budget edge.
-    for (let i = 0; i < 2200; i++) {
+    // These maps stay strongly reachable for the whole run and exercise the
+    // ordinary marking-budget boundary where a WeakMap can be the final stack
+    // item processed before a slice expires.
+    for (let i = 0; i < 1800; i++) {
       makeStrongCandidate();
     }
+    report(`strong-pool=${state.strong.length}`);
 
-    // WeakRef-held maps let normal read barriers introduce new deferred maps
-    // between incremental marking slices. Construction keeps targets alive only
-    // until this task ends, hence the explicit task boundary below.
-    for (let i = 0; i < 4200; i++) {
-      makeWeakCandidate();
-    }
-
-    report(`cycle=${cycle} setup-done strong=${state.strongCandidates.length} weak=${state.weakCandidates.length}`);
-    await nextTask();
-
-    let cursor = 0;
+    const rounds = 520;
     let activated = 0;
-    const rounds = 260;
+    let missed = 0;
 
     for (let round = 0; round < rounds; round++) {
-      allocatePressure(round + cycle * rounds);
+      state.round = round;
+      const batch = makeWeakBatch(72);
 
-      // Let allocation-triggered incremental/concurrent GC take a slice before
-      // performing the read barriers below.
+      // End the constructor job so WeakRef targets are no longer protected by
+      // AddToKeptObjects. They are now eligible for a normal incremental GC.
       await nextTask();
 
-      for (let i = 0; i < 24 && cursor < state.weakCandidates.length; i++, cursor++) {
-        if (activateCandidate(state.weakCandidates[cursor], round)) {
-          activated++;
-        }
+      // Allocation can start or advance GC synchronously. Activate half of the
+      // batch immediately after this pressure, and half after another task
+      // boundary, covering both in-slice and between-slice read barriers.
+      allocatePressure(round);
+      for (let i = 0; i < 36; i++) {
+        activate(batch[i]) ? activated++ : missed++;
       }
 
-      // End the activation job so kept-object state does not mask later GC.
       await nextTask();
 
+      for (let i = 36; i < batch.length; i++) {
+        activate(batch[i]) ? activated++ : missed++;
+      }
+
+      await nextTask();
+      trimActiveWindow(2048);
+
       if ((round % 20) === 0) {
-        report(`cycle=${cycle} round=${round}/${rounds} activated=${activated} cursor=${cursor} finalized=${state.finalized}`);
+        report(`round=${round}/${rounds} active=${state.active.length} activated=${activated} missed=${missed} live-finalizers=${state.finalizedLive}`);
       }
     }
 
-    report(`cycle=${cycle} pressure-complete activated=${activated} active=${state.activeCandidates.length}`);
+    report(`pressure-complete active=${state.active.length} activated=${activated} missed=${missed}`);
 
-    // Drop most pressure and keep yielding so sweeping and finalization jobs can
-    // complete. Fresh short-lived allocations encourage reuse of finalized cells.
     state.pressureBuffers.splice(0, Math.max(0, state.pressureBuffers.length - 8));
-    state.pressureObjects.length = 0;
+    state.pressureGraphs.length = 0;
 
-    for (let i = 0; i < 120; i++) {
-      const reclaim = new Array(2500);
+    // Repeated same-size allocations encourage finalized JS cells and backing
+    // storage to be poisoned/reused before the final stale-edge sweep.
+    for (let i = 0; i < 100; i++) {
+      const reclaim = new Array(600);
       for (let j = 0; j < reclaim.length; j++) {
         reclaim[j] = new Uint8Array(32 * 1024);
         reclaim[j][0] = (i + j) & 0xff;
       }
       await nextTask();
       if ((i % 20) === 0) {
-        report(`cycle=${cycle} settle=${i}/120 finalized=${state.finalized}`);
+        report(`settle=${i}/100 live-finalizers=${state.finalizedLive}`);
       }
     }
 
     await nextTask(3000);
 
-    // Final fallback: after the GC pressure has settled, touch every logically
-    // live entry. A skipped value may fault here even if its cleanup callback was
-    // delayed or coalesced.
-    report(`cycle=${cycle} final-touch active=${state.activeCandidates.length} strong=${state.strongCandidates.length}`);
-    for (const candidate of state.activeCandidates) {
-      touchCandidate(candidate, "post-settle-active");
+    report(`final-touch active=${state.active.length} strong=${state.strong.length}`);
+    for (const candidate of state.active) {
+      touchCandidate(candidate, "post-settle-active", false);
     }
-    for (const candidate of state.strongCandidates) {
-      touchCandidate(candidate, "post-settle-strong");
+    for (const candidate of state.strong) {
+      touchCandidate(candidate, "post-settle-strong", false);
     }
 
-    report(`cycle=${cycle} complete finalized=${state.finalized} touches=${state.touches}`);
-  }
-
-  async function main() {
-    report("ordinary-web-js-reproducer start; no shell, zeal, selectforgc, enqueueMark, or fuzzing APIs");
-
-    for (let cycle = 0; cycle < 4; cycle++) {
-      await runCycle(cycle);
-      state.pressureBuffers.length = 0;
-      state.pressureObjects.length = 0;
-      await nextTask(1000);
-    }
-
-    report(`all-cycles-complete finalized=${state.finalized} touches=${state.touches}`);
-    // Keep the document alive for delayed FinalizationRegistry callbacks.
-    setInterval(() => report(`heartbeat finalized=${state.finalized} touches=${state.touches}`), 15000);
+    report(`complete live-finalizers=${state.finalizedLive} expected-finalizers=${state.finalizedExpected} touches=${state.touches} checksum=${state.checksum}`);
+    setInterval(() => report(`heartbeat live-finalizers=${state.finalizedLive} touches=${state.touches}`), 15000);
   }
 
   main().catch(error => {
