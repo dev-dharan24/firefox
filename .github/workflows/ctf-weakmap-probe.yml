@@ -18,26 +18,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts
+          mkdir -p browser shell
 
           curl --fail --location --retry 4 --retry-delay 3 \
             'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.linux64-asan-opt/artifacts/public/build/target.tar.xz' \
-            --output artifacts/firefox-asan-opt.tar.xz
+            --output browser/firefox-asan-opt.tar.xz
 
-          # The matching SpiderMonkey shell is useful for deterministic GC-state
-          # experiments before the browser-level trigger is run locally.
           curl --fail --location --retry 4 --retry-delay 3 \
             'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.sm-linux64-asan-opt/artifacts/public/build/target.jsshell.zip' \
-            --output artifacts/jsshell-asan-opt.zip
+            --output shell/jsshell-asan-opt.zip
 
-          sha256sum artifacts/* | tee artifacts/SHA256SUMS
-          du -h artifacts/*
+          sha256sum browser/* > browser/SHA256SUMS
+          sha256sum shell/* > shell/SHA256SUMS
+          du -h browser/* shell/*
 
-      - name: Upload ASan prebuilds
+      - name: Upload Firefox ASan browser
         uses: actions/upload-artifact@v4
         with:
-          name: firefox-asan-latest
-          path: artifacts/
+          name: firefox-asan-browser
+          path: browser/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload SpiderMonkey ASan shell
+        uses: actions/upload-artifact@v4
+        with:
+          name: jsshell-asan
+          path: shell/
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
