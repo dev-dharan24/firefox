@@ -109,9 +109,6 @@
     state.finalizedLive++;
     report(`FINALIZATION-REGISTRY-LIVE-VALUE id=${id} kind=${candidate.kind} violations=${state.finalizedLive}`);
 
-    // Correct WeakMap semantics require this target to remain alive while the
-    // map and key are strongly reachable. Reading the entry immediately after
-    // finalization exercises the stale edge while ASan poisoning is fresh.
     touchCandidate(candidate, "finalization-callback", true);
   });
 
@@ -169,10 +166,6 @@
       return false;
     }
 
-    // WeakRef.deref uses the normal weak-pointer read barrier. During an
-    // incremental collection this marks the WeakMap black and moves its entries
-    // to the deferred-map list. We retain the map and key without reading the
-    // value, so the value is logically live solely through the WeakMap edge.
     candidate.map = map;
     candidate.expectedLive = true;
     state.active.push(candidate);
@@ -191,8 +184,6 @@
   }
 
   function allocatePressure(round) {
-    // Malloc pressure requests major collections. The retained object graphs
-    // keep incremental marking non-trivial while staying within CI memory limits.
     for (let i = 0; i < 8; i++) {
       const buffer = new Uint8Array(MiB);
       for (let page = 0; page < buffer.length; page += 4096) {
@@ -229,29 +220,21 @@
     report("ordinary-web-js-reproducer start; no shell, gczeal, selectforgc, enqueueMark, or fuzzing APIs");
     report(`ua=${navigator.userAgent}`);
 
-    // These maps stay strongly reachable for the whole run and exercise the
-    // ordinary marking-budget boundary where a WeakMap can be the final stack
-    // item processed before a slice expires.
     for (let i = 0; i < 1800; i++) {
       makeStrongCandidate();
     }
     report(`strong-pool=${state.strong.length}`);
 
-    const rounds = 520;
+    const params = new URL(location).searchParams;
+    const rounds = +(params.get('rounds') || 520);
     let activated = 0;
     let missed = 0;
 
     for (let round = 0; round < rounds; round++) {
       state.round = round;
       const batch = makeWeakBatch(72);
-
-      // End the constructor job so WeakRef targets are no longer protected by
-      // AddToKeptObjects. They are now eligible for a normal incremental GC.
       await nextTask();
 
-      // Allocation can start or advance GC synchronously. Activate half of the
-      // batch immediately after this pressure, and half after another task
-      // boundary, covering both in-slice and between-slice read barriers.
       allocatePressure(round);
       for (let i = 0; i < 36; i++) {
         activate(batch[i]) ? activated++ : missed++;
@@ -276,9 +259,8 @@
     state.pressureBuffers.splice(0, Math.max(0, state.pressureBuffers.length - 8));
     state.pressureGraphs.length = 0;
 
-    // Repeated same-size allocations encourage finalized JS cells and backing
-    // storage to be poisoned/reused before the final stale-edge sweep.
-    for (let i = 0; i < 100; i++) {
+    const settleRounds = +(params.get('settle') || 100);
+    for (let i = 0; i < settleRounds; i++) {
       const reclaim = new Array(600);
       for (let j = 0; j < reclaim.length; j++) {
         reclaim[j] = new Uint8Array(32 * 1024);
@@ -286,7 +268,7 @@
       }
       await nextTask();
       if ((i % 20) === 0) {
-        report(`settle=${i}/100 live-finalizers=${state.finalizedLive}`);
+        report(`settle=${i}/${settleRounds} live-finalizers=${state.finalizedLive}`);
       }
     }
 
@@ -300,8 +282,13 @@
       touchCandidate(candidate, "post-settle-strong", false);
     }
 
-    report(`complete live-finalizers=${state.finalizedLive} expected-finalizers=${state.finalizedExpected} touches=${state.touches} checksum=${state.checksum}`);
-    setInterval(() => report(`heartbeat live-finalizers=${state.finalizedLive} touches=${state.touches}`), 15000);
+    const completion = `complete live-finalizers=${state.finalizedLive} expected-finalizers=${state.finalizedExpected} touches=${state.touches} checksum=${state.checksum}`;
+    report(completion);
+    fetch(`/done?m=${encodeURIComponent(completion)}`, {
+      cache: "no-store",
+      credentials: "omit",
+      keepalive: true,
+    }).catch(() => {});
   }
 
   main().catch(error => {
