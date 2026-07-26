@@ -1,0 +1,99 @@
+name: CTF WeakMap UAF Lab
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "ctf/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    name: ${{ matrix.kind }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: asan-fuzzing
+            flags: "--asan --fuzzing"
+          - kind: debug-fuzzing
+            flags: "--debug --fuzzing"
+          - kind: asan-debug-fuzzing
+            flags: "--asan --debug --fuzzing"
+
+    steps:
+      - name: Fetch PoC from the pull request head
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 4 \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${HEAD_SHA}/ctf/weakmap_uaf.js" \
+            --output weakmap_uaf.js
+          sha256sum weakmap_uaf.js
+
+      - name: Install fuzzfetch
+        run: |
+          set -euxo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install fuzzfetch
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Download a vulnerable SpiderMonkey shell
+        env:
+          BUILD_FLAGS: ${{ matrix.flags }}
+        run: |
+          set -euxo pipefail
+          rm -rf shell
+          # 9d00a4d920e3 landed on 2026-06-12. Prefer the last build that day,
+          # then fall back to the nearest newer indexed build.
+          if ! fuzzfetch --target js --branch central --build 2026-06-12 \
+              --nearest-newer ${BUILD_FLAGS} --out shell; then
+            rm -rf shell
+            fuzzfetch --target js --branch central --build 2026-06-13 \
+              --nearest-newer ${BUILD_FLAGS} --out shell
+          fi
+          JS_BIN="$(find shell -type f -name js -perm -111 | head -n 1)"
+          test -n "$JS_BIN"
+          echo "JS_BIN=$JS_BIN" >> "$GITHUB_ENV"
+          "$JS_BIN" --version || true
+          find shell -maxdepth 4 -type f -name '*.fuzzmanagerconf' -print -exec cat {} \;
+
+      - name: Exercise GC-state variants
+        env:
+          ASAN_OPTIONS: "abort_on_error=1:allocator_may_return_null=1:detect_leaks=0:handle_abort=1:symbolize=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+        run: |
+          set -uo pipefail
+          mkdir -p logs
+          echo "binary=$JS_BIN" | tee logs/build.txt
+          for mode in queue select weakref natural; do
+            echo "===== MODE: $mode =====" | tee "logs/${mode}.log"
+            set +e
+            if [ "$mode" = queue ]; then
+              timeout 180s "$JS_BIN" --fuzzing-safe --no-threads --no-baseline --no-ion \
+                weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
+            else
+              timeout 180s "$JS_BIN" --fuzzing-safe --no-baseline --no-ion \
+                weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
+            fi
+            status=${PIPESTATUS[0]}
+            set -e
+            echo "exit_status=$status" | tee -a "logs/${mode}.log"
+          done
+          echo "===== SIGNAL SCAN ====="
+          grep -RniE 'heap-use-after-free|use-after-free|AddressSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{' logs || true
+
+      - name: Upload reproduction logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weakmap-uaf-${{ matrix.kind }}
+          path: logs
+          if-no-files-found: warn
+          retention-days: 3
