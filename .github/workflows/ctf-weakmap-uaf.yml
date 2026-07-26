@@ -12,9 +12,9 @@ permissions:
 
 jobs:
   reproduce:
-    name: standard-asan-firefox-web
+    name: standard-asan-firefox-web-concurrent-serial
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 35
 
     steps:
       - name: Fetch ordinary web PoC from the pull request head
@@ -61,9 +61,7 @@ jobs:
           user_pref("javascript.options.mem.gc_incremental", true);
           user_pref("javascript.options.mem.incremental_weakmap", true);
           user_pref("javascript.options.mem.gc_incremental_slice_ms", 1);
-          user_pref("javascript.options.mem.gc_parallel_marking", true);
-          user_pref("javascript.options.mem.gc_parallel_marking_threshold_mb", 0);
-          user_pref("javascript.options.mem.gc_max_parallel_marking_threads", 2);
+          user_pref("javascript.options.mem.gc_parallel_marking", false);
           user_pref("javascript.options.mem.gc_experimental_concurrent_marking", true);
           user_pref("dom.ipc.processCount", 1);
           EOF
@@ -85,7 +83,7 @@ jobs:
           sleep 1
 
           set +e
-          timeout --signal=TERM --kill-after=30s 900s \
+          timeout --signal=TERM --kill-after=30s 720s \
             "$FIREFOX_BIN" --headless --no-remote --profile "$PWD/profile" \
             "http://127.0.0.1:8000/weakmap_uaf.html" \
             > logs/firefox.log 2>&1
@@ -94,15 +92,15 @@ jobs:
           echo "exit_status=$status" | tee logs/status.txt
 
           echo "===== PAGE PROGRESS ====="
-          grep -E 'GET /log\?' logs/http.log | tail -n 200 || true
+          grep -E 'GET /log\?' logs/http.log | tail -n 300 || true
           echo "===== SANITIZER / FLAG SCAN ====="
-          grep -RniE 'heap-use-after-free|use-after-free|use-after-poison|AddressSanitizer|UndefinedBehaviorSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{|flag\{' logs || true
+          grep -RniE 'heap-use-after-free|use-after-free|use-after-poison|AddressSanitizer|UndefinedBehaviorSanitizer|MOZ_CRASH|Assertion failure|FINALIZATION-REGISTRY|FLAG\{|CTF\{|flag\{' logs || true
 
       - name: Upload browser and page logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: weakmap-uaf-standard-asan-firefox
+          name: weakmap-uaf-standard-asan-firefox-concurrent-serial
           path: logs
           if-no-files-found: warn
           retention-days: 3
