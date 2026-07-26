@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ctf/**"
+      - ".github/workflows/ctf-weakmap-uaf.yml"
   workflow_dispatch:
 
 permissions:
@@ -12,44 +13,72 @@ permissions:
 
 jobs:
   reproduce:
-    name: standard-asan-firefox-web-concurrent-serial
+    name: custom-asan-firefox-web-concurrent-serial
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 180
+
+    env:
+      MOZBUILD_STATE_PATH: ${{ github.workspace }}/.mozbuild
+      MOZ_AUTOMATION: "1"
 
     steps:
-      - name: Fetch ordinary web PoC from the pull request head
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Reclaim runner disk space
         run: |
           set -euxo pipefail
-          mkdir -p site
-          curl --fail --location --retry 4 \
-            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${HEAD_SHA}/ctf/weakmap_uaf.html" \
-            --output site/weakmap_uaf.html
-          sha256sum site/weakmap_uaf.html
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get clean
+          df -h
 
-      - name: Download official optimized ASan Firefox artifact
-        run: |
-          set -euxo pipefail
-          curl --fail --location --retry 5 --retry-all-errors \
-            "https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.linux64-asan-opt/artifacts/public/build/target.tar.xz" \
-            --output firefox-asan.tar.xz
-          mkdir -p firefox-asan
-          tar -xJf firefox-asan.tar.xz -C firefox-asan
-          FIREFOX_BIN="$(find firefox-asan -type f -name firefox -perm -111 | head -n 1)"
-          test -n "$FIREFOX_BIN"
-          echo "FIREFOX_BIN=$FIREFOX_BIN" >> "$GITHUB_ENV"
-          "$FIREFOX_BIN" --version
-          ldd "$FIREFOX_BIN" | tee firefox-ldd.txt
-          if grep -q 'not found' firefox-ldd.txt; then
-            exit 1
-          fi
+      - name: Check out Firefox and the ordinary web PoC
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          submodules: false
 
-      - name: Create isolated profile with product GC preferences
+      - name: Bootstrap Firefox build dependencies
         run: |
           set -euxo pipefail
-          mkdir -p profile logs
-          cat > profile/user.js <<'EOF'
+          ./mach bootstrap --application-choice=browser --no-interactive
+
+      - name: Configure optimized ASan Firefox with concurrent marking compiled in
+        run: |
+          set -euxo pipefail
+          cat > mozconfig <<'EOF_MOZCONFIG'
+          mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-ctf-asan
+          mk_add_options AUTOCLOBBER=1
+          ac_add_options --enable-application=browser
+          ac_add_options --enable-address-sanitizer
+          ac_add_options --enable-gc-concurrent-marking
+          ac_add_options --enable-optimize=-O1
+          ac_add_options --disable-debug
+          ac_add_options --disable-tests
+          ac_add_options --disable-install-strip
+          ac_add_options --disable-jemalloc
+          ac_add_options --disable-crashreporter
+          ac_add_options --disable-profiling
+          ac_add_options --enable-debug-symbols=-gline-tables-only
+          ac_add_options MOZ_TELEMETRY_REPORTING=
+          EOF_MOZCONFIG
+          cat mozconfig
+          ./mach configure
+
+      - name: Build Firefox
+        run: |
+          set -euxo pipefail
+          ./mach build
+          test -x obj-ctf-asan/dist/bin/firefox
+          test -f obj-ctf-asan/dist/bin/libxul.so
+          grep -R "define JS_GC_CONCURRENT_MARKING 1" obj-ctf-asan/dist/include obj-ctf-asan/config.status
+          obj-ctf-asan/dist/bin/firefox --version
+          df -h
+
+      - name: Create isolated browser profile and log server
+        run: |
+          set -euxo pipefail
+          mkdir -p site profile logs
+          cp ctf/weakmap_uaf.html site/weakmap_uaf.html
+          cat > profile/user.js <<'EOF_PREFS'
           user_pref("browser.shell.checkDefaultBrowser", false);
           user_pref("browser.startup.homepage_override.mstone", "ignore");
           user_pref("browser.tabs.warnOnClose", false);
@@ -64,10 +93,32 @@ jobs:
           user_pref("javascript.options.mem.gc_parallel_marking", false);
           user_pref("javascript.options.mem.gc_experimental_concurrent_marking", true);
           user_pref("dom.ipc.processCount", 1);
-          EOF
+          EOF_PREFS
+          cat > log_server.py <<'EOF_SERVER'
+          from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+          from pathlib import Path
+          from urllib.parse import parse_qs, urlparse
+          import os
+
+          os.chdir(Path(__file__).resolve().parent / "site")
+
+          class Handler(SimpleHTTPRequestHandler):
+              def do_GET(self):
+                  request = urlparse(self.path)
+                  if request.path in ("/log", "/done"):
+                      message = parse_qs(request.query).get("m", [""])[0]
+                      kind = "DONE" if request.path == "/done" else "LOG"
+                      print(f"{kind} {message}", flush=True)
+                      self.send_response(204)
+                      self.end_headers()
+                      return
+                  super().do_GET()
+
+          ThreadingHTTPServer(("127.0.0.1", 8000), Handler).serve_forever()
+          EOF_SERVER
           cat profile/user.js
 
-      - name: Run ordinary web JavaScript in standard ASan Firefox
+      - name: Run pure-web UAF reproducer
         env:
           ASAN_OPTIONS: "abort_on_error=1:allocator_may_return_null=1:detect_leaks=0:handle_abort=1:symbolize=1"
           UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
@@ -76,31 +127,53 @@ jobs:
           MOZ_HEADLESS: "1"
         run: |
           set -uo pipefail
-          python3 -m http.server 8000 --bind 127.0.0.1 --directory site \
-            > logs/http.log 2>&1 &
+          python3 log_server.py > logs/http.log 2>&1 &
           SERVER_PID=$!
           trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
           sleep 1
 
           set +e
-          timeout --signal=TERM --kill-after=30s 720s \
-            "$FIREFOX_BIN" --headless --no-remote --profile "$PWD/profile" \
+          setsid timeout --signal=TERM --kill-after=30s 900s \
+            obj-ctf-asan/dist/bin/firefox --headless --no-remote --profile "$PWD/profile" \
             "http://127.0.0.1:8000/weakmap_uaf.html" \
-            > logs/firefox.log 2>&1
+            > logs/firefox.log 2>&1 &
+          FIREFOX_WRAPPER_PID=$!
+
+          reason=running
+          for _ in $(seq 1 1800); do
+            if grep -q '^DONE ' logs/http.log; then
+              reason=page-complete
+              break
+            fi
+            if grep -qiE 'heap-use-after-free|use-after-free|use-after-poison|SUMMARY: AddressSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{|flag\{' logs/firefox.log; then
+              reason=crash-or-flag
+              break
+            fi
+            if ! kill -0 "$FIREFOX_WRAPPER_PID" 2>/dev/null; then
+              reason=browser-exited
+              break
+            fi
+            sleep 0.5
+          done
+
+          if kill -0 "$FIREFOX_WRAPPER_PID" 2>/dev/null; then
+            kill -TERM -- "-$FIREFOX_WRAPPER_PID" 2>/dev/null || kill -TERM "$FIREFOX_WRAPPER_PID" 2>/dev/null || true
+          fi
+          wait "$FIREFOX_WRAPPER_PID"
           status=$?
           set -e
-          echo "exit_status=$status" | tee logs/status.txt
 
+          printf 'reason=%s\nexit_status=%s\n' "$reason" "$status" | tee logs/status.txt
           echo "===== PAGE PROGRESS ====="
-          grep -E 'GET /log\?' logs/http.log | tail -n 300 || true
+          grep -E '^(LOG|DONE) ' logs/http.log | tail -n 400 || true
           echo "===== SANITIZER / FLAG SCAN ====="
-          grep -RniE 'heap-use-after-free|use-after-free|use-after-poison|AddressSanitizer|UndefinedBehaviorSanitizer|MOZ_CRASH|Assertion failure|FINALIZATION-REGISTRY|FLAG\{|CTF\{|flag\{' logs || true
+          grep -RniE 'heap-use-after-free|use-after-free|use-after-poison|AddressSanitizer|UndefinedBehaviorSanitizer|MOZ_CRASH|Assertion failure|FINALIZATION-REGISTRY-LIVE|FLAG\{|CTF\{|flag\{' logs || true
 
       - name: Upload browser and page logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: weakmap-uaf-standard-asan-firefox-concurrent-serial
+          name: weakmap-uaf-custom-asan-firefox-concurrent-serial
           path: logs
           if-no-files-found: warn
           retention-days: 3
