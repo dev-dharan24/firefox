@@ -14,15 +14,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Download latest Linux ASan debug SpiderMonkey shell
         shell: bash
         run: |
           set -euo pipefail
+          python -m pip install --upgrade fuzzfetch
           mkdir -p shell
-          curl --fail --location --retry 4 --retry-delay 3 \
-            'https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/gecko.v2.mozilla-central.latest.firefox.sm-linux64-asan-debug/artifacts/public/build/target.jsshell.zip' \
-            --output shell/jsshell-asan-debug.zip
-          sha256sum shell/* > shell/SHA256SUMS
+          fuzzfetch --target js --branch central --build latest \
+            --asan --debug --out shell/runtime
+          find shell/runtime -maxdepth 3 -type f -printf '%p %s\n' | sort
+          tar -C shell/runtime -cJf shell/jsshell-asan-debug.tar.xz .
+          rm -rf shell/runtime
+          sha256sum shell/jsshell-asan-debug.tar.xz > shell/SHA256SUMS
           du -h shell/*
 
       - name: Upload SpiderMonkey ASan debug shell
