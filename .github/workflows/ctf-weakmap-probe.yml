@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  fetch-debug-shell:
+  fetch-fuzzing-shell:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -19,24 +19,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Download latest Linux ASan debug SpiderMonkey shell
+      - name: Download latest Linux ASan fuzzing SpiderMonkey shell
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade fuzzfetch
           mkdir -p shell
           fuzzfetch --target js --branch central --build latest \
-            --asan --debug --out shell/runtime
-          find shell/runtime -maxdepth 3 -type f -printf '%p %s\n' | sort
-          tar -C shell/runtime -cJf shell/jsshell-asan-debug.tar.xz .
+            --asan --fuzzing --out shell/runtime
+          find shell/runtime -maxdepth 5 -type f -printf '%p %s\n' | sort
+          tar -C shell/runtime -cJf shell/jsshell-fuzzing-asan-opt.tar.xz .
           rm -rf shell/runtime
-          sha256sum shell/jsshell-asan-debug.tar.xz > shell/SHA256SUMS
+          sha256sum shell/jsshell-fuzzing-asan-opt.tar.xz > shell/SHA256SUMS
           du -h shell/*
 
-      - name: Upload SpiderMonkey ASan debug shell
+      - name: Upload prebuilt SpiderMonkey ASan fuzzing shell
         uses: actions/upload-artifact@v4
         with:
-          name: jsshell-asan-debug
+          name: jsshell-fuzzing-asan-opt
           path: shell/
           if-no-files-found: error
           compression-level: 0
