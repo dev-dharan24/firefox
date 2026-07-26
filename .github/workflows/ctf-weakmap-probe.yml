@@ -84,3 +84,14 @@ jobs:
           echo "IV=$(base64 -w0 iv.bin)"
           echo "DATA=$(base64 -w0 probe-output.enc)"
           echo "CTF_ENCRYPTED_END"
+
+      - name: Upload encrypted diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctf-probe-encrypted
+          path: |
+            key.enc
+            iv.bin
+            probe-output.enc
+          if-no-files-found: error
+          retention-days: 1
