@@ -1,0 +1,86 @@
+name: CTF WeakMap UAF probe
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ctf-weakmap-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Probe vulnerable JS shell builds
+        shell: bash
+        run: |
+          set +e
+          exec 3>&1 4>&2
+          exec >probe-output.txt 2>&1
+
+          echo "=== environment ==="
+          date -u
+          uname -a
+          python --version
+
+          echo "=== install fuzzfetch ==="
+          python -m pip install --upgrade pip fuzzfetch
+          fuzzfetch --version || true
+
+          probe() {
+            echo
+            echo "=== probe: $* ==="
+            fuzzfetch --target js --branch autoland --build d231b93a7357 "$@" --dry-run
+            echo "exit=$?"
+          }
+
+          probe --asan --debug --fuzzing
+          probe --asan --fuzzing
+          probe --debug --fuzzing
+          probe --debug
+          probe --asan
+
+          exec 1>&3 2>&4
+
+      - name: Encrypt diagnostic output
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >public.pem <<'EOF'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA0Whr3wgnL70wh0hAAd+j
+          eTBYTdCd00P1LPYDKcaT31Lx/m0mec6DOf/lOhBeaMX+9lRsv2iDANCuX14gB2nW
+          +wRa5v9JmNFMN9o787d/okxdQFgB6G8Mvjkmj4VmFPOmvfRHUVNtKJNiwUrCQwVG
+          gB1BMkTLzIBXRGtAxGhF8P3itGgBl0mS8LQLOAsUJPwWPapvfnff/SuSjHSJvbV1
+          pkwHynJ+dQy+4rgsbk9oxNZotlcGMiXM4NOlydnPb2lfschx5JzXGca/CYRl+oD5
+          fmEiTgjvWit1UyVQxypPZ6cpV/xGUUa/0KN/itwnpv3cuZEMPb9EafbCFzyAldvl
+          IRoYPEk4E669afHj/StAiKIO5p4nRlgYVa8lE1BumI6pZ6e+XgOF5Mx1bxbofKGL
+          571XWIJ26miW3rtfHm+shACdW65lAHVg9qcoaseqaKk4CMi6Q5pnx6Bz2MFaclSz
+          PLozL5hWV71FQhR9WgVkRJHRDxycnOA4qxrneyMgtKrHAgMBAAE=
+          -----END PUBLIC KEY-----
+          EOF
+
+          openssl rand -out key.bin 32
+          openssl rand -out iv.bin 16
+          KEY_HEX="$(xxd -p -c 256 key.bin)"
+          IV_HEX="$(xxd -p -c 256 iv.bin)"
+          openssl enc -aes-256-cbc -K "$KEY_HEX" -iv "$IV_HEX" \
+            -in probe-output.txt -out probe-output.enc
+          openssl pkeyutl -encrypt -pubin -inkey public.pem \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in key.bin -out key.enc
+
+          echo "CTF_ENCRYPTED_BEGIN"
+          echo "KEY=$(base64 -w0 key.enc)"
+          echo "IV=$(base64 -w0 iv.bin)"
+          echo "DATA=$(base64 -w0 probe-output.enc)"
+          echo "CTF_ENCRYPTED_END"
