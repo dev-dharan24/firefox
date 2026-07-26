@@ -21,8 +21,6 @@ jobs:
         include:
           - kind: asan-fuzzing
             flags: "--asan --fuzzing"
-          - kind: debug-fuzzing
-            flags: "--debug --fuzzing"
           - kind: asan-debug-fuzzing
             flags: "--asan --debug --fuzzing"
 
@@ -44,25 +42,19 @@ jobs:
           python3 -m pip install fuzzfetch
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Download a vulnerable SpiderMonkey shell
+      - name: Download latest ASan SpiderMonkey shell
         env:
           BUILD_FLAGS: ${{ matrix.flags }}
         run: |
           set -euxo pipefail
           rm -rf shell
-          # 9d00a4d920e3 landed on 2026-06-12. Prefer the last build that day,
-          # then fall back to the nearest newer indexed build.
-          if ! fuzzfetch --target js --branch central --build 2026-06-12 \
-              --nearest-newer ${BUILD_FLAGS} --out shell; then
-            rm -rf shell
-            fuzzfetch --target js --branch central --build 2026-06-13 \
-              --nearest-newer ${BUILD_FLAGS} --out shell
-          fi
+          fuzzfetch --target js --branch central --build latest \
+            ${BUILD_FLAGS} --out shell
           JS_BIN="$(find shell -type f -name js -perm -111 | head -n 1)"
           test -n "$JS_BIN"
           echo "JS_BIN=$JS_BIN" >> "$GITHUB_ENV"
           "$JS_BIN" --version || true
-          find shell -maxdepth 4 -type f -name '*.fuzzmanagerconf' -print -exec cat {} \;
+          find shell -maxdepth 5 -type f -name '*.fuzzmanagerconf' -print -exec cat {} \;
 
       - name: Exercise GC-state variants
         env:
@@ -72,22 +64,17 @@ jobs:
           set -uo pipefail
           mkdir -p logs
           echo "binary=$JS_BIN" | tee logs/build.txt
-          for mode in queue select weakref natural; do
+          for mode in probe queue select weakref natural; do
             echo "===== MODE: $mode =====" | tee "logs/${mode}.log"
             set +e
-            if [ "$mode" = queue ]; then
-              timeout 180s "$JS_BIN" --fuzzing-safe --no-threads --no-baseline --no-ion \
-                weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
-            else
-              timeout 180s "$JS_BIN" --fuzzing-safe --no-baseline --no-ion \
-                weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
-            fi
+            timeout 240s "$JS_BIN" --no-baseline --no-ion \
+              weakmap_uaf.js "$mode" 2>&1 | tee -a "logs/${mode}.log"
             status=${PIPESTATUS[0]}
             set -e
             echo "exit_status=$status" | tee -a "logs/${mode}.log"
           done
           echo "===== SIGNAL SCAN ====="
-          grep -RniE 'heap-use-after-free|use-after-free|AddressSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{' logs || true
+          grep -RniE 'heap-use-after-free|use-after-free|AddressSanitizer|MOZ_CRASH|Assertion failure|FLAG\{|CTF\{|flag\{' logs || true
 
       - name: Upload reproduction logs
         if: always()
