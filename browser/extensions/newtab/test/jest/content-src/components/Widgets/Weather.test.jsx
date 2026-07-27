@@ -927,7 +927,10 @@ describe("<Weather> (Widgets/Weather)", () => {
       ).not.toBeInTheDocument();
     });
 
-    it("renders weather-container when opt-in is rejected", () => {
+    // Bug 2046143: opt-in enabled and not accepted must show the opt-in prompt,
+    // not real location weather, even when weather.optInDisplayed is false (the
+    // state a user reaches via a legacy reject before being migrated to Nova).
+    it("renders weather-opt-in-container when opt-in not accepted and optInDisplayed is false", () => {
       const state = {
         ...optInMockState,
         Prefs: {
@@ -940,9 +943,11 @@ describe("<Weather> (Widgets/Weather)", () => {
         },
       };
       const { container } = renderWeather("medium", state);
-      expect(container.querySelector(".weather-container")).toBeInTheDocument();
       expect(
         container.querySelector(".weather-opt-in-container")
+      ).toBeInTheDocument();
+      expect(
+        container.querySelector(".weather-container")
       ).not.toBeInTheDocument();
     });
 

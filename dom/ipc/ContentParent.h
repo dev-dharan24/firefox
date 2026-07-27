@@ -753,6 +753,8 @@ class ContentParent final : public PContentParent,
       const OriginAttributes& aOriginAttributes, uint64_t aInnerWindowId,
       const nsCString& aPartitionKey, BlobURLDataRequestResolver&& aResolver);
 
+  bool WasA11yEverActivated() const { return mWasA11yEverActivated; }
+
  protected:
   bool CheckBrowsingContextEmbedder(CanonicalBrowsingContext* aBC,
                                     const char* aOperation) const;
@@ -1580,6 +1582,8 @@ class ContentParent final : public PContentParent,
   // True if we already created the
   // ClipboardContentAnalysis actor
   uint8_t mClipboardContentAnalysisCreated : 1;
+
+  bool mWasA11yEverActivated : 1 = false;
 
 #ifdef MOZ_DIAGNOSTIC_ASSERT_ENABLED
   bool mBlockShutdownCalled;

@@ -16,10 +16,12 @@
 #include "mozilla/Components.h"  // for mozilla::components
 #include "mozilla/PerfStats.h"
 #include "mozilla/ProfilerMarkers.h"
+#include "mozilla/StaticPrefs_accessibility.h"
 #include "mozilla/a11y/Platform.h"
 #include "mozilla/dom/BrowserBridgeParent.h"
 #include "mozilla/dom/BrowserParent.h"
 #include "mozilla/dom/CanonicalBrowsingContext.h"
+#include "mozilla/dom/ContentParent.h"
 #include "nsAccUtils.h"
 #include "nsAccessibilityService.h"
 #include "nsIIOService.h"
@@ -1564,6 +1566,47 @@ mozilla::ipc::IPCResult DocAccessibleParent::RecvPrinting() {
   return IPC_OK();
 }
 #endif
+
+DocAccessibleParent::AllowConstruction
+DocAccessibleParent::ShouldAllowConstruction() const {
+  if (IsPrintDoc()) {
+#ifdef MOZ_ENABLE_SKIA_PDF
+    if (!StaticPrefs::accessibility_tagged_pdf_output_enabled()) {
+      return AllowConstruction::Disallow;
+    }
+    // We need the accessibility tree to generate a tagged PDF. We can do this
+    // even if the accessibility service isn't running in the parent process.
+    // However, we can only be generating a PDF if there's a PRemotePrintJob
+    // actor in the BrowserParent ancestry.
+    auto* bp = static_cast<dom::BrowserParent*>(Manager());
+    while (bp) {
+      if (!bp->Manager()->ManagedPRemotePrintJobParent().IsEmpty()) {
+        return AllowConstruction::Allow;
+      }
+      dom::BrowserBridgeParent* bridge = bp->GetBrowserBridgeParent();
+      if (!bridge) {
+        break;
+      }
+      bp = bridge->Manager();
+    }
+#endif  // MOZ_ENABLE_SKIA_PDF
+    return AllowConstruction::Disallow;
+  }
+  // For non-print documents, only allow construction if the accessibility
+  // service is running here in the parent process.
+  if (GetAccService()) {
+    return AllowConstruction::Allow;
+  }
+  // If accessibility is activated and then quickly deactivated, there might
+  // already be PDocAccessible messages in flight. To deal with this, check if
+  // accessibility was ever activated in the associated content process. If it
+  // was, we don't treat the construction as an error, but we mark the actor as
+  // shut down and ignore it.
+  if (Manager()->Manager()->WasA11yEverActivated()) {
+    return AllowConstruction::AllowButIgnore;
+  }
+  return AllowConstruction::Disallow;
+}
 
 }  // namespace a11y
 }  // namespace mozilla

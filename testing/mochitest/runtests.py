@@ -3682,6 +3682,7 @@ toolbar#nav-bar {
             "http3": options.useHttp3Server,
             "http2": options.useHttp2Server,
             "inc_origin_init": os.environ.get("MOZ_ENABLE_INC_ORIGIN_INIT") == "1",
+            "nova": self.extraPrefs.get("browser.nova.enabled", False),
             "sessionHistoryInParent": True,
             "socketprocess_e10s": self.extraPrefs.get("network.process.enabled", False),
             "socketprocess_networking": self.extraPrefs.get(

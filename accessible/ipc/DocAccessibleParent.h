@@ -347,6 +347,13 @@ class DocAccessibleParent : public RemoteAccessible,
   mozilla::ipc::IPCResult RecvPrinting();
 #endif
 
+  enum class AllowConstruction {
+    Disallow,
+    Allow,
+    AllowButIgnore,
+  };
+  AllowConstruction ShouldAllowConstruction() const;
+
  private:
   ~DocAccessibleParent();
 

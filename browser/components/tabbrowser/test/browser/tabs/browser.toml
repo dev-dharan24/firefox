@@ -13,6 +13,9 @@ prefs = [
   "browser.sessionstore.closedTabsFromClosedWindows=true",
   "sidebar.verticalTabs.dragToPinPromo.dismissed=true",
 ]
+skip-if = [
+  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && tsan", # Bug 2057863
+]
 
 ["browser_1936752_lock_tab_sizing.js"]
 
@@ -126,6 +129,8 @@ tags = "vertical-tabs"
 ["browser_lastSeenActive.js"]
 tags = "vertical-tabs"
 skip-if = [
+  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && debug && vertical_tab && nova", # Bug 2057865
+  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && opt && vertical_tab && nova", # Bug 2057865
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt", # Bug 1889774
 ]
 
@@ -351,13 +356,15 @@ https_first_disabled = true
 
 ["browser_new_tab_bookmarks_toolbar_height.js"]
 support-files = ["file_observe_height_changes.html"]
+tags = "vertical-tabs"
 skip-if = [
+  "os == 'linux' && os_version == '24.04' && nova", # Bug 2057866
   "os == 'mac' && os_version == '10.15' && arch == 'x86_64'", # Bug 1872477
   "os == 'mac' && os_version == '14.70' && arch == 'x86_64'", # Bug 1929417
   "os == 'mac' && os_version == '15.30' && arch == 'aarch64'", # Bug 1872477
+  "os == 'win' && nova", # Bug 2057866
   "vertical_tab", # Bug 1936170
 ]
-tags = "vertical-tabs"
 
 ["browser_new_tab_in_privilegedabout_process_pref.js"]
 https_first_disabled = true
@@ -519,6 +526,9 @@ skip-if = [
 
 ["browser_tabContextMenu_altStructure.js"]
 tags = "vertical-tabs"
+skip-if = [
+  "os == 'win' && os_version == '11.26200' && arch == 'x86' && debug && vertical_tab && nova", # Bug 2055481
+]
 
 ["browser_tabContextMenu_keyboard.js"]
 tags = "vertical-tabs"
@@ -600,8 +610,6 @@ skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt", # Bug 1947600
 ]
 
-["browser_tab_interaction_telemetry.js"]
-
 ["browser_tab_groups_tab_interactions_telemetry.js"]
 skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt && swgl", # Bug 1968371
@@ -611,6 +619,8 @@ skip-if = [
 ]
 
 ["browser_tab_groups_telemetry.js"]
+
+["browser_tab_interaction_telemetry.js"]
 
 ["browser_tab_label_character_cap.js"]
 tags = "vertical-tabs"
@@ -658,6 +668,7 @@ skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11'", # Bug 1980036
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt", # Bug 2010318
   "os == 'mac' && os_version == '10.15' && arch == 'x86_64'", # Bug 1980036
+  "os == 'mac' && os_version == '15.30' && arch == 'aarch64' && nova", # Bug 2055490
   "os == 'win' && os_version == '11.26100' && arch == 'x86_64'", #  Bug 1980036;
   "os == 'win' && os_version == '11.26200' && arch == 'x86_64'", #  Bug 1980036;
 ]
@@ -698,6 +709,8 @@ support-files = ["file_withicon.html"]
 tags = "vertical-tabs"
 skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && tsan", # Bug 1775653
+  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && opt && nova", # Bug 2055033
+  "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && opt && nova", # Bug 2055033
   "vertical_tab", # Bug 1976110, fails in the "vertical-tabs" variant
 ]
 

@@ -17345,9 +17345,13 @@ function Weather_Weather({
   const weatherOptIn = prefs["system.showWeatherOptIn"];
   const nimbusWeatherOptInEnabled = prefs.trainhopConfig?.weather?.weatherOptInEnabled;
   const isOptInEnabled = weatherOptIn || nimbusWeatherOptInEnabled;
-  const optInDisplayed = prefs["weather.optInDisplayed"];
   const optInUserChoice = prefs["weather.optInAccepted"];
-  const showOptInState = isOptInEnabled && optInDisplayed && !optInUserChoice;
+  // Show the opt-in prompt whenever opt-in is required and the user has not yet
+  // accepted, independent of weather.optInDisplayed. The Nova widget has no
+  // reject button, so the only path to optInDisplayed=false is acceptance (which
+  // sets optInAccepted=true); gating on optInDisplayed previously let real
+  // location weather render for users migrated from a legacy reject (Bug 2046143).
+  const showOptInState = isOptInEnabled && !optInUserChoice;
   const {
     searchActive
   } = weatherData;

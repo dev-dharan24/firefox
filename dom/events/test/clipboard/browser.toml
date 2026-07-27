@@ -29,6 +29,9 @@ skip-if = [
 ]
 
 ["browser_document_command_paste_contextmenu_suppression.js"]
+skip-if = [
+  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && opt && nova", # Bug 2057876
+]
 
 ["browser_document_command_paste_contextmenu_suppression_ext.js"]
 
@@ -59,6 +62,7 @@ support-files = [
 ]
 skip-if = [
   "headless", # bug 1989339
+  "os == 'mac' && nova", # Bug 2057877
 ]
 
 ["browser_navigator_clipboard_contextmenu_suppression_ext.js"]

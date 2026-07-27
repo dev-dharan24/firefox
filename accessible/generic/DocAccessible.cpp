@@ -1801,7 +1801,7 @@ void DocAccessible::DoInitialUpdate() {
 
   if (nsCoreUtils::IsTopLevelContentDocInProcess(mDocumentNode)) {
     mDocFlags |= eTopLevelContentDocInProcess;
-    if (IPCAccessibilityActive()) {
+    if (ShouldSendToParentProcess()) {
       nsIDocShell* docShell = mDocumentNode->GetDocShell();
       if (RefPtr<dom::BrowserChild> browserChild =
               dom::BrowserChild::GetFrom(docShell)) {
@@ -1865,7 +1865,7 @@ void DocAccessible::DoInitialUpdate() {
   if (AppShutdown::IsShutdownImpending()) {
     return;
   }
-  if (IPCAccessibilityActive()) {
+  if (ShouldSendToParentProcess()) {
     DocAccessibleChild* ipcDoc = IPCDoc();
     MOZ_ASSERT(ipcDoc);
     if (ipcDoc) {

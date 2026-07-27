@@ -139,7 +139,6 @@
 #include "mozilla/dom/quota/QuotaManager.h"
 #include "mozilla/dom/quota/QuotaObject.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
-#include "mozilla/dom/quota/ScopedLogExtraInfo.h"
 #include "mozilla/dom/quota/ThreadUtils.h"
 #include "mozilla/dom/quota/UniversalDirectoryLock.h"
 #include "mozilla/dom/quota/UsageInfo.h"
@@ -12188,9 +12187,7 @@ nsresult DatabaseFileManager::InitDirectory(nsIFile& aDirectory,
               QM_TRY_INSPECT(const auto& file,
                              CloneFileAndAppend(aDirectory, name));
 
-              const ScopedLogExtraInfo scope{
-                  ScopedLogExtraInfo::kTagContextTainted,
-                  "IDBFileManager::OrphanedFileCleanupFailed"_ns};
+              QM_SCOPED_CONTEXT("IDBFileManager::OrphanedFileCleanupFailed"_ns);
 
               QM_WARNONLY_TRY(MOZ_TO_RESULT(file->Remove(false)),
                               [](const auto&) {

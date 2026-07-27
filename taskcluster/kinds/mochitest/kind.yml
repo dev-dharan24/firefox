@@ -391,18 +391,19 @@ tasks:
                         .*-artifact.*: []
                         .*-asan.*: []
                         .*-ccov.*: []
-                        linux.*64(-shippable)?/opt: ['mozilla-central']
+                        linux.*64(-shippable)?/opt: ['trunk']
+                        # limited testing pool
                         macosx1[45].*64(-shippable)?(-qr)?/opt: ['mozilla-central']
-                        windows11.*-64.*(-shippable)?/opt: ['mozilla-central']
+                        windows11.*-64.*(-shippable)?/opt: ['trunk']
                         default: []
                 nova+vertical-tabs:
                     by-test-platform:
                         .*-artifact.*: []
                         .*-asan.*: []
                         .*-ccov.*: []
-                        linux.*64(-shippable)?/opt: ['mozilla-central']
-                        macosx1[45].*64(-shippable)?(-qr)?/opt: ['mozilla-central']
-                        windows11.*-64.*(-shippable)?/opt: ['mozilla-central']
+                        linux.*64(-shippable)?/opt: ['trunk']
+                        macosx1[45].*64(-shippable)?(-qr)?/opt: ['trunk']
+                        windows11.*-64.*(-shippable)?/opt: ['trunk']
                         default: []
                 default:
                     by-test-platform:
@@ -667,9 +668,9 @@ tasks:
                         .*-artifact.*: []
                         .*-asan.*: []
                         .*-ccov.*: []
-                        linux.*64(-shippable)?/opt: ['mozilla-central']
-                        macosx1[45].*64(-shippable)?(-qr)?/opt: ['mozilla-central']
-                        windows11.*-64.*(-shippable)?/opt: ['mozilla-central']
+                        linux.*64(-shippable)?/opt: ['trunk']
+                        macosx1[45].*64(-shippable)?(-qr)?/opt: ['trunk']
+                        windows11.*-64.*(-shippable)?/opt: ['trunk']
                         default: []
         chunks: dynamic
         default-chunks:

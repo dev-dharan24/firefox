@@ -1650,6 +1650,7 @@ void ContentParent::Init() {
   // shouldn't bring up accessibility.
   if (GetAccService() && !nsAccessibilityService::IsOnlyForPdfOutput()) {
     (void)SendActivateA11y(nsAccessibilityService::GetActiveCacheDomains());
+    mWasA11yEverActivated = true;
   }
 #endif  // #ifdef ACCESSIBILITY
 
@@ -4037,6 +4038,7 @@ ContentParent::Observe(nsISupports* aSubject, const char* aTopic,
       // accessibility gets fully initiated in chrome process.
       MOZ_ASSERT(!nsAccessibilityService::IsOnlyForPdfOutput());
       (void)SendActivateA11y(nsAccessibilityService::GetActiveCacheDomains());
+      mWasA11yEverActivated = true;
     } else if (*aData == '0') {
       // If possible, shut down accessibility in content process when
       // accessibility gets shutdown in chrome process.

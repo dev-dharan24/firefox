@@ -4358,8 +4358,7 @@ nsresult Connection::FlushOp::DoDatastoreWork() {
   QM_TRY(MOZ_TO_RESULT(autoWriteTransaction.Start(mConnection)));
 
   {
-    const ScopedLogExtraInfo scope{ScopedLogExtraInfo::kTagContextTainted,
-                                   "LSFlushOp::CommitFailed"_ns};
+    QM_SCOPED_CONTEXT("LSFlushOp::CommitFailed"_ns);
     QM_TRY_INSPECT(const int64_t& usage,
                    mWriteOptimizer.Perform(mConnection, mShadowWrites));
 

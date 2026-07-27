@@ -27,7 +27,6 @@
 #include "mozilla/dom/quota/QuotaManager.h"
 #include "mozilla/dom/quota/QuotaObject.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
-#include "mozilla/dom/quota/ScopedLogExtraInfo.h"
 
 namespace mozilla::dom::fs::data {
 
@@ -781,9 +780,7 @@ nsresult FileSystemDatabaseManagerVersion002::MergeFileId(
 
   QM_TRY(MOZ_TO_RESULT(stmt.Execute()));
 
-  const quota::ScopedLogExtraInfo scope{
-      quota::ScopedLogExtraInfo::kTagContextTainted,
-      "FileSystemMergeFileId::CommitFailed"_ns};
+  QM_SCOPED_CONTEXT("FileSystemMergeFileId::CommitFailed"_ns);
 
   if (!maybeOldFileId) {
     // We successfully added a new main file and there is nothing to clean up.

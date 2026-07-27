@@ -11,8 +11,8 @@
 #include "mozIStorageConnection.h"
 #include "mozIStorageStatement.h"
 #include "mozilla/dom/quota/AssertionsImpl.h"
+#include "mozilla/dom/quota/QuotaCommon.h"
 #include "mozilla/dom/quota/ResultExtensions.h"
-#include "mozilla/dom/quota/ScopedLogExtraInfo.h"
 #include "mozilla/dom/quota/UsageInfo.h"
 
 #if defined(NIGHTLY_BUILD) || defined(DEBUG)
@@ -65,22 +65,19 @@ void OriginInfo::CheckIfUsageIsConsistent(const nsACString& context) const {
   uint64_t usage = 0;
   for (Client::Type type : quotaManager->AllClientTypes()) {
     AssertNoOverflow(usage, mClientUsages[type].valueOr(0));
-    const ScopedLogExtraInfo scope{
-        ScopedLogExtraInfo::kTagContextTainted,
-        context + "["_ns + Client::TypeToText(type) + "]Underflow"_ns};
+    QM_SCOPED_CONTEXT(context + "["_ns + Client::TypeToText(type) +
+                      "]Underflow"_ns);
     const uint64_t value = mClientUsages[type].valueOr(0);
     QM_WARNONLY_TRY(OkIf(value < static_cast<uint64_t>(INT64_MAX)));
     usage += value;
   }
   {
-    const ScopedLogExtraInfo scope{ScopedLogExtraInfo::kTagContextTainted,
-                                   context + "Mismatch"_ns};
+    QM_SCOPED_CONTEXT(context + "Mismatch"_ns);
     QM_WARNONLY_TRY(OkIf(mUsage == usage));
     MOZ_ASSERT(mUsage == usage);
   }
   {
-    const ScopedLogExtraInfo scope{ScopedLogExtraInfo::kTagContextTainted,
-                                   context + "mUsageUnderflow"_ns};
+    QM_SCOPED_CONTEXT(context + "mUsageUnderflow"_ns);
     QM_WARNONLY_TRY(OkIf(mUsage < static_cast<uint64_t>(INT64_MAX)));
   }
 }
