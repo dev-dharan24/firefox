@@ -11,6 +11,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /**
  * @import {UrlbarChild} from "../../../actors/UrlbarChild.sys.mjs"
+ * @import {UrlbarParentController} from "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs"
  */
 
 /**
@@ -159,6 +160,20 @@ export class UrlbarParentControllerProxy {
     });
   }
 
+  /**
+   * Records a search opening in a new tab, against that tab's browser resolved
+   * parent-side. The counterpart to the controller's `recordSearchInOpenedTab()`.
+   *
+   * @param {Parameters<UrlbarParentController["recordSearch"]>[0]} searchData
+   *   The data for `recordSearch`.
+   */
+  recordSearchInOpenedTab(searchData) {
+    this.#actor.sendAsyncMessage("RecordSearchInOpenedTab", {
+      instanceId: this.#instanceId,
+      searchData,
+    });
+  }
+
   // Named to match the controller property the child controller forwards to.
   get _lastQueryContextWrapper() {
     return this.#lastQueryContextWrapper;
@@ -211,6 +226,23 @@ export class UrlbarParentControllerProxy {
     return wire ? lazy.UrlbarResult.fromWire(wire) : null;
   }
 
+  /**
+   * Resolves an Enter with no result available to pick parent-side, returning
+   * either a heuristic result to pick or a fixup URL to load.
+   *
+   * @param {object} details The serializable resolve parameters.
+   * @returns {Promise<object>} `{ heuristicResult }`, `{ fixup }`, or `{}`.
+   */
+  async resolveFallbackNavigation(details) {
+    let outcome = await this.#actor.sendQuery("ResolveFallbackNavigation", {
+      instanceId: this.#instanceId,
+      details,
+    });
+    return outcome.heuristicResult
+      ? { heuristicResult: lazy.UrlbarResult.fromWire(outcome.heuristicResult) }
+      : outcome;
+  }
+
   cancelQuery() {
     this.#actor.sendAsyncMessage("CancelQuery", {
       instanceId: this.#instanceId,
@@ -260,6 +292,19 @@ export class UrlbarParentControllerProxy {
     return this.#actor.sendQuery("FocusBrowser", {
       instanceId: this.#instanceId,
       browserId,
+    });
+  }
+
+  /**
+   * Switches to a tab already showing the URL (or opens it), resolved
+   * parent-side, along with the follow-up history/open-tab writes.
+   *
+   * @param {object} loadData The serializable switch parameters.
+   */
+  switchToTab(loadData) {
+    this.#actor.sendAsyncMessage("SwitchToTab", {
+      instanceId: this.#instanceId,
+      loadData,
     });
   }
 
@@ -331,6 +376,33 @@ export class UrlbarParentControllerProxy {
       instanceId: this.#instanceId,
       result: result.toWire(),
       idsByName,
+    });
+  }
+
+  /**
+   * {@link UrlbarParentController#initEngineStore}
+   */
+  initEngineStore() {
+    return this.#actor.sendAsyncMessage("InitEngineStore", {
+      instanceId: this.#instanceId,
+    });
+  }
+
+  /**
+   * @type {UrlbarParentController["getEngineIconURL"]}
+   */
+  getEngineIconURL(engineId) {
+    return this.#actor.sendQuery("GetEngineIconURL", {
+      instanceId: this.#instanceId,
+      engineId,
+    });
+  }
+
+  /** @type {UrlbarParentController["markEngineAsUsed"]} */
+  markEngineAsUsed(engineId) {
+    this.#actor.sendAsyncMessage("MarkEngineAsUsed", {
+      instanceId: this.#instanceId,
+      engineId,
     });
   }
 }

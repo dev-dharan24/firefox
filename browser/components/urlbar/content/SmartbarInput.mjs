@@ -65,8 +65,6 @@ const lazy = XPCOMUtils.declareLazy({
   UrlbarQueryContext: "chrome://browser/content/urlbar/UrlbarQueryContext.mjs",
   UrlbarProviderHeuristicFallback:
     "moz-src:///browser/components/urlbar/UrlbarProviderHeuristicFallback.sys.mjs",
-  UrlbarProviderOpenTabs:
-    "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
   UrlbarSearchUtils:
     "moz-src:///browser/components/urlbar/UrlbarSearchUtils.sys.mjs",
   UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
@@ -291,6 +289,9 @@ ${
   #compositionState = UrlbarShared.COMPOSITION.NONE;
   #compositionClosedPopup = false;
   #compositionHadText = false;
+  // Bumped on each input-driven search; a deferred-Enter snapshots it so its
+  // async keyup can tell whether a fresh search has started since.
+  #inputEpoch = 0;
 
   #isSidebarMode = false;
 
@@ -1471,7 +1472,9 @@ ${
     // Using browser navigation buttons should potentially trigger a bounce
     // telemetry event.
     if (webProgress.loadType & Ci.nsIDocShell.LOAD_CMD_HISTORY) {
-      this.controller.engagementEvent.handleBounceEventTrigger(browser);
+      this.controller.engagementEvent.handleBounceEventTrigger(
+        browser.browserId
+      );
     }
   }
 
@@ -1916,23 +1919,7 @@ ${
       triggeringSource: this.#sapName,
       triggeringSearchEngine: engine.name,
     };
-    if (openWhere == "tab") {
-      // The TabOpen event is fired synchronously so tabEvent.target is our new
-      // search tab.
-      this.window.gBrowser.tabContainer.addEventListener(
-        "TabOpen",
-        tabEvent =>
-          this._recordSearch(
-            engine.id,
-            event,
-            {},
-            tabEvent.target.linkedBrowser
-          ),
-        { once: true }
-      );
-    } else {
-      this._recordSearch(engine.id, event);
-    }
+    this._recordSearch(engine.id, event, {}, openWhere == "tab");
     lazy.UrlbarUtils.addToFormHistory(this, searchString, engine.name).catch(
       console.error
     );
@@ -2135,63 +2122,40 @@ ${
     // docshell wouldn't know about our engine restriction.
     // Also remember to invoke this._recordSearch, after replacing url with
     // the appropriate engine submission url.
-    let browser = this.window.gBrowser.selectedBrowser;
-    let lastLocationChange = browser.lastLocationChange;
-
-    // Increment rate denominator measuring how often Address Bar handleCommand fallback path is hit.
-    Glean.urlbar.heuristicResultMissing.addToDenominator(1);
-
-    lazy.UrlbarUtils.getHeuristicResultFor(url, this)
-      .then(newResult => {
-        // Because this happens asynchronously, we must verify that the browser
-        // location did not change in the meanwhile.
-        if (
-          where != "current" ||
-          browser.lastLocationChange == lastLocationChange
-        ) {
-          this.pickResult(newResult, event, null, browser);
+    // The heuristic fetch and its uriFixup fallback are parent-only, and they
+    // depend on the current browser's per-tab data and navigation epoch, which
+    // a content urlbar can't read; the parent controller owns all of it and
+    // hands back either a heuristic result to pick or a fixup URL to load.
+    // The load resolves asynchronously, so capture the target tab now, at the
+    // commit: a tab opened before it resolves must not steal the load. The chrome
+    // address bar reads its selected tab here; a content-process moz-urlbar has
+    // no gBrowser and leaves the target to the parent (its own tab).
+    let browserId = this.window.gBrowser?.selectedBrowser?.browserId ?? null;
+    this.controller
+      .resolveFallbackNavigation({
+        searchString: url,
+        where,
+        searchMode: this.searchMode,
+        browserId,
+      })
+      .then(({ heuristicResult, fixup }) => {
+        if (heuristicResult) {
+          this.pickResult(heuristicResult, event, null, browserId);
+        } else if (fixup) {
+          openParams.postData = fixup.postData;
+          if (!fixup.keywordAsSent) {
+            // `fixup.url` is not a search engine url, so we annotate if the
+            // untrimmed value contained a scheme, to potentially be later
+            // upgraded by schemeless HTTPS-First.
+            openParams.schemelessInput = this.#getSchemelessInput(
+              this.untrimmedValue
+            );
+          }
+          this._loadURL(fixup.url, event, where, openParams, null, browserId);
         }
       })
-      .catch(() => {
-        if (url) {
-          // Something went wrong, we should always have a heuristic result,
-          // otherwise it means we're not able to search at all, maybe because
-          // some parts of the profile are corrupt.
-          // The urlbar should still allow to search or visit the typed string,
-          // so that the user can look for help to resolve the problem.
-
-          // Increment rate numerator measuring how often Address Bar handleCommand fallback path is hit.
-          Glean.urlbar.heuristicResultMissing.addToNumerator(1);
-
-          let flags =
-            Ci.nsIURIFixup.FIXUP_FLAG_FIX_SCHEME_TYPOS |
-            Ci.nsIURIFixup.FIXUP_FLAG_ALLOW_KEYWORD_LOOKUP;
-          if (this.isPrivate) {
-            flags |= Ci.nsIURIFixup.FIXUP_FLAG_PRIVATE_CONTEXT;
-          }
-          let {
-            preferredURI: uri,
-            postData,
-            keywordAsSent,
-          } = Services.uriFixup.getFixupURIInfo(url, flags);
-          if (
-            where != "current" ||
-            browser.lastLocationChange == lastLocationChange
-          ) {
-            openParams.postData = postData;
-            if (!keywordAsSent) {
-              // `uri` is not a search engine url, so we annotate if the untrimmed
-              // value contained a scheme, to potentially be later upgraded by
-              // schemeless HTTPS-First.
-              openParams.schemelessInput = this.#getSchemelessInput(
-                this.untrimmedValue
-              );
-            }
-            this._loadURL(uri.spec, event, where, openParams, null, browser);
-          }
-        }
-      });
-    // Don't add further handling here, the catch above is our last resort.
+      .catch(console.error);
+    // resolveFallbackNavigation is the last resort; nothing more to handle here.
   }
 
   handleRevert() {
@@ -2271,22 +2235,20 @@ ${
    * @param {UrlbarResult} result The result that was picked.
    * @param {Event} event The event that picked the result.
    * @param {HTMLElement} element the picked view element, if available.
-   * @param {object} browser The browser to use for the load.
+   * @param {number} [browserId]
+   *   The id of the browser to load into, for a load that resolves
+   *   asynchronously and must target the tab selected when it was committed.
+   *   Defaults to the parent resolving the selected browser at load time.
    */
   // eslint-disable-next-line complexity
-  pickResult(
-    result,
-    event,
-    element = null,
-    browser = this.window.gBrowser.selectedBrowser
-  ) {
+  pickResult(result, event, element = null, browserId = null) {
     if (element?.classList.contains("urlbarView-button-menu")) {
       this.view.openResultMenu(result, element);
       return;
     }
 
     if (element?.dataset.command) {
-      this.#pickMenuResult(result, event, element, browser);
+      this.#pickMenuResult(result, event, element);
       return;
     }
 
@@ -2380,7 +2342,14 @@ ${
         searchString: this._lastSearchString,
         windowMode: this.windowMode,
       });
-      this._loadURL(this._untrimmedValue, event, where, openParams, browser);
+      this._loadURL(
+        this._untrimmedValue,
+        event,
+        where,
+        openParams,
+        null,
+        browserId
+      );
       return;
     }
 
@@ -2447,12 +2416,6 @@ ${
         // Keep the searchMode for telemetry since handleRevert sets it to null.
         const searchMode = this.searchMode;
         this.handleRevert();
-        let prevTab = this.window.gBrowser.selectedTab;
-        let loadOpts = {
-          adoptIntoActiveWindow: lazy.UrlbarPrefs.get(
-            "switchTabs.adoptIntoActiveWindow"
-          ),
-        };
 
         // We cache the search string because switching tab may clear it.
         let searchString = this._lastSearchString;
@@ -2467,38 +2430,13 @@ ${
           windowMode: this.windowMode,
         });
 
-        let switched = this.window.switchToTabHavingURI(
-          Services.io.newURI(url),
-          true,
-          loadOpts,
-          UrlbarShared.isNonPrivateUserContextId(result.payload.userContextId)
-            ? result.payload.userContextId
-            : null
-        );
-        if (switched && prevTab.isEmpty) {
-          this.window.gBrowser.removeTab(prevTab);
-        }
-
-        if (switched && !this.isPrivate && !result.heuristic) {
-          // We don't await for this, because a rejection should not interrupt
-          // the load. Just reportError it.
-          lazy.UrlbarUtils.addToInputHistory(url, searchString).catch(
-            console.error
-          );
-        }
-
-        // TODO (Bug 1865757): We should not show a "switchtotab" result for
-        // tabs that are not currently open. Find out why tabs are not being
-        // properly unregistered when they are being closed.
-        if (!switched) {
-          console.error(`Tried to switch to non-existent tab: ${url}`);
-          lazy.UrlbarProviderOpenTabs.unregisterOpenTab(
-            url,
-            result.payload.userContextId,
-            result.payload.tabGroup,
-            this.isPrivate
-          );
-        }
+        this.controller.switchToTab({
+          url,
+          searchString,
+          userContextId: result.payload.userContextId,
+          tabGroup: result.payload.tabGroup,
+          heuristic: result.heuristic,
+        });
 
         return;
       }
@@ -2521,6 +2459,7 @@ ${
         }
 
         if (
+          this.#isAddressbar &&
           !this.searchMode &&
           result.heuristic &&
           // If we asked the DNS earlier, avoid the post-facto check.
@@ -2561,23 +2500,7 @@ ${
           result.payload.engine
         );
 
-        if (where == "tab") {
-          // The TabOpen event is fired synchronously so tabEvent.target
-          // is guaranteed to be our new search tab.
-          this.window.gBrowser.tabContainer.addEventListener(
-            "TabOpen",
-            tabEvent =>
-              this._recordSearch(
-                engine.id,
-                event,
-                actionDetails,
-                tabEvent.target.linkedBrowser
-              ),
-            { once: true }
-          );
-        } else {
-          this._recordSearch(engine.id, event, actionDetails);
-        }
+        this._recordSearch(engine.id, event, actionDetails, where == "tab");
 
         if (!result.payload.inPrivateWindow) {
           lazy.UrlbarUtils.addToFormHistory(
@@ -2708,17 +2631,26 @@ ${
       }
     }
 
-    this.controller.engagementEvent
-      .startTrackingBounceEvent(browser, event, {
-        result,
-        element,
-        location: this.sapLocation,
-        searchString: this._lastSearchString,
-        selType: this.view.telemetryTypeFromElement(result, element),
-        searchSource: this.getSearchSource(event),
-        windowMode: this.windowMode,
-      })
-      .catch(e => lazy.logger.error(e));
+    // Bounce tracking starts on the selected tab and triggers on chrome tab
+    // events (navigation, tab close), so it only runs in a browser window. TBD
+    // if and how this should work for a moz-urlbar living in a content process.
+    if (this.window.gBrowser) {
+      this.controller.engagementEvent
+        .startTrackingBounceEvent(
+          this.window.gBrowser.selectedBrowser.browserId,
+          event,
+          {
+            result,
+            element,
+            location: this.sapLocation,
+            searchString: this._lastSearchString,
+            selType: this.view.telemetryTypeFromElement(result, element),
+            searchSource: this.getSearchSource(event),
+            windowMode: this.windowMode,
+          }
+        )
+        .catch(e => lazy.logger.error(e));
+    }
 
     this.controller.engagementEvent.record(event, {
       result,
@@ -2774,7 +2706,7 @@ ${
         type: result.type,
         searchTerm: result.payload.suggestion ?? result.payload.query,
       },
-      browser
+      browserId
     );
   }
 
@@ -3326,23 +3258,7 @@ ${
     let trimmedValue = value.trim();
     this._lastSearchString = trimmedValue;
     if (trimmedValue) {
-      if (where.startsWith("tab")) {
-        // The TabOpen event is fired synchronously so tabEvent.target
-        // is guaranteed to be our new search tab.
-        this.window.gBrowser.tabContainer.addEventListener(
-          "TabOpen",
-          tabEvent =>
-            this._recordSearch(
-              searchEngine.id,
-              event,
-              {},
-              tabEvent.target.linkedBrowser
-            ),
-          { once: true }
-        );
-      } else {
-        this._recordSearch(searchEngine.id, event);
-      }
+      this._recordSearch(searchEngine.id, event, {}, where.startsWith("tab"));
 
       if (where == "current") {
         // Enter search mode so:
@@ -4752,15 +4668,16 @@ ${
    *   True if this query was initiated from a form history result.
    * @param {string} [searchActionDetails.url]
    *   The url this query was triggered with.
-   * @param {MozBrowser} [browser]
-   *   The browser where the search is being opened. When omitted, the parent
-   *   controller records against its selected browser.
+   * @param {boolean} [inNewTab]
+   *   Whether the search opens in a new tab, in which case it is recorded
+   *   against that tab's browser once the load opens it (parent-side); otherwise
+   *   against the selected browser.
    */
-  _recordSearch(engineId, event, searchActionDetails = {}, browser = null) {
+  _recordSearch(engineId, event, searchActionDetails = {}, inNewTab = false) {
     const isOneOff = this.view.oneOffSearchButtons?.eventTargetIsAOneOff(event);
     const searchSource = this.getSearchSource(event);
 
-    this.controller.recordSearch({
+    let searchData = {
       engineId,
       searchSource,
       details: {
@@ -4768,8 +4685,12 @@ ${
         isOneOff,
         newtabSessionId: this._handoffSession,
       },
-      browserId: browser?.browsingContext?.browserId,
-    });
+    };
+    if (inNewTab) {
+      this.controller.recordSearchInOpenedTab(searchData);
+    } else {
+      this.controller.recordSearch(searchData);
+    }
   }
 
   /**
@@ -4919,9 +4840,8 @@ ${
    * @param {UrlbarResult} result The result that was picked.
    * @param {Event} event The event that picked the result.
    * @param {HTMLElement} element the picked view element, if available.
-   * @param {object} browser The browser to use for the load.
    */
-  #pickMenuResult(result, event, element, browser) {
+  #pickMenuResult(result, event, element) {
     this.controller.engagementEvent.record(event, {
       result,
       element,
@@ -4966,8 +4886,7 @@ ${
       {
         source: result.source,
         type: result.type,
-      },
-      browser
+      }
     );
   }
 
@@ -4999,7 +4918,10 @@ ${
    *   Search term of the result source, if any.
    * @param {Values<typeof UrlbarShared.RESULT_SOURCE>} [resultDetails.source]
    *   Details of the result source, if any.
-   * @param {object} browser [optional] the browser to use for the load.
+   * @param {number} [browserId]
+   *   The id of the browser to load into. Defaults to the parent resolving the
+   *   selected browser at load time; pass it to pin an asynchronously-resolved
+   *   load to the tab selected when it was committed.
    */
   async _loadURL(
     url,
@@ -5007,10 +4929,8 @@ ${
     openUILinkWhere,
     params,
     resultDetails = null,
-    browser
+    browserId = null
   ) {
-    browser ??= this.window.gBrowser?.selectedBrowser ?? null;
-
     let userTypedValue;
     if (this.#isAddressbar && openUILinkWhere == "current") {
       // Make sure URL is formatted properly (don't show punycode).
@@ -5020,7 +4940,7 @@ ${
       } catch {}
 
       this.value =
-        lazy.UrlbarPrefs.isPersistedSearchTermsEnabled() &&
+        lazy.UrlbarUtils.isPersistedSearchTermsEnabled() &&
         resultDetails?.searchTerm
           ? resultDetails.searchTerm
           : formattedURL;
@@ -5077,7 +4997,7 @@ ${
       url,
       where: openUILinkWhere,
       params,
-      browserId: browser?.browserId ?? null,
+      browserId,
       userTypedValue,
     });
     // In the message-passing path, loadURL returns a promise.
@@ -5743,7 +5663,7 @@ ${
     if (!this.#isAddressbar) {
       return false;
     }
-    if (!lazy.UrlbarPrefs.isPersistedSearchTermsEnabled()) {
+    if (!lazy.UrlbarUtils.isPersistedSearchTermsEnabled()) {
       if (state.persist) {
         this.removeAttribute("persistsearchterms");
         delete state.persist;
@@ -6294,6 +6214,9 @@ ${
   }
 
   _on_input(event) {
+    // A new input starts a fresh search; bump the epoch so a pending
+    // deferred-Enter's async keyup won't reset this search's caret.
+    this.#inputEpoch++;
     if (
       this._autofillPlaceholder &&
       this.value === this.userTypedValue &&
@@ -6683,7 +6606,7 @@ ${
 
   _on_TabClose(event) {
     this.controller.engagementEvent.handleBounceEventTrigger(
-      event.target.linkedBrowser
+      event.target.linkedBrowser.browserId
     );
 
     if (this.view.isOpen) {
@@ -6760,6 +6683,7 @@ ${
           this._keyDownEnterDeferred.reject();
         }
         this._keyDownEnterDeferred = Promise.withResolvers();
+        this._keyDownEnterDeferred.inputEpoch = this.#inputEpoch;
         event._disableCanonization =
           AppConstants.platform == "macosx"
             ? this._isKeyDownWithMeta
@@ -6830,14 +6754,18 @@ ${
     // Enter key before releasing Meta key, the keyup event is not fired.
     // Therefore, if Enter keydown is detecting, continue the post processing
     // for Enter key when any keyup event is detected.
-    if (this._keyDownEnterDeferred) {
-      if (this._keyDownEnterDeferred.loadedContent) {
+    let keyDownEnterDeferred = this._keyDownEnterDeferred;
+    if (keyDownEnterDeferred) {
+      if (keyDownEnterDeferred.loadedContent) {
         try {
-          const browserId = await this._keyDownEnterDeferred.promise;
+          const browserId = await keyDownEnterDeferred.promise;
           // The parent focuses the loading browser if it's still selected,
           // since only it can reach the browser element and the chrome window.
           let { focused } = await this.controller.focusBrowser(browserId);
-          if (focused) {
+          // focusBrowser resolves asynchronously; if the user began a fresh
+          // search since this Enter (a later input bumped the epoch), its
+          // caret must be left alone -- only keep the domain visible for our load.
+          if (focused && keyDownEnterDeferred.inputEpoch === this.#inputEpoch) {
             // Make sure the domain name stays visible for spoof protection and usability.
             this.setSelectionRange(0, 0);
           }
@@ -6849,7 +6777,7 @@ ${
         }
       } else {
         // Discard the _keyDownEnterDeferred promise to receive any key inputs immediately.
-        this._keyDownEnterDeferred.resolve();
+        keyDownEnterDeferred.resolve();
       }
 
       this._keyDownEnterDeferred = null;

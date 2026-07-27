@@ -146,6 +146,26 @@ static LogicalSize* GetUnfragmentedSize(const ReflowInput& aCBReflowInput,
              : aFrame->FirstInFlow()->GetProperty(UnfragmentedSizeProperty());
 }
 
+// Return true if aInlineFrame is the first inline continuation in its
+// fragmentainer, i.e. no previous continuation shares its nearest block
+// ancestor.
+static bool IsFirstInlineContinuationInFragmentainer(
+    const nsIFrame* aInlineFrame) {
+  MOZ_ASSERT(aInlineFrame->IsInlineFrameOrSubclass());
+  const nsBlockFrame* myBlock =
+      nsLayoutUtils::FindNearestBlockAncestor(aInlineFrame);
+  for (nsIFrame* prev =
+           nsLayoutUtils::GetPrevContinuationOrIBSplitSibling(aInlineFrame);
+       prev; prev = nsLayoutUtils::GetPrevContinuationOrIBSplitSibling(prev)) {
+    if (prev->IsBlockFrameOrSubclass()) {
+      // Skip IB-split block siblings.
+      continue;
+    }
+    return nsLayoutUtils::FindNearestBlockAncestor(prev) != myBlock;
+  }
+  return true;
+}
+
 // Walk aInlineFrame's continuation chain and return the *first* continuation
 // (near the start-most edges) of the previous fragmentainer (not the first
 // fragment we encountered during the walk). Or return nullptr if no such
@@ -259,6 +279,28 @@ void AbsoluteContainingBlock::DrainPushedChildList(
   }
 }
 
+void AbsoluteContainingBlock::PullAbsoluteFramesFrom(
+    nsContainerFrame* aDelegatingFrame, nsIFrame* aContinuation,
+    OnlyFirstInFlows aOnlyFirstInFlows) {
+  AbsoluteContainingBlock* absCB = aContinuation->GetAbsoluteContainingBlock();
+  MOZ_ASSERT(absCB,
+             "If this delegating frame has an absCB, aContinuation must "
+             "have one, too!");
+
+  absCB->DrainPushedChildList(aContinuation);
+
+  for (auto iter = absCB->GetChildList().begin();
+       iter != absCB->GetChildList().end();) {
+    // Advance the iterator first, so it's safe to move |child|.
+    nsIFrame* const child = *iter++;
+    if (aOnlyFirstInFlows == OnlyFirstInFlows::No || !child->GetPrevInFlow()) {
+      absCB->StealFrame(child);
+      mAbsoluteFrames.AppendFrame(aDelegatingFrame, child);
+      child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
+    }
+  }
+}
+
 bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     nsContainerFrame* aDelegatingFrame) {
   if (const nsIFrame* prev =
@@ -274,27 +316,6 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
     if (pushedFrames.NotEmpty()) {
       mAbsoluteFrames.InsertFrames(aDelegatingFrame, nullptr,
                                    std::move(pushedFrames));
-
-      // After stealing children from the previous absCB, traverse our children
-      // and see if any child has a prev-in-flow that is also in our child list.
-      // If so, we insert them at the front of our pushed child list.
-      nsFrameList newPushedAbsoluteFrames;
-      for (auto iter = mAbsoluteFrames.begin();
-           iter != mAbsoluteFrames.end();) {
-        // Advance the iterator first, so it's safe to move |child|.
-        nsIFrame* const child = *iter++;
-        nsIFrame* const childPrevInFlow = child->GetPrevInFlow();
-        if (childPrevInFlow &&
-            childPrevInFlow->GetParent() == aDelegatingFrame) {
-          mAbsoluteFrames.RemoveFrame(child);
-          newPushedAbsoluteFrames.AppendFrame(nullptr, child);
-        }
-      }
-      if (newPushedAbsoluteFrames.NotEmpty()) {
-        // Prepend the new pushed frames to the front of mPushedAbsoluteFrames.
-        mPushedAbsoluteFrames.InsertFrames(nullptr, nullptr,
-                                           std::move(newPushedAbsoluteFrames));
-      }
     }
   }
 
@@ -303,28 +324,61 @@ bool AbsoluteContainingBlock::PrepareAbsoluteFrames(
   // our child list.
   DrainPushedChildList(aDelegatingFrame);
 
+  // After column balancing chooses a larger column height, inline continuations
+  // that hold abspos children in a later column may be moved into the current
+  // fragmentainer. Reparent those abspos children under us (the first
+  // continuation in the fragmentainer) so that the rest of the
+  // same-fragmentainer continuations don't have any abspos children. We enforce
+  // this invariant in SanityCheckChildListsBeforeReflow().
+  if (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() &&
+      aDelegatingFrame->IsInlineFrameOrSubclass() &&
+      IsFirstInlineContinuationInFragmentainer(aDelegatingFrame)) {
+    const nsBlockFrame* myBlock =
+        nsLayoutUtils::FindNearestBlockAncestor(aDelegatingFrame);
+    for (nsIFrame* next = nsLayoutUtils::GetNextContinuationOrIBSplitSibling(
+             aDelegatingFrame);
+         next;
+         next = nsLayoutUtils::GetNextContinuationOrIBSplitSibling(next)) {
+      if (next->IsBlockFrameOrSubclass()) {
+        // Skip IB-split block siblings.
+        continue;
+      }
+      if (nsLayoutUtils::FindNearestBlockAncestor(next) != myBlock) {
+        // Reached a continuation in a later fragmentainer.
+        break;
+      }
+      PullAbsoluteFramesFrom(aDelegatingFrame, next, OnlyFirstInFlows::No);
+    }
+  }
+
   // Steal absolute frame's first-in-flow from the child list of our
   // continuations that appear as the first continuation in each fragmentainer.
   for (nsIFrame* next =
            GetFirstContinuationInNextFragmentainer(aDelegatingFrame);
        next; next = GetFirstContinuationInNextFragmentainer(next)) {
-    AbsoluteContainingBlock* nextAbsCB = next->GetAbsoluteContainingBlock();
-    MOZ_ASSERT(nextAbsCB,
-               "If this delegating frame has an absCB, |next| must "
-               "have one, too!");
+    PullAbsoluteFramesFrom(aDelegatingFrame, next, OnlyFirstInFlows::Yes);
+  }
 
-    nextAbsCB->DrainPushedChildList(next);
-
-    for (auto iter = nextAbsCB->GetChildList().begin();
-         iter != nextAbsCB->GetChildList().end();) {
-      // Advance the iterator first, so it's safe to move |child|.
-      nsIFrame* const child = *iter++;
-      if (!child->GetPrevInFlow()) {
-        nextAbsCB->StealFrame(child);
-        mAbsoluteFrames.AppendFrame(aDelegatingFrame, child);
-        child->RemoveStateBits(NS_FRAME_IS_PUSHED_OUT_OF_FLOW);
-      }
+  // The steps above may leave more than one continuation of the same abspos
+  // frame in our child list. Ensure at most one continuation of each abspos
+  // frame remains in our child list by pushing the rest to our pushed child
+  // list.
+  nsFrameList newPushedAbsoluteFrames;
+  for (auto iter = mAbsoluteFrames.begin(); iter != mAbsoluteFrames.end();) {
+    // Advance the iterator first, so it's safe to move |child|.
+    nsIFrame* const child = *iter++;
+    nsIFrame* const childPrevInFlow = child->GetPrevInFlow();
+    if (childPrevInFlow && childPrevInFlow->GetParent() == aDelegatingFrame) {
+      mAbsoluteFrames.RemoveFrame(child);
+      newPushedAbsoluteFrames.AppendFrame(nullptr, child);
     }
+  }
+  if (newPushedAbsoluteFrames.NotEmpty()) {
+    // These new pushed frames have continuations already in our child list,
+    // preceding anything already deferred to a later containing block
+    // continuation. Prepend to keep mPushedAbsoluteFrames in order.
+    mPushedAbsoluteFrames.InsertFrames(nullptr, nullptr,
+                                       std::move(newPushedAbsoluteFrames));
   }
 
   return HasAbsoluteFrames();
@@ -340,6 +394,16 @@ void AbsoluteContainingBlock::StealFrame(nsIFrame* aFrame) {
 #ifdef DEBUG
 void AbsoluteContainingBlock::SanityCheckChildListsBeforeReflow(
     const nsIFrame* aDelegatingFrame) const {
+  if (StaticPrefs::layout_abspos_fragment_aware_inline_cb_enabled() &&
+      aDelegatingFrame->IsInlineFrameOrSubclass() &&
+      !IsFirstInlineContinuationInFragmentainer(aDelegatingFrame)) {
+    // Only the first inline continuation in a fragmentainer serves as the
+    // abspos containing block.
+    MOZ_ASSERT(GetChildList().IsEmpty() && GetPushedChildList().IsEmpty(),
+               "A non-first inline continuation in a fragmentainer should not "
+               "have any abspos children!");
+  }
+
   // TODO(TYLin): This is potentially O(N^2), where N is the number of
   // continuations that an abspos frame gets. Consider putting this behind an
   // about:config pref if it turns out to slow down debug builds too much.

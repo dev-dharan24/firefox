@@ -4,14 +4,6 @@
 
 import { UrlbarShared } from "./UrlbarShared.mjs";
 
-const lazy = {};
-
-ChromeUtils.defineESModuleGetters(lazy, {
-  ConfigSearchEngine:
-    "moz-src:///toolkit/components/search/ConfigSearchEngine.sys.mjs",
-  SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
-});
-
 const logger = UrlbarShared.getLogger({ prefix: "SearchEngineStore" });
 
 /**
@@ -41,10 +33,15 @@ const logger = UrlbarShared.getLogger({ prefix: "SearchEngineStore" });
  * A lightweight view of a SearchEngine for use with SearchEngineStore.
  */
 export class PartialSearchEngine {
+  /** @type {UrlbarChildController} */
+  #controller;
+
   /**
    * @param {SearchEngineInfo} engineInfo
+   * @param {UrlbarChildController} controller
    */
-  constructor(engineInfo) {
+  constructor(engineInfo, controller) {
+    this.#controller = controller;
     this.id = engineInfo.id;
     this.name = engineInfo.name;
     this.isConfigEngine = engineInfo.isConfigEngine;
@@ -71,14 +68,7 @@ export class PartialSearchEngine {
    */
   async getIconURL() {
     if (this.#icon === undefined) {
-      // This will be replaced by IPC at some point.
-      let engine = lazy.SearchService.getEngineById(this.id);
-      if (!engine) {
-        logger.warn(`No engine found for id ${this.id}`);
-        return null;
-      }
-
-      this.#icon = (await engine.getIconURL()) ?? null;
+      this.#icon = (await this.#controller.getEngineIconURL(this.id)) ?? null;
     }
     return this.#icon;
   }
@@ -107,16 +97,7 @@ export class PartialSearchEngine {
    * Marks an engine as used if it's not marked already.
    */
   markAsUsed() {
-    // This will be replaced by IPC at some point.
-    let engine = lazy.SearchService.getEngineById(this.id);
-    if (!engine) {
-      logger.warn(`No engine found for id ${this.id}`);
-      return;
-    }
-
-    if (engine instanceof lazy.ConfigSearchEngine && !engine.hasBeenUsed) {
-      engine.markAsUsed();
-    }
+    this.#controller.markEngineAsUsed(this.id);
   }
 }
 
@@ -259,7 +240,7 @@ export class SearchEngineStore {
     }
 
     for (let engineInfo of engineInfos) {
-      this.#store.push(new PartialSearchEngine(engineInfo));
+      this.#store.push(new PartialSearchEngine(engineInfo, this.#controller));
     }
     this.#defaultEngine = this.#store[defaultIndex];
 
@@ -311,7 +292,7 @@ export class SearchEngineStore {
       case "changed": {
         if (currentIndex == -1) {
           // Add new engine.
-          let newEngine = new PartialSearchEngine(engineInfo);
+          let newEngine = new PartialSearchEngine(engineInfo, this.#controller);
           if (newIndex == -1) {
             this.#store.push(newEngine);
           } else {

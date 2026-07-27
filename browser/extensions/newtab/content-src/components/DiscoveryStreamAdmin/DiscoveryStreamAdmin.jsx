@@ -740,6 +740,55 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
     );
   }
 
+  renderTrainhop() {
+    const {
+      trainhopConfig = {},
+      trainhopVersion,
+      nimbusDebug,
+    } = this.props.otherPrefs;
+    return (
+      <>
+        <table className="minimal-table trainhop-info">
+          <tbody>
+            <Row>
+              <td className="min">Installed version</td>
+              <td>{trainhopVersion ?? "unknown"}</td>
+            </Row>
+            <Row>
+              <td className="min">nimbus.debug</td>
+              <td>{nimbusDebug ? "true" : "false"}</td>
+            </Row>
+          </tbody>
+        </table>
+        <p>
+          Manage the experiments and rollouts that populate this config in{" "}
+          <a target="_blank" rel="noopener noreferrer" href="about:studies">
+            about:studies
+          </a>
+          , or install the{" "}
+          <a
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://github.com/mozilla-extensions/nimbus-devtools/releases"
+          >
+            Nimbus devtools extension
+          </a>
+          .
+        </p>
+        {Object.keys(trainhopConfig || {}).length ? (
+          <pre className="trainhop-config">
+            {JSON.stringify(trainhopConfig, null, 2)}
+          </pre>
+        ) : (
+          <p className="trainhop-empty">
+            No train-hop config. This build isn&apos;t enrolled in any
+            newtabTrainhop experiment or rollout.
+          </p>
+        )}
+      </>
+    );
+  }
+
   renderFeedsData() {
     const { feeds } = this.props.state.DiscoveryStream;
     return (
@@ -1010,6 +1059,10 @@ export class DiscoveryStreamAdminUI extends React.PureComponent {
           />
         </div>
         {/* Collapsible Sections for experiments for easy on/off */}
+        <details className="details-section">
+          <summary>Train Hop</summary>
+          {this.renderTrainhop()}
+        </details>
         <details className="details-section">
           <summary>IAB Banner Ad Sizes</summary>
           <div className="toggle-wrapper">

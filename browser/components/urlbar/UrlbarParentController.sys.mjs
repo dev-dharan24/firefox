@@ -30,8 +30,11 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs",
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
+  UrlbarProviderOpenTabs:
+    "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
   UrlbarProviderSemanticHistorySearch:
     "moz-src:///browser/components/urlbar/UrlbarProviderSemanticHistorySearch.sys.mjs",
+  UrlbarQueryContext: "chrome://browser/content/urlbar/UrlbarQueryContext.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UrlbarTelemetryUtils:
     "chrome://browser/content/urlbar/UrlbarTelemetryUtils.mjs",
@@ -85,10 +88,14 @@ function engineToEngineInfo(engine) {
  * - onViewClose()
  */
 export class UrlbarParentController {
-  // The paired UrlbarChildController, which registers itself via setChild().
-  // Listener registration and notification dispatch live on it, keeping
-  // dispatch on the side where the listeners (the view, the event bufferer)
-  // live. The child is always set before any query runs.
+  /**
+   * The paired UrlbarChildController, which registers itself via setChild().
+   * Listener registration and notification dispatch live on it, keeping
+   * dispatch on the side where the listeners (the view, the event bufferer)
+   * live. The child is always set before any query runs.
+   *
+   * @type {UrlbarChildController}
+   */
   #child = null;
 
   // The owning JSWindowActor, used to resolve the chrome window parent-side
@@ -233,6 +240,114 @@ export class UrlbarParentController {
   async getHeuristicResult(queryContext) {
     await this.manager.startQuery(queryContext);
     return queryContext.heuristicResult;
+  }
+
+  /**
+   * Resolves the navigation for an Enter with no result available to pick,
+   * entirely parent-side: it fetches the heuristic result for the typed value,
+   * and if that fails (a corrupt profile) falls back to `uriFixup`. Both the
+   * query and `uriFixup` are parent-only, and the target browser's per-tab data
+   * and navigation epoch can't be read from a content urlbar, so this owns all
+   * of it and hands the content side only what it needs to pick or load.
+   *
+   * The epoch guards against the browser navigating while the heuristic query
+   * awaited: for a `current` load, a changed epoch means the user moved on, so
+   * neither the pick nor the fixup load should happen.
+   *
+   * @param {object} details
+   * @param {string} details.searchString
+   *   The typed value to resolve.
+   * @param {string} details.where
+   *   Where the result will open, per `openTrustedLinkIn`.
+   * @param {object} [details.searchMode]
+   *   The input's search mode, if any.
+   * @param {number} [details.browserId]
+   *   The id of the browser committed at Enter; its per-tab data and navigation
+   *   epoch are read here, defaulting to the selected browser.
+   * @returns {Promise<object>}
+   *   `{ heuristicResult }` to pick, `{ fixup: { url, postData, keywordAsSent } }`
+   *   to load, or `{}` when the browser navigated in the meanwhile.
+   */
+  async resolveFallbackNavigation({
+    searchString,
+    where,
+    searchMode,
+    browserId,
+  }) {
+    // Increment rate denominator measuring how often the fallback path is hit.
+    Glean.urlbar.heuristicResultMissing.addToDenominator(1);
+
+    let { gBrowser } = this.browserWindow;
+    let browser =
+      (browserId &&
+        BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement) ||
+      gBrowser.selectedBrowser;
+    // Capture the location change counter before awaiting, to verify below that
+    // the browser didn't navigate in the meanwhile.
+    let lastLocationChange =
+      where == "current" ? browser.lastLocationChange : null;
+    let navigated = () =>
+      where == "current" && browser.lastLocationChange != lastLocationChange;
+
+    let heuristicResult;
+    try {
+      let options = {
+        allowAutofill: false,
+        isPrivate: this.isPrivate,
+        sapName: this.sapName,
+        maxResults: 1,
+        searchString,
+        userContextId: parseInt(browser.getAttribute("usercontextid") || 0),
+        tabGroup: gBrowser.getTabForBrowser(browser)?.group?.id ?? null,
+        prohibitRemoteResults: true,
+        providers: [
+          "UrlbarProviderAliasEngines",
+          "UrlbarProviderBookmarkKeywords",
+          "UrlbarProviderHeuristicFallback",
+        ],
+      };
+      if (searchMode) {
+        options.searchMode = searchMode;
+        if (searchMode.source) {
+          options.sources = [searchMode.source];
+        }
+      }
+      heuristicResult = await this.getHeuristicResult(
+        new lazy.UrlbarQueryContext(options)
+      );
+      if (!heuristicResult) {
+        throw new Error("There should always be an heuristic result");
+      }
+    } catch (ex) {
+      // Something went wrong, we should always have a heuristic result,
+      // otherwise it means we're not able to search at all, maybe because some
+      // parts of the profile are corrupt. The urlbar should still allow to
+      // search or visit the typed string, so that the user can look for help to
+      // resolve the problem.
+
+      // Increment rate numerator measuring how often the fallback path is hit.
+      Glean.urlbar.heuristicResultMissing.addToNumerator(1);
+
+      try {
+        let flags =
+          Ci.nsIURIFixup.FIXUP_FLAG_FIX_SCHEME_TYPOS |
+          Ci.nsIURIFixup.FIXUP_FLAG_ALLOW_KEYWORD_LOOKUP;
+        if (this.isPrivate) {
+          flags |= Ci.nsIURIFixup.FIXUP_FLAG_PRIVATE_CONTEXT;
+        }
+        let { preferredURI, postData, keywordAsSent } =
+          Services.uriFixup.getFixupURIInfo(searchString, flags);
+        return navigated()
+          ? {}
+          : { fixup: { url: preferredURI.spec, postData, keywordAsSent } };
+      } catch (fixupEx) {
+        // uriFixup can throw; swallow it so the resolve never rejects.
+        console.error(fixupEx);
+        return {};
+      }
+    }
+
+    return navigated() ? {} : { heuristicResult };
   }
 
   /**
@@ -420,6 +535,27 @@ export class UrlbarParentController {
   }
 
   /**
+   * Records a search that opens in a new tab, against that tab's browser. The
+   * load opens the tab right after this call; TabOpen fires synchronously, so
+   * the next-opened tab is the search tab. Reaching its browser is parent-only.
+   *
+   * @param {Parameters<typeof this.recordSearch>[0]} searchData
+   *   The data for `recordSearch`; its `browserId` is filled in here.
+   */
+  recordSearchInOpenedTab(searchData) {
+    this.browserWindow.gBrowser.tabContainer.addEventListener(
+      "TabOpen",
+      tabEvent => {
+        this.recordSearch({
+          ...searchData,
+          browserId: tabEvent.target.linkedBrowser.browserId,
+        });
+      },
+      { once: true }
+    );
+  }
+
+  /**
    * Cancels an in-progress query. Note, queries may continue running if they
    * can't be cancelled.
    */
@@ -538,6 +674,39 @@ export class UrlbarParentController {
   }
 
   /**
+   * Returns the icon URL of the engine with the given id.
+   *
+   * @param {string} engineId
+   * @returns {Promise<?string>}
+   *   The icon URL, or null if the engine or its icon could not be found.
+   */
+  async getEngineIconURL(engineId) {
+    let engine = lazy.SearchService.getEngineById(engineId);
+    if (!engine) {
+      lazy.logger.warn(`No engine found for id ${engineId}`);
+      return null;
+    }
+    return (await engine.getIconURL()) ?? null;
+  }
+
+  /**
+   * Marks the engine with the given id as used if it's a config engine that
+   * hasn't been used already.
+   *
+   * @param {string} engineId
+   */
+  markEngineAsUsed(engineId) {
+    let engine = lazy.SearchService.getEngineById(engineId);
+    if (!engine) {
+      lazy.logger.warn(`No engine found for id ${engineId}`);
+      return;
+    }
+    if (engine instanceof lazy.ConfigSearchEngine && !engine.hasBeenUsed) {
+      engine.markAsUsed();
+    }
+  }
+
+  /**
    * Tries to initialize a speculative connection on a result.
    * Speculative connections are only supported for a subset of all the results.
    *
@@ -637,9 +806,13 @@ export class UrlbarParentController {
    *   content-process input can't resolve the selected browser itself.
    */
   loadURL({ url, where, params, browserId, userTypedValue }) {
+    // Prefer the browser the child pinned at commit; otherwise a content-process
+    // moz-urlbar loads its own tab (identified by the actor's browsing context),
+    // falling back to the chrome window's selected tab.
     let browser =
       (browserId &&
         BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement) ||
+      this.#actor?.browsingContext?.top?.embedderElement ||
       this.browserWindow.gBrowser.selectedBrowser;
 
     if (this.#isAddressbar) {
@@ -699,6 +872,76 @@ export class UrlbarParentController {
       return { focused: true };
     }
     return { focused: false };
+  }
+
+  /**
+   * Switches to a tab already showing the URL (or opens it), doing the
+   * tabbrowser bookkeeping and the follow-up history/open-tab writes that only
+   * the parent can: reading the previous tab and its split view, closing the
+   * previous tab if it was left empty, recording input history on success, and
+   * unregistering a stale open-tab entry on a miss.
+   *
+   * @param {object} loadData
+   * @param {string} loadData.url
+   *   The URL to switch to.
+   * @param {string} loadData.searchString
+   *   The search string that produced the result, for input history.
+   * @param {number} [loadData.userContextId]
+   *   The id of the container the target tab belongs to; 0 for the default
+   *   container.
+   * @param {string} [loadData.tabGroup]
+   *   The id of the tab group the target tab belongs to, or null for none.
+   * @param {boolean} [loadData.heuristic]
+   *   Whether the result was the heuristic one.
+   */
+  switchToTab({
+    url,
+    searchString,
+    userContextId = 0,
+    tabGroup = null,
+    heuristic = false,
+  }) {
+    let { gBrowser } = this.browserWindow;
+    let prevTab = gBrowser.selectedTab;
+    let activeSplitView = prevTab.splitview;
+    let switched = this.browserWindow.switchToTabHavingURI(
+      Services.io.newURI(url),
+      true,
+      {
+        adoptIntoActiveWindow: lazy.UrlbarPrefs.get(
+          "switchTabs.adoptIntoActiveWindow"
+        ),
+      },
+      lazy.UrlbarShared.isNonPrivateUserContextId(userContextId)
+        ? userContextId
+        : null,
+      activeSplitView
+    );
+
+    if (switched) {
+      if (!activeSplitView && prevTab.isEmpty) {
+        gBrowser.removeTab(prevTab);
+      }
+      if (!this.isPrivate && !heuristic) {
+        // We don't await this, because a rejection should not interrupt the
+        // load. Just reportError it.
+        lazy.UrlbarUtils.addToInputHistory(url, searchString).catch(
+          console.error
+        );
+      }
+      return;
+    }
+
+    // TODO (Bug 1865757): We should not show a "switchtotab" result for tabs
+    // that are not currently open. Find out why tabs are not being properly
+    // unregistered when they are being closed.
+    console.error(`Tried to switch to non-existent tab: ${url}`);
+    lazy.UrlbarProviderOpenTabs.unregisterOpenTab(
+      url,
+      userContextId,
+      tabGroup,
+      this.isPrivate
+    );
   }
 
   /**
@@ -830,11 +1073,14 @@ export class UrlbarParentController {
   #engineStoreInitStarted = false;
 
   /**
-   * Initializes the engine store if the search service
+   * Initializes the engine store synchronously if the search service
    * is already loaded and initialized.
    *
+   * Since this is only useful if  it can be called synchronously,
+   * it's intentionally not exposed in UrlbarParentControllerProxy.
+   *
    * @returns {boolean}
-   *   Whether the search service was initialized successfully.
+   *   Whether the engine store was initialized successfully.
    */
   maybeInitEngineStore() {
     if (
@@ -858,22 +1104,22 @@ export class UrlbarParentController {
       try {
         await lazy.SearchService.init();
       } catch {
-        this.#child.engineStore.receive("error");
+        this.#child.updateEngineStore("error");
         return;
       }
     }
     let engines = lazy.SearchService.visibleEngines;
     let engineInfos = engines.map(engineToEngineInfo);
-    let defaultEngine = this.#child.engineStore.isPrivate
+    let defaultEngine = this.isPrivate
       ? lazy.SearchService.defaultPrivateEngine
       : lazy.SearchService.defaultEngine;
     let defaultIndex = engines.findIndex(e => e == defaultEngine);
     if (!defaultEngine || defaultIndex == -1) {
       // Something went very wrong.
-      this.#child.engineStore.receive("error");
+      this.#child.updateEngineStore("error");
       return;
     }
-    this.#child.engineStore.receive("init", engineInfos, defaultIndex);
+    this.#child.updateEngineStore("init", engineInfos, defaultIndex);
     Services.obs.addObserver(this, "browser-search-engine-modified", true);
   }
 
@@ -904,22 +1150,22 @@ export class UrlbarParentController {
       case "engine-added":
       case "engine-changed":
         if (!engine.hidden) {
-          this.#child.engineStore.receive("changed", engineInfo, index);
+          this.#child.updateEngineStore("changed", engineInfo, index);
         } else {
-          this.#child.engineStore.receive("removed", engineInfo, index);
+          this.#child.updateEngineStore("removed", engineInfo, index);
         }
         break;
       case "engine-removed":
-        this.#child.engineStore.receive("removed", engineInfo, index);
+        this.#child.updateEngineStore("removed", engineInfo, index);
         break;
       case "engine-default":
-        if (!this.#child.engineStore.isPrivate) {
-          this.#child.engineStore.receive("default", engineInfo, index);
+        if (!this.isPrivate) {
+          this.#child.updateEngineStore("default", engineInfo, index);
         }
         break;
       case "engine-default-private":
-        if (this.#child.engineStore.isPrivate) {
-          this.#child.engineStore.receive("default", engineInfo, index);
+        if (this.isPrivate) {
+          this.#child.updateEngineStore("default", engineInfo, index);
         }
         break;
     }
@@ -1842,28 +2088,38 @@ export class TelemetryEvent {
     return ChromeUtils.now();
   }
 
+  // Bounces still being tracked on the direct path, keyed by the tab's stable
+  // browser id. The browser element is captured while alive so a tab-close
+  // trigger can still reach Interactions for it after the tab is gone.
+  #directBounces = new Map();
+
   /**
    * Start tracking a potential bounce event after the user has engaged
    * with a URL bar result.
    *
-   * @param {MozBrowser} browser
-   *   The chrome <browser> for the tab the engagement happened in.
+   * @param {number} browserId
+   *   The stable browser id of the tab the engagement happened in.
    * @param {event} event
    *   A DOM event.
    * @param {ActionDetails} details
    *   An object describing interaction details.
    */
-  async startTrackingBounceEvent(browser, event, details) {
-    let state = this._controller.input.getBrowserState(browser);
+  async startTrackingBounceEvent(browserId, event, details) {
     let startEventInfo = this._startEventInfo;
 
     // If we are already tracking a bounce, then another engagement
     // could possibly lead to a bounce.
-    if (state.bounceEventTracking) {
-      await this.handleBounceEventTrigger(browser);
+    if (this.#directBounces.has(browserId)) {
+      await this.handleBounceEventTrigger(browserId);
     }
 
-    state.bounceEventTracking = {
+    let browser =
+      BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement;
+    if (!browser) {
+      return;
+    }
+
+    this.#directBounces.set(browserId, {
       startTime: Date.now(),
       snapshot: lazy.UrlbarTelemetryUtils.collectBounceSnapshot(
         event,
@@ -1871,7 +2127,8 @@ export class TelemetryEvent {
         startEventInfo,
         this.#engagementData.visibleResults
       ),
-    };
+      browser,
+    });
   }
 
   /**
@@ -1880,58 +2137,60 @@ export class TelemetryEvent {
    * browser chrome (this includes clicking on history or bookmark entries,
    * and engaging with the URL bar).
    *
-   * @param {MozBrowser} browser
-   *   The chrome <browser> for the tab the trigger happened in.
+   * @param {number} browserId
+   *   The stable browser id of the tab the trigger happened in.
    */
-  async handleBounceEventTrigger(browser) {
-    let state = this._controller.input.getBrowserState(browser);
-    if (state.bounceEventTracking) {
-      const interactions =
-        (await lazy.Interactions.getRecentInteractionsForBrowser(browser)) ??
-        [];
-
-      // handleBounceEventTrigger() can run concurrently, so we bail out
-      // if a prior async invocation has already cleared bounceEventTracking.
-      if (!state.bounceEventTracking) {
-        return;
-      }
-
-      let totalViewTime = 0;
-      for (let interaction of interactions) {
-        if (interaction.created_at >= state.bounceEventTracking.startTime) {
-          totalViewTime += interaction.totalViewTime || 0;
-        }
-      }
-
-      // If the total view time when the user navigates away after a
-      // URL bar interaction is less than the threshold of
-      // events.bounce.maxSecondsFromLastSearch, we record a bounce event.
-      // If totalViewTime is 0, that means the page didn't load yet, so
-      // we wouldn't record a bounce event.
-      if (
-        totalViewTime != 0 &&
-        totalViewTime <
-          lazy.UrlbarPrefs.get("events.bounce.maxSecondsFromLastSearch") * 1000
-      ) {
-        this.recordBounceEvent(browser, totalViewTime);
-      }
-
-      state.bounceEventTracking = null;
+  async handleBounceEventTrigger(browserId) {
+    let tracking = this.#directBounces.get(browserId);
+    if (!tracking) {
+      return;
     }
+
+    const interactions =
+      (await lazy.Interactions.getRecentInteractionsForBrowser(
+        tracking.browser
+      )) ?? [];
+
+    // handleBounceEventTrigger() can run concurrently, so we bail out
+    // if a prior async invocation has already cleared the tracking.
+    if (!this.#directBounces.has(browserId)) {
+      return;
+    }
+
+    let totalViewTime = 0;
+    for (let interaction of interactions) {
+      if (interaction.created_at >= tracking.startTime) {
+        totalViewTime += interaction.totalViewTime || 0;
+      }
+    }
+
+    // If the total view time when the user navigates away after a
+    // URL bar interaction is less than the threshold of
+    // events.bounce.maxSecondsFromLastSearch, we record a bounce event.
+    // If totalViewTime is 0, that means the page didn't load yet, so
+    // we wouldn't record a bounce event.
+    if (
+      totalViewTime != 0 &&
+      totalViewTime <
+        lazy.UrlbarPrefs.get("events.bounce.maxSecondsFromLastSearch") * 1000
+    ) {
+      this.recordBounceEvent(browserId, totalViewTime);
+    }
+
+    this.#directBounces.delete(browserId);
   }
 
   /**
    * Record a bounce event
    *
-   * @param {MozBrowser} browser
-   *   The chrome <browser> for the tab the engagement happened in.
+   * @param {number} browserId
+   *   The stable browser id of the tab the engagement happened in.
    * @param {number} viewTime
    *  The time spent on a tab after a URL bar engagement before
    *  navigating away via browser chrome or closing the tab.
    */
-  recordBounceEvent(browser, viewTime) {
-    let { snapshot } =
-      this._controller.input.getBrowserState(browser).bounceEventTracking;
+  recordBounceEvent(browserId, viewTime) {
+    let { snapshot } = this.#directBounces.get(browserId);
     this.#recordBounce(snapshot, viewTime);
   }
 

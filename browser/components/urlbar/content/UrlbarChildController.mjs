@@ -5,6 +5,7 @@
 import { UrlbarShared } from "chrome://browser/content/urlbar/UrlbarShared.mjs";
 import { UrlbarChildTelemetry } from "chrome://browser/content/urlbar/UrlbarChildTelemetry.mjs";
 import { UrlbarParentControllerProxy } from "chrome://browser/content/urlbar/UrlbarParentControllerProxy.mjs";
+import UrlbarPrefs from "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs";
 
 const { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
@@ -15,7 +16,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   UrlbarParentController:
     "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs",
-  UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
 });
 
 /**
@@ -111,6 +111,13 @@ export class UrlbarChildController {
     this.engineStore = new SearchEngineStore(this);
   }
 
+  /**
+   * @type {typeof SearchEngineStore.prototype.receive}
+   */
+  updateEngineStore(...args) {
+    this.engineStore.receive(...args);
+  }
+
   get input() {
     return this.#input;
   }
@@ -181,6 +188,9 @@ export class UrlbarChildController {
   getHeuristicResult(queryContext) {
     return this.#parentController.getHeuristicResult(queryContext);
   }
+  resolveFallbackNavigation(details) {
+    return this.#parentController.resolveFallbackNavigation(details);
+  }
   addListener(listener) {
     if (!listener || typeof listener != "object") {
       throw new TypeError("Expected listener to be an object");
@@ -232,6 +242,9 @@ export class UrlbarChildController {
   }
   recordSearch(options) {
     return this.#parentController.recordSearch(options);
+  }
+  recordSearchInOpenedTab(searchData) {
+    return this.#parentController.recordSearchInOpenedTab(searchData);
   }
   /**
    * Starts a query and returns the parent controller's promise so callers (the
@@ -312,7 +325,7 @@ export class UrlbarChildController {
       }
 
       let handled = false;
-      if (lazy.UrlbarPrefs.get("scotchBonnet.enableOverride")) {
+      if (UrlbarPrefs.get("scotchBonnet.enableOverride")) {
         handled = this.input.searchModeSwitcher.handleKeyDown(event);
       } else if (this.view.isOpen && this._lastQueryContextWrapper) {
         let { queryContext } = this._lastQueryContextWrapper;
@@ -338,7 +351,7 @@ export class UrlbarChildController {
             // chrome moz-urlbar; a content-process one already has focus in
             // content. Only a browser window has `gBrowser`.
             this.window.gBrowser &&
-            lazy.UrlbarPrefs.get("focusContentDocumentOnEsc") &&
+            UrlbarPrefs.get("focusContentDocumentOnEsc") &&
             !this.input.searchMode &&
             (this.input.sapName == "searchbar"
               ? this.input.value == ""
@@ -413,7 +426,7 @@ export class UrlbarChildController {
 
         // Change the tab behavior when urlbar view is open.
         if (
-          lazy.UrlbarPrefs.get("scotchBonnet.enableOverride") &&
+          UrlbarPrefs.get("scotchBonnet.enableOverride") &&
           this.view.isOpen &&
           !event.ctrlKey &&
           !event.altKey
@@ -662,6 +675,10 @@ export class UrlbarChildController {
     return this.#parentController.focusBrowser(browserId);
   }
 
+  switchToTab(loadData) {
+    return this.#parentController.switchToTab(loadData);
+  }
+
   /**
    * Returns whether the passed-in event represents a canonization request.
    *
@@ -679,7 +696,7 @@ export class UrlbarChildController {
       event.keyCode == KeyEvent.DOM_VK_RETURN &&
       (AppConstants.platform == "macosx" ? event.metaKey : event.ctrlKey) &&
       !(/** @type {any} */ (event)._disableCanonization) &&
-      lazy.UrlbarPrefs.get("ctrlCanonizesURLs")
+      UrlbarPrefs.get("ctrlCanonizesURLs")
     );
   }
 
@@ -714,8 +731,8 @@ export class UrlbarChildController {
     }
     let openInTabPref =
       this.#input.sapName == "searchbar"
-        ? lazy.UrlbarPrefs.get("browser.search.openintab")
-        : lazy.UrlbarPrefs.get("openintab");
+        ? UrlbarPrefs.get("browser.search.openintab")
+        : UrlbarPrefs.get("openintab");
     if (openInTabPref) {
       if (where == "current") {
         where = "tab";
@@ -774,12 +791,18 @@ export class UrlbarChildController {
     );
   }
 
+  /** @type {typeof UrlbarParentController.prototype.initEngineStore} */
   initEngineStore() {
-    this.#parentController.initEngineStore();
+    return this.#parentController.initEngineStore();
   }
 
+  /** @type {typeof UrlbarParentController.prototype.maybeInitEngineStore} */
   maybeInitEngineStore() {
-    return this.#parentController.maybeInitEngineStore();
+    if (this.#parentController.maybeInitEngineStore) {
+      return this.#parentController.maybeInitEngineStore();
+    }
+    // Synchronous initialization isn't supported in the message path.
+    return false;
   }
 
   /** @type {typeof UrlbarParentController.prototype.openSERP} */
@@ -790,5 +813,15 @@ export class UrlbarChildController {
   /** @type {typeof UrlbarParentController.prototype.openSearchForm} */
   openSearchForm(engineId, where, inBackground) {
     this.#parentController.openSearchForm(engineId, where, inBackground);
+  }
+
+  /** @type {typeof UrlbarParentController.prototype.getEngineIconURL} */
+  getEngineIconURL(engineId) {
+    return this.#parentController.getEngineIconURL(engineId);
+  }
+
+  /** @type {typeof UrlbarParentController.prototype.markEngineAsUsed} */
+  markEngineAsUsed(engineId) {
+    this.#parentController.markEngineAsUsed(engineId);
   }
 }

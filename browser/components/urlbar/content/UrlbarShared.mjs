@@ -9,6 +9,8 @@
  * its own copy of the module).
  */
 
+import UrlbarPrefs from "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs";
+
 /**
  * @typedef {object} LocalSearchMode
  *   Represents a local search mode, e.g. bookmarks.
@@ -32,7 +34,6 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
-  UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
 });
 
 // The userContextId used in the moz_openpages_temp table for tabs in private
@@ -338,7 +339,7 @@ export const UrlbarShared = {
       this.RESTRICT_TOKENS.OPENPAGE,
       this.RESTRICT_TOKENS.SEARCH,
     ];
-    if (lazy.UrlbarPrefs.get("scotchBonnet.enableOverride")) {
+    if (UrlbarPrefs.get("scotchBonnet.enableOverride")) {
       keys.push(this.RESTRICT_TOKENS.ACTION);
     }
     return new Set(keys);
@@ -534,7 +535,7 @@ function createLoggerContent(prefix) {
 
   let shouldLog = level => {
     let maxLevel =
-      LEVEL_NUMBERS[lazy.UrlbarPrefs.get("loglevel").toLowerCase()] ??
+      LEVEL_NUMBERS[UrlbarPrefs.get("loglevel").toLowerCase()] ??
       LEVEL_NUMBERS.warn;
     return maxLevel <= LEVEL_NUMBERS[level];
   };

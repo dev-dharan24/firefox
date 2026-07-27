@@ -14,7 +14,6 @@
  */
 
 import { UrlbarShared } from "chrome://browser/content/urlbar/UrlbarShared.mjs";
-import { UrlbarQueryContext } from "chrome://browser/content/urlbar/UrlbarQueryContext.mjs";
 import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
@@ -23,6 +22,8 @@ const lazy = XPCOMUtils.declareLazy({
   BrowserUIUtils: "resource:///modules/BrowserUIUtils.sys.mjs",
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
+  CustomizableUI:
+    "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   DEFAULT_FORM_HISTORY_PARAM:
     "moz-src:///toolkit/components/search/SearchSuggestionController.sys.mjs",
   FaviconUtils: "moz-src:///toolkit/modules/FaviconUtils.sys.mjs",
@@ -1271,6 +1272,19 @@ export var UrlbarUtils = {
   },
 
   /**
+   * Return whether or not persisted search terms is enabled.
+   *
+   * @returns {boolean} true: if enabled.
+   */
+  isPersistedSearchTermsEnabled() {
+    return (
+      lazy.UrlbarPrefs.getScotchBonnetPref("showSearchTerms.featureGate") &&
+      lazy.UrlbarPrefs.get("showSearchTerms.enabled") &&
+      !lazy.CustomizableUI.getPlacementOfWidget("search-container")
+    );
+  },
+
+  /**
    * Returns the portion of a string starting at the index where another string
    * begins.
    *
@@ -1333,52 +1347,6 @@ export var UrlbarUtils = {
       return ["", str];
     }
     return [prefix, str.substring(prefix.length)];
-  },
-
-  /**
-   * Runs a search for the given string, and returns the heuristic result.
-   *
-   * @param {string} searchString The string to search for.
-   * @param {UrlbarInput} urlbarInput The input requesting it.
-   * @returns {Promise<UrlbarResult>} an heuristic result.
-   */
-  async getHeuristicResultFor(searchString, urlbarInput) {
-    if (!searchString) {
-      throw new Error("Must pass a non-null search string");
-    }
-
-    let gBrowser = urlbarInput.window.gBrowser;
-    let options = {
-      allowAutofill: false,
-      isPrivate: urlbarInput.isPrivate,
-      sapName: urlbarInput.sapName,
-      maxResults: 1,
-      searchString,
-      userContextId: parseInt(
-        gBrowser.selectedBrowser.getAttribute("usercontextid") || 0
-      ),
-      tabGroup: gBrowser.selectedTab.group?.id ?? null,
-      prohibitRemoteResults: true,
-      providers: [
-        "UrlbarProviderAliasEngines",
-        "UrlbarProviderBookmarkKeywords",
-        "UrlbarProviderHeuristicFallback",
-      ],
-    };
-    if (urlbarInput.searchMode) {
-      let searchMode = urlbarInput.searchMode;
-      options.searchMode = searchMode;
-      if (searchMode.source) {
-        options.sources = [searchMode.source];
-      }
-    }
-    let context = new UrlbarQueryContext(options);
-    let heuristicResult =
-      await urlbarInput.controller.getHeuristicResult(context);
-    if (!heuristicResult) {
-      throw new Error("There should always be an heuristic result");
-    }
-    return heuristicResult;
   },
 
   /**

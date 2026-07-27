@@ -89,6 +89,8 @@ skip-if = [
 
 ["browser_aiwindow_grouped_chips.js"]
 
+["browser_aiwindow_history_menu.js"]
+
 ["browser_aiwindow_immersive.js"]
 
 ["browser_aiwindow_integration.js"]

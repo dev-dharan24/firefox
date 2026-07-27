@@ -13,8 +13,6 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 import { TelemetryReportingPolicy } from "resource://gre/modules/TelemetryReportingPolicy.sys.mjs";
 
 const lazy = XPCOMUtils.declareLazy({
-  CustomizableUI:
-    "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
 });
@@ -795,6 +793,9 @@ const PREF_TYPES = new Map([
   ["number", "Int"],
   ["string", "Char"],
 ]);
+
+let inParent =
+  Services.appinfo.processType == Services.appinfo.PROCESS_TYPE_DEFAULT;
 
 /**
  * Builds the default result groups and returns the root group.  Result
@@ -1579,19 +1580,6 @@ class Preferences {
   }
 
   /**
-   * Return whether or not persisted search terms is enabled.
-   *
-   * @returns {boolean} true: if enabled.
-   */
-  isPersistedSearchTermsEnabled() {
-    return (
-      this.getScotchBonnetPref("showSearchTerms.featureGate") &&
-      this.get("showSearchTerms.enabled") &&
-      !lazy.CustomizableUI.getPlacementOfWidget("search-container")
-    );
-  }
-
-  /**
    * @type {Map<string, ResultGroup>}
    * Result groups cached by search access point and params used to build them.
    */
@@ -1613,6 +1601,12 @@ class Preferences {
         this._observerWeakRefs.splice(i, 1);
         continue;
       }
+
+      if (!inParent) {
+        // This is necessary for observers created in non-chrome code.
+        observer = Cu.waiveXrays(observer);
+      }
+
       if (method in observer) {
         try {
           observer[method](changed, ...rest);

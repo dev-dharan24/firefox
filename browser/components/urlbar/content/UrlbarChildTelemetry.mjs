@@ -305,6 +305,10 @@ export class UrlbarChildTelemetry {
     });
   }
 
+  // Bounces still being tracked on the message path, keyed by the tab's stable
+  // browser id.
+  #bounceStates = new Map();
+
   /**
    * Starts tracking a potential bounce after an engagement, resolving the
    * bounce snapshot content-side (the recording itself runs parent-side).
@@ -314,16 +318,15 @@ export class UrlbarChildTelemetry {
    * recording -- it doesn't run for a content-process urlbar, which has no such
    * browser.
    *
-   * @param {MozBrowser} browser
-   *   The chrome <browser> for the tab the engagement happened in.
+   * @param {number} browserId
+   *   The stable browser id of the tab the engagement happened in.
    * @param {Event} event The DOM event behind the engagement.
    * @param {object} details The interaction details.
    */
-  async startTrackingBounceEvent(browser, event, details) {
-    let state = this.#controller.input.getBrowserState(browser);
+  async startTrackingBounceEvent(browserId, event, details) {
     // Another engagement while already tracking could itself be a bounce.
-    if (state.bounceEventTracking) {
-      await this.handleBounceEventTrigger(browser);
+    if (this.#bounceStates.has(browserId)) {
+      await this.handleBounceEventTrigger(browserId);
     }
 
     let { input, view } = this.#controller;
@@ -372,12 +375,16 @@ export class UrlbarChildTelemetry {
       });
     }
 
-    state.bounceEventTracking = { startTime: Date.now(), built, searchSource };
+    this.#bounceStates.set(browserId, {
+      startTime: Date.now(),
+      built,
+      searchSource,
+    });
 
     // The bounce records parent-side at trigger time, by which point a closing
     // tab's browser is gone. Hand the parent the live browser now so it can
     // still resolve it then.
-    this.#controller.trackBounceBrowser(browser.browsingContext?.browserId);
+    this.#controller.trackBounceBrowser(browserId);
   }
 
   /**
@@ -386,22 +393,22 @@ export class UrlbarChildTelemetry {
    * content the recording reads to the parent, which queries `Interactions`
    * and records the bounce if warranted.
    *
-   * @param {MozBrowser} browser
-   *   The chrome <browser> for the tab the trigger happened in.
+   * @param {number} browserId
+   *   The stable browser id of the tab the trigger happened in.
    */
-  handleBounceEventTrigger(browser) {
-    let state = this.#controller.input.getBrowserState(browser);
-    if (!state.bounceEventTracking) {
+  handleBounceEventTrigger(browserId) {
+    let state = this.#bounceStates.get(browserId);
+    if (!state) {
       return;
     }
-    let { built, searchSource, startTime } = state.bounceEventTracking;
-    state.bounceEventTracking = null;
+    this.#bounceStates.delete(browserId);
+    let { built, searchSource, startTime } = state;
 
     this.#controller.handleBounceTrigger({
       built,
       searchSource,
       startTime,
-      browserId: browser.browsingContext?.browserId,
+      browserId,
     });
   }
 }

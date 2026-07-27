@@ -394,6 +394,9 @@
       "chrome://browser/content/urlbar/UrlbarChildTelemetry.mjs": [
         "../../../browser/components/urlbar/content/UrlbarChildTelemetry.mjs"
       ],
+      "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs": [
+        "../../../browser/components/urlbar/content/UrlbarContentPrefs.mjs"
+      ],
       "chrome://browser/content/urlbar/UrlbarEventBufferer.mjs": [
         "../../../browser/components/urlbar/content/UrlbarEventBufferer.mjs"
       ],
@@ -541,8 +544,14 @@
       "chrome://global/content/elements/moz-segmented-control.mjs": [
         "../../../toolkit/content/widgets/moz-segmented-control/moz-segmented-control.mjs"
       ],
+      "chrome://global/content/elements/moz-select.mjs": [
+        "../../../toolkit/content/widgets/moz-select/moz-select.mjs"
+      ],
       "chrome://global/content/elements/moz-support-link.mjs": [
         "../../../toolkit/content/widgets/moz-support-link/moz-support-link.mjs"
+      ],
+      "chrome://global/content/elements/moz-textarea.mjs": [
+        "../../../toolkit/content/widgets/moz-textarea/moz-textarea.mjs"
       ],
       "chrome://global/content/elements/moz-toggle.mjs": [
         "../../../toolkit/content/widgets/moz-toggle/moz-toggle.mjs"
@@ -807,6 +816,9 @@
       ],
       "chrome://mozapps/content/extensions/components/aboutaddons-themes-mode.mjs": [
         "../../../toolkit/mozapps/extensions/content/components/aboutaddons-themes-mode.mjs"
+      ],
+      "chrome://mozapps/content/extensions/components/aboutaddons-themes-picker.mjs": [
+        "../../../toolkit/mozapps/extensions/content/components/aboutaddons-themes-picker.mjs"
       ],
       "chrome://mozapps/content/extensions/components/addon-card.mjs": [
         "../../../toolkit/mozapps/extensions/content/components/addon-card.mjs"
@@ -2871,6 +2883,12 @@
       ],
       "resource://devtools/client/inspector/computed/computed.js": [
         "../../../devtools/client/inspector/computed/computed.js"
+      ],
+      "resource://devtools/client/inspector/emulation/actions/emulation.js": [
+        "../../../devtools/client/inspector/emulation/actions/emulation.js"
+      ],
+      "resource://devtools/client/inspector/emulation/actions/index.js": [
+        "../../../devtools/client/inspector/emulation/actions/index.js"
       ],
       "resource://devtools/client/inspector/extensions/actions/index.js": [
         "../../../devtools/client/inspector/extensions/actions/index.js"

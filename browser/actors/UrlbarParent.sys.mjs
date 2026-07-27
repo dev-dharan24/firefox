@@ -13,6 +13,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 /**
  * @import {UrlbarParentController} from "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs"
+ * @import {SearchEngineStore} from "chrome://browser/content/urlbar/SearchEngineStore.mjs"
  */
 
 /**
@@ -82,6 +83,14 @@ export class UrlbarParent extends JSWindowActorParent {
             lazy.UrlbarQueryContext.fromWire(message.data.queryContext)
           )
           .then(result => result?.toWire() ?? null);
+      case "ResolveFallbackNavigation":
+        return controller
+          .resolveFallbackNavigation(message.data.details)
+          .then(outcome =>
+            outcome.heuristicResult
+              ? { heuristicResult: outcome.heuristicResult.toWire() }
+              : outcome
+          );
       case "RecordEngagement":
         controller.recordEngagement(message.data.wire);
         break;
@@ -102,6 +111,9 @@ export class UrlbarParent extends JSWindowActorParent {
         break;
       case "RecordSearch":
         controller.recordSearch(message.data);
+        break;
+      case "RecordSearchInOpenedTab":
+        controller.recordSearchInOpenedTab(message.data.searchData);
         break;
       case "StartQuery":
         // Round-trips so the proxy's startQuery resolves at true completion with
@@ -126,6 +138,9 @@ export class UrlbarParent extends JSWindowActorParent {
         return controller.loadURL(message.data.loadData);
       case "FocusBrowser":
         return controller.focusBrowser(message.data.browserId);
+      case "SwitchToTab":
+        controller.switchToTab(message.data.loadData);
+        break;
       case "RemoveResult":
         controller.removeResult(
           lazy.UrlbarResult.fromWire(message.data.result),
@@ -152,6 +167,14 @@ export class UrlbarParent extends JSWindowActorParent {
         break;
       case "OnSelection":
         controller.onSelection(lazy.UrlbarResult.fromWire(message.data.result));
+        break;
+      case "InitEngineStore":
+        controller.initEngineStore();
+        break;
+      case "GetEngineIconURL":
+        return controller.getEngineIconURL(message.data.engineId);
+      case "MarkEngineAsUsed":
+        controller.markEngineAsUsed(message.data.engineId);
         break;
     }
     return undefined;
@@ -186,6 +209,16 @@ class UrlbarChildControllerProxy {
           ? { serializedQueryContext: param.toWire() }
           : param
       ),
+    });
+  }
+
+  /**
+   * @type {typeof SearchEngineStore.prototype.receive}
+   */
+  updateEngineStore(...args) {
+    this.#actor.sendAsyncMessage("UpdateEngineStore", {
+      instanceId: this.#instanceId,
+      args,
     });
   }
 

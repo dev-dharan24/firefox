@@ -173,7 +173,7 @@ export const TOOL_RESULTS_SUBQUERY = `(
 ) AS tool_results`;
 
 export const CONVERSATIONS_MOST_RECENT = `
-SELECT conv_id, title
+SELECT conv_id, title, page_url
 FROM conversation
 ORDER BY updated_date DESC
 LIMIT :limit;

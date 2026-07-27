@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import UrlbarPrefs from "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs";
 import { UrlbarShared } from "chrome://browser/content/urlbar/UrlbarShared.mjs";
 import { L10nCache } from "chrome://browser/content/urlbar/L10nCache.mjs";
 
@@ -10,7 +11,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
-  UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
   UrlbarProviderTopSites:
     "moz-src:///browser/components/urlbar/UrlbarProviderTopSites.sys.mjs",
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
@@ -495,7 +495,7 @@ export class UrlbarView {
       let skipAnnouncement =
         result?.providerName == "UrlbarProviderTabToSearch" &&
         !this.#announceTabToSearchOnSelection &&
-        lazy.UrlbarPrefs.get("accessibility.tabToSearch.announceResults");
+        UrlbarPrefs.get("accessibility.tabToSearch.announceResults");
       if (skipAnnouncement) {
         // Once we skip setting aria-activedescendant once, we should not skip
         // it again if the user returns to that result.
@@ -1024,7 +1024,7 @@ export class UrlbarView {
     let secondResult = queryContext.results[1];
     if (
       secondResult?.providerName == "UrlbarProviderTabToSearch" &&
-      lazy.UrlbarPrefs.get("accessibility.tabToSearch.announceResults") &&
+      UrlbarPrefs.get("accessibility.tabToSearch.announceResults") &&
       this.#previousTabToSearchEngine != secondResult.payload.engine
     ) {
       let engine = secondResult.payload.engine;
@@ -1069,7 +1069,7 @@ export class UrlbarView {
       });
     }
 
-    if (lazy.UrlbarPrefs.get("unifiedSearchButton.always")) {
+    if (UrlbarPrefs.get("unifiedSearchButton.always")) {
       // Update the search mode switcher icon to reflect what pressing Enter will do after new results show.
       this.input.searchModeSwitcher?.updateSearchIcon();
     }
@@ -1246,7 +1246,7 @@ export class UrlbarView {
    */
   maybeRollupPopups() {
     if (
-      lazy.UrlbarPrefs.get("closeOtherPanelsOnOpen") &&
+      UrlbarPrefs.get("closeOtherPanelsOnOpen") &&
       !this.input.inOverflowPanel
     ) {
       this.window.docShell.treeOwner
@@ -1261,7 +1261,7 @@ export class UrlbarView {
       throw new Error("A heuristic result must be given");
     }
     return (
-      !lazy.UrlbarPrefs.get("experimental.hideHeuristic") ||
+      !UrlbarPrefs.get("experimental.hideHeuristic") ||
       result.type == UrlbarShared.RESULT_TYPE.TIP
     );
   }
@@ -1585,7 +1585,7 @@ export class UrlbarView {
   }
 
   #createExplanation(parentNode, item) {
-    if (!lazy.UrlbarPrefs.get("resultExplanationsFeatureGate")) {
+    if (!UrlbarPrefs.get("resultExplanationsFeatureGate")) {
       return;
     }
 
@@ -2064,7 +2064,7 @@ export class UrlbarView {
         l10n: result.showFeedbackMenu
           ? { id: "urlbar-result-menu-button-feedback" }
           : { id: "urlbar-result-menu-button" },
-        attributes: lazy.UrlbarPrefs.get("resultMenu.keyboardAccessible")
+        attributes: UrlbarPrefs.get("resultMenu.keyboardAccessible")
           ? null
           : {
               "keyboard-inaccessible": true,
@@ -2450,7 +2450,7 @@ export class UrlbarView {
     switch (result.type) {
       case UrlbarShared.RESULT_TYPE.TAB_SWITCH:
         // Hide chiclet when showing secondaryActions.
-        if (!lazy.UrlbarPrefs.get("secondaryActions.switchToTab")) {
+        if (!UrlbarPrefs.get("secondaryActions.switchToTab")) {
           actionSetter = () => {
             this.#setSwitchTabActionChiclet(result, action);
           };
@@ -3054,7 +3054,7 @@ export class UrlbarView {
    *   returns an l10n object for the label's l10n string: `{ id, args }`
    */
   #rowLabel(row) {
-    if (!lazy.UrlbarPrefs.get("groupLabels.enabled")) {
+    if (!UrlbarPrefs.get("groupLabels.enabled")) {
       return null;
     }
 
@@ -3200,7 +3200,7 @@ export class UrlbarView {
     this.#removeStaleRowsTimer = this.window.setTimeout(() => {
       this.#removeStaleRowsTimer = null;
       this.#removeStaleRows();
-    }, lazy.UrlbarPrefs.get("removeStaleRowsTimeout"));
+    }, UrlbarPrefs.get("removeStaleRowsTimeout"));
   }
 
   #cancelRemoveStaleRowsTimer() {
@@ -3512,9 +3512,7 @@ export class UrlbarView {
         });
       } else if (
         result.providerName == "UrlbarProviderTokenAliasEngines" &&
-        lazy.UrlbarPrefs.getScotchBonnetPref(
-          "searchRestrictKeywords.featureGate"
-        )
+        UrlbarPrefs.getScotchBonnetPref("searchRestrictKeywords.featureGate")
       ) {
         this.#l10nCache.setElementL10n(titleNode, {
           id: "urlbar-result-search-with-engine-keywords",
@@ -3868,14 +3866,14 @@ export class UrlbarView {
       { id: "urlbar-result-action-move-tab-to-split-view" },
     ];
 
-    if (lazy.UrlbarPrefs.get("groupLabels.enabled")) {
+    if (UrlbarPrefs.get("groupLabels.enabled")) {
       idArgs.push({ id: "urlbar-group-firefox-suggest" });
       idArgs.push({ id: "urlbar-group-best-match" });
     }
 
     let suggestSponsoredEnabled =
-      lazy.UrlbarPrefs.get("quickSuggestEnabled") &&
-      lazy.UrlbarPrefs.get("suggest.quicksuggest.sponsored");
+      UrlbarPrefs.get("quickSuggestEnabled") &&
+      UrlbarPrefs.get("suggest.quicksuggest.sponsored");
     if (suggestSponsoredEnabled) {
       idArgs.push({ id: "urlbar-result-action-sponsored" });
     }
@@ -3920,7 +3918,7 @@ export class UrlbarView {
       });
     }
 
-    if (lazy.UrlbarPrefs.get("groupLabels.enabled")) {
+    if (UrlbarPrefs.get("groupLabels.enabled")) {
       idArgs.push({
         id: "urlbar-group-search-suggestions",
         args: { engine: defaultEngineName },
@@ -4176,7 +4174,7 @@ export class UrlbarView {
     // If the view is open without the input being focused, it will not close
     // automatically when the window loses focus. We might be in this state
     // after a Search Tip is shown on an engine homepage.
-    if (!lazy.UrlbarPrefs.get("ui.popup.disable_autohide")) {
+    if (!UrlbarPrefs.get("ui.popup.disable_autohide")) {
       this.close();
     }
   }
@@ -4348,7 +4346,7 @@ export class UrlbarView {
 
   on_popupshowing(event) {
     if (event.target.id == "urlbarView-context-menu") {
-      if (!lazy.UrlbarPrefs.get("contextMenu.featureGate")) {
+      if (!UrlbarPrefs.get("contextMenu.featureGate")) {
         event.preventDefault();
         return;
       }
@@ -4398,7 +4396,7 @@ export class UrlbarView {
     event.preventDefault();
 
     if (
-      !lazy.UrlbarPrefs.get("contextMenu.featureGate") ||
+      !UrlbarPrefs.get("contextMenu.featureGate") ||
       !event.target.closest(".urlbarView-row")
     ) {
       // Don't show the context menu from the background or the group label etc.

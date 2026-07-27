@@ -612,6 +612,10 @@ export class PrefsFeed {
     values.widgetsConfig =
       lazy.NimbusFeatures.newtabWidgets.getAllVariables() || {};
     values.trainhopConfig = this._getTrainhopConfig();
+    values.trainhopVersion =
+      globalThis.WebExtensionPolicy?.getByID("newtab@mozilla.org")?.version ??
+      null;
+    values.nimbusDebug = Services.prefs.getBoolPref("nimbus.debug", false);
     values.adsBackendConfig = this._getAdsBackendFeatures();
     for (const { type, key, defaultValue } of PREF_DEFAULTS) {
       if (type === "bool") {

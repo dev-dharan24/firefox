@@ -178,11 +178,17 @@ smartwindow-prompts {
   display: flex;
   gap: var(--space-small);
   grid-area: sidebar-header;
+  justify-content: flex-start;
 }
 
 .fullpage-header {
   display: none;
   grid-area: fullpage-header;
+  /* Center the row on the content column. */
+  inset-inline: 0;
+  margin-inline: auto;
+  max-width: var(--smartwindow-content-max-width);
+  padding-inline: 0;
 }
 
 moz-button.new-chat-icon-button,
@@ -237,6 +243,8 @@ moz-button.close-sidebar-button {
 
 moz-button.close-sidebar-button {
   --icon-size: calc(var(--icon-size-xsmall) - 2px);
+  /* Push to the trailing edge. */
+  margin-inline-start: auto;
 }
 
 #smartbar-toggle-button:not([hidden]) {

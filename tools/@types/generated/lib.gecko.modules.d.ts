@@ -301,6 +301,7 @@ export interface Modules {
   "moz-src:///browser/components/aiwindow/ui/modules/AIWindowTabStatesManager.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AIWindowTabStatesManager.sys.mjs"),
   "moz-src:///browser/components/aiwindow/ui/modules/AIWindowTelemetry.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AIWindowTelemetry.sys.mjs"),
   "moz-src:///browser/components/aiwindow/ui/modules/AIWindowUI.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AIWindowUI.sys.mjs"),
+  "moz-src:///browser/components/aiwindow/ui/modules/AgentUI.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AgentUI.sys.mjs"),
   "moz-src:///browser/components/aiwindow/ui/modules/AutoTabGrouping.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AutoTabGrouping.sys.mjs"),
   "moz-src:///browser/components/aiwindow/ui/modules/AutoTabGroupingSuggestions.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/AutoTabGroupingSuggestions.sys.mjs"),
   "moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs": typeof import("moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs"),

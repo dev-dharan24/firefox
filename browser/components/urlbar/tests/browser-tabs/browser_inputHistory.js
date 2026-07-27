@@ -73,7 +73,15 @@ add_task(async function test_adaptive_with_search_term_and_switch_tab() {
   Assert.equal(result2.url, urls[1]);
 
   info("Visiting tab 1");
+  // The pick switches tabs and records the adaptive-history engagement
+  // parent-side, so on the actor message path both are async relative to the
+  // key; wait for the tab switch before asserting.
+  let tabSwitched = BrowserTestUtils.waitForEvent(
+    gBrowser.tabContainer,
+    "TabSelect"
+  );
   EventUtils.synthesizeKey("KEY_Enter");
+  await tabSwitched;
   Assert.equal(gBrowser.selectedTab, tabs[1], "Should have switched to tab 1");
 
   info("Switch back to tab 0");

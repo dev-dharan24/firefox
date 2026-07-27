@@ -86,6 +86,28 @@ export class UrlbarChild extends JSWindowActorChild {
   }
 
   /**
+   * Expose UrlbarPrefs on the window for UrlbarPrefs.mjs.
+   * This is only needed in child processes. In the parent process,
+   * it can be imported directly from the system global.
+   */
+  exposeUrlbarPrefs() {
+    let xrayedWin = Cu.waiveXrays(this.contentWindow);
+    xrayedWin.UrlbarPrefs = Cu.cloneInto(
+      {
+        get: name => Cu.cloneInto(lazy.UrlbarPrefs.get(name), xrayedWin),
+        addObserver: observer => lazy.UrlbarPrefs.addObserver(observer),
+        removeObserver: observer => lazy.UrlbarPrefs.removeObserver(observer),
+      },
+      xrayedWin,
+      { cloneFunctions: true }
+    );
+  }
+
+  actorCreated() {
+    this.exposeUrlbarPrefs();
+  }
+
+  /**
    * Registers a message-path `<moz-urlbar>` input for teardown -- so the parent
    * drops the controller once the input is collected -- and returns the instance
    * id the child controller pairs with the proxy it builds.
@@ -135,6 +157,9 @@ export class UrlbarChild extends JSWindowActorChild {
         break;
       case "InvokeContentAction":
         this.#invokeContentAction(message.data);
+        break;
+      case "UpdateEngineStore":
+        this.#updateEngineStore(message.data);
         break;
     }
   }
@@ -195,5 +220,15 @@ export class UrlbarChild extends JSWindowActorChild {
       return;
     }
     child[target]?.[method](...args);
+  }
+
+  #updateEngineStore({ instanceId, args }) {
+    let child = this.#childControllers.get(instanceId)?.deref();
+    if (!child) {
+      this.#childControllers.delete(instanceId);
+      return;
+    }
+
+    child.updateEngineStore(...args);
   }
 }
