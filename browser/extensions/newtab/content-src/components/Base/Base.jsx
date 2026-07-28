@@ -626,6 +626,8 @@ export class BaseContent extends React.PureComponent {
 
   async updateWallpaper() {
     const prefs = this.props.Prefs.values;
+    // Bump every call so a newer selection supersedes an in-flight decode.
+    const applyToken = this.nextWallpaperToken();
     const novaEnabled = prefs[PREF_NOVA_ENABLED];
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     const wallpapersUserEnabled = prefs["newtabWallpapers.user.enabled"];
@@ -655,6 +657,11 @@ export class BaseContent extends React.PureComponent {
         "--newtab-wallpaper-backgroundPosition"
       );
       global.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
+      return;
+    }
+
+    // Keep the current background until the custom wallpaper's URL hydrates.
+    if (selectedWallpaper === "custom" && !uploadedWallpaperUrl) {
       return;
     }
 
@@ -691,6 +698,18 @@ export class BaseContent extends React.PureComponent {
         }
       }
     }
+
+    // Decode a replacement before swapping so the current wallpaper stays up
+    // until it's ready; initial renders (nothing painted) apply synchronously.
+    if (
+      selectedWallpaper === "custom" &&
+      url &&
+      global.document?.body.style.getPropertyValue("--newtab-wallpaper") &&
+      !(await this.decodeWallpaper(url, applyToken))
+    ) {
+      return;
+    }
+
     global.document?.body.style.setProperty(
       "--newtab-wallpaper",
       `url(${url})`
@@ -708,6 +727,25 @@ export class BaseContent extends React.PureComponent {
     global.document?.body.classList.add(
       newTheme === "dark" ? "darkWallpaper" : "lightWallpaper"
     );
+  }
+
+  // Monotonic token to detect if a newer updateWallpaper ran mid-decode.
+  nextWallpaperToken() {
+    this._wallpaperApplyToken = (this._wallpaperApplyToken ?? 0) + 1;
+    return this._wallpaperApplyToken;
+  }
+
+  // Returns false if decode fails or a newer update supersedes this one, so the
+  // current wallpaper stays painted.
+  async decodeWallpaper(url, applyToken) {
+    try {
+      const image = new global.Image();
+      image.src = url;
+      await image.decode();
+    } catch {
+      return false;
+    }
+    return applyToken === this._wallpaperApplyToken;
   }
 
   toggleDownloadHighlight() {

@@ -634,18 +634,6 @@ void DirectManipulationOwner::ResizeViewport(
 }
 
 void DirectManipulationOwner::Destroy() {
-  if (mDmHandler) {
-    mDmHandler->mWindow = nullptr;
-    mDmHandler->mOwner = nullptr;
-    if (mDmHandler->mObserver) {
-      gfxWindowsPlatform::GetPlatform()
-          ->GetGlobalVsyncDispatcher()
-          ->RemoveMainThreadObserver(mDmHandler->mObserver);
-      mDmHandler->mObserver->ClearOwner();
-      mDmHandler->mObserver = nullptr;
-    }
-  }
-
   HRESULT hr;
   if (mDmViewport) {
     hr = mDmViewport->Stop();
@@ -661,6 +649,19 @@ void DirectManipulationOwner::Destroy() {
     hr = mDmViewport->RemoveEventHandler(mDmViewportHandlerCookie);
     if (!SUCCEEDED(hr)) {
       NS_WARNING("mDmViewport->RemoveEventHandler() failed");
+    }
+    mDmViewportHandlerCookie = 0;
+
+    if (mDmHandler) {
+      mDmHandler->mWindow = nullptr;
+      mDmHandler->mOwner = nullptr;
+      if (mDmHandler->mObserver) {
+        gfxWindowsPlatform::GetPlatform()
+            ->GetGlobalVsyncDispatcher()
+            ->RemoveMainThreadObserver(mDmHandler->mObserver);
+        mDmHandler->mObserver->ClearOwner();
+        mDmHandler->mObserver = nullptr;
+      }
     }
 
     hr = mDmViewport->Abandon();

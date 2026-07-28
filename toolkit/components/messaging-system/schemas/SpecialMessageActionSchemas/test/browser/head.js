@@ -13,6 +13,8 @@ const { JsonSchema } = ChromeUtils.importESModule(
 ChromeUtils.defineESModuleGetters(this, {
   SpecialMessageActions:
     "resource://messaging-system/lib/SpecialMessageActions.sys.mjs",
+  MessagingSystemAllowlists:
+    "resource://messaging-system/lib/MessagingSystemAllowlists.sys.mjs",
   ASRouterTargeting: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
 });
 

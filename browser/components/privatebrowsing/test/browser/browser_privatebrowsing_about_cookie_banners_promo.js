@@ -26,16 +26,11 @@ add_task(async function test_cookie_banners_promo_user_set_prefs() {
   await ASRouter.onPrefChange();
 
   const { win, tab } = await openTabAndWaitForRender();
-  await SpecialPowers.spawn(tab, [promoImgSrc], async function (imgSrc) {
-    const promoImage = content.document.querySelector(
-      ".promo-image-large > img"
-    );
-    Assert.notStrictEqual(
-      promoImage?.src,
-      imgSrc,
-      "Cookie banner reduction promo is not shown"
-    );
-  });
+  Assert.notStrictEqual(
+    await getPromoImageSrc(tab),
+    promoImgSrc,
+    "Cookie banner reduction promo is not shown"
+  );
 
   await BrowserTestUtils.closeWindow(win);
   await SpecialPowers.popPrefEnv();
@@ -69,17 +64,13 @@ add_task(async function test_cookie_banners_promo() {
     });
   });
 
-  await SpecialPowers.spawn(tab, [promoImgSrc], async function (imgSrc) {
-    const promoImage = content.document.querySelector(
-      ".promo-image-large > img"
-    );
-    Assert.strictEqual(
-      promoImage?.src,
-      imgSrc,
-      "Cookie banner reduction promo is shown"
-    );
-    let linkEl = content.document.getElementById("private-browsing-promo-link");
-    linkEl.click();
+  Assert.strictEqual(
+    await getPromoImageSrc(tab),
+    promoImgSrc,
+    "Cookie banner reduction promo is shown"
+  );
+  await SpecialPowers.spawn(tab, [getPromoSelectors()], async function (promo) {
+    content.document.querySelector(promo.link).click();
   });
 
   await triedToOpenTab;
@@ -89,16 +80,11 @@ add_task(async function test_cookie_banners_promo() {
 
   let { win: win2, tab: tab2 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab2, [promoImgSrc], async function (imgSrc) {
-    const promoImage = content.document.querySelector(
-      ".promo-image-large > img"
-    );
-    Assert.notStrictEqual(
-      promoImage?.src,
-      imgSrc,
-      "Cookie banner reduction promo is no longer shown after clicking the link"
-    );
-  });
+  Assert.notStrictEqual(
+    await getPromoImageSrc(tab2),
+    promoImgSrc,
+    "Cookie banner reduction promo is no longer shown after clicking the link"
+  );
 
   await BrowserTestUtils.closeWindow(win2);
   await BrowserTestUtils.closeWindow(win);

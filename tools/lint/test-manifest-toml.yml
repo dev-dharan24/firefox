@@ -41,7 +41,6 @@ test-manifest-toml:
         - '**/pyproject.toml'
         - '**/python.toml'
         - '**/rustfmt.toml'
-        - '**/servo-tidy.toml'
         - '**/tests/manifest.toml'
         - '**/uniffi.toml'
     extensions: ['toml']

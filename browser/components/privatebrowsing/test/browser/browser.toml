@@ -28,17 +28,10 @@ support-files = [
 
 ["browser_privatebrowsing_about.js"]
 tags = "trackingprotection"
-skip-if = [
-  "nova", # Bug 2057852
-]
 
 ["browser_privatebrowsing_aboutSessionRestore.js"]
 
 ["browser_privatebrowsing_about_cookie_banners_promo.js"]
-skip-if = [
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && opt && nova", # Bug 2057929
-  "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && opt && nova", # Bug 2057929
-]
 
 ["browser_privatebrowsing_about_default_pin_promo.js"]
 skip-if = [
@@ -48,13 +41,9 @@ skip-if = [
   "os == 'mac' && os_version == '14.70' && arch == 'x86_64'",
   "os == 'mac' && os_version == '15.30' && arch == 'aarch64'",
   "os == 'win' && msix", # We don't support private pinning in MSIX builds
-  "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && opt && asan && nova", # Bug 2057936
 ]
 
 ["browser_privatebrowsing_about_default_promo.js"]
-skip-if = [
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && opt && nova", # Bug 2057937
-]
 
 ["browser_privatebrowsing_about_nimbus_dismiss.js"]
 
@@ -97,6 +86,9 @@ skip-if = [
 ["browser_privatebrowsing_history_shift_click.js"]
 
 ["browser_privatebrowsing_indicator.js"]
+skip-if = [
+  "nova", # Bug 2058023
+]
 
 ["browser_privatebrowsing_last_private_browsing_context_exited.js"]
 

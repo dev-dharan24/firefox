@@ -28,7 +28,8 @@ use crate::invalidation::vert_buffer::{CornersCache, VertRange};
 use crate::invalidation::compare::{PrimitiveDependency, ImageDependency};
 use crate::invalidation::compare::PrimitiveComparisonKey;
 use crate::invalidation::compare::{OpacityBindingInfo, ColorBindingInfo};
-use crate::picture::{SurfaceTextureDescriptor, PictureCompositeMode, SurfaceIndex, clamp};
+use crate::picture::{SurfaceTextureDescriptor, clamp};
+use crate::picture_composite_mode::PictureCompositeMode;
 use crate::picture::{get_relative_scale_offset, PictureInstance};
 use crate::picture::MAX_COMPOSITOR_SURFACES_SIZE;
 use crate::prim_store::{ClipSnap, PrimitiveInstance, PrimitiveKind, PrimitiveScratchBuffer, PictureIndex};
@@ -41,7 +42,7 @@ use crate::resource_cache::{ResourceCache, ImageRequest};
 use crate::scene_building::SliceFlags;
 use crate::space::{SpaceMapper, SpaceSnapper};
 use crate::spatial_tree::{SpatialNodeIndex, SpatialTree};
-use crate::surface::{SubpixelMode, SurfaceInfo};
+use crate::surface::{SubpixelMode, SurfaceIndex, SurfaceInfo};
 use crate::util::{ScaleOffset, MatrixHelpers, MaxRect};
 use crate::visibility::{FrameVisibilityContext, FrameVisibilityState, DrawState, PrimitiveVisibilityFlags};
 use euclid::approxeq::ApproxEq;
@@ -1141,7 +1142,7 @@ impl TileCacheInstance {
                             .get_instance_from_range(&clip_chain.clips_range, i);
                         let clip_node = &frame_state.data_stores.clip[clip_instance.handle];
 
-                        if let ClipItemKind::RoundedRectangle { radius, mode } = clip_node.item.kind {
+                        if let ClipItemKind::RoundedRectangle { radius, inset: _, mode } = clip_node.item.kind {
                             assert_eq!(mode, ClipMode::Clip);
 
                             let radius = clamped_radius(&radius, clip_instance.clip_rect.size());
@@ -2518,7 +2519,7 @@ impl TileCacheInstance {
                                 break;
                             }
                         }
-                   }
+                    }
 
                     // TODO(gw): When we support RGBA images for external surfaces, we also
                     //           need to check if opaque (YUV images are implicitly opaque).
@@ -3077,6 +3078,27 @@ impl TileCacheInstance {
                     ));
                     scratch.frame.draws[desc.prim_instance_index.0 as usize].compositor_surface_kind =
                         CompositorSurfaceKind::Blit;
+
+                    let (p0, p1) = self.get_tile_coords_for_rect(&desc.local_rect);
+
+                    for sub_slice in &mut self.sub_slices {
+                        for y in p0.y .. p1.y {
+                            for x in p0.x .. p1.x {
+                                let key = TileOffset::new(x, y);
+
+                                let tile = sub_slice
+                                    .tiles
+                                    .get_mut(&key)
+                                    .expect("bug: no tile for cancelled underlay");
+
+                                tile.invalidate(
+                                    Some(desc.local_rect),
+                                    InvalidationReason::CancelUnderlay,
+                                );
+
+                            }
+                        }
+                    }
                 }
 
                 let mut underlays: Vec<ExternalSurfaceDescriptor> = underlays

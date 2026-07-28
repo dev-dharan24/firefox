@@ -464,28 +464,13 @@ export const toolsConfig = [
 ];
 
 /**
- * Metadata about a Tab used in chat conversations.
+ * Gets N amount of most recently opened tabs
  *
- * @typedef {object} TabInfo
- * @property {string} url - The url of the tab.
- * @property {string} title - Title of the tab.
- * @property {number} lastAccessed - When the tab was last accessed in milliseconds.
- */
-
-/**
- * Retrieves a list of the latest open tabs from the current active browser window.
- * Tabs are sorted by most recently accessed and limited to MAX_TABS results.
- * Only includes tabs with http/https URLs.
+ * @param {number} [amount=MAX_TABS] How many tabs to get
  *
- * @param {ChatConversation} conversation
- * @returns {Promise<Array<TabInfo>>}
+ * @returns {Array<TabInfo>}
  */
-export async function getOpenTabs(conversation) {
-  // No security check needed. The security checks prevent data exfiltration,
-  // which requires external communication. This tool makes no external requests.
-
-  const startTime = ChromeUtils.now();
-
+export function getTabList(amount = MAX_TABS) {
   /** @type {Array<TabInfo>} */
   const tabs = [];
 
@@ -513,7 +498,33 @@ export async function getOpenTabs(conversation) {
 
   tabs.sort((a, b) => b.lastAccessed - a.lastAccessed);
 
-  const recentTabs = tabs.slice(0, MAX_TABS);
+  return tabs.slice(0, amount);
+}
+
+/**
+ * Metadata about a Tab used in chat conversations.
+ *
+ * @typedef {object} TabInfo
+ * @property {string} url - The url of the tab.
+ * @property {string} title - Title of the tab.
+ * @property {number} lastAccessed - When the tab was last accessed in milliseconds.
+ */
+
+/**
+ * Retrieves a list of the latest open tabs from the current active browser window.
+ * Tabs are sorted by most recently accessed and limited to MAX_TABS results.
+ * Only includes tabs with http/https URLs.
+ *
+ * @param {ChatConversation} conversation
+ * @returns {Promise<Array<TabInfo>>}
+ */
+export async function getOpenTabs(conversation) {
+  // No security check needed. The security checks prevent data exfiltration,
+  // which requires external communication. This tool makes no external requests.
+
+  const startTime = ChromeUtils.now();
+
+  const recentTabs = getTabList(MAX_TABS);
 
   // Tab titles are truncated to 100 characters and therefore not expected to
   // contain enough untrusted data for a prompt injection attack.

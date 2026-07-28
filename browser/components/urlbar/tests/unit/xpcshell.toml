@@ -38,6 +38,8 @@ support-files = ["data/engine.xml"]
 
 ["test_UrlbarShared_deepEqual.js"]
 
+["test_UrlbarShared_formatDate.js"]
+
 ["test_UrlbarTelemetryUtils_wireSerialization.js"]
 
 ["test_UrlbarUtils_addToInputHistoryWhenReady.js"]
@@ -49,8 +51,6 @@ support-files = ["data/engine.xml"]
 ["test_UrlbarUtils_autofillBlock.js"]
 
 ["test_UrlbarUtils_copySnakeKeysToCamel.js"]
-
-["test_UrlbarUtils_formatDate.js"]
 
 ["test_UrlbarUtils_getBackspaceBlock.js"]
 

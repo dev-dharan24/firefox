@@ -8,7 +8,7 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   ObjectUtils: "resource://gre/modules/ObjectUtils.sys.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
 });
 
 /**
@@ -193,7 +193,7 @@ export class SportsSuggestions extends RealtimeSuggestProvider {
       formattedDate,
       formattedTime,
       parseDateResult: { daysAgo, zonedNow },
-    } = lazy.UrlbarUtils.formatDate(date, {
+    } = lazy.UrlbarShared.formatDate(date, {
       // If the item has an icon, the date chiclet won't be shown, so show the
       // absolute date in the bottom part of the row.
       forceMonthAndDayWhenAbsolute:

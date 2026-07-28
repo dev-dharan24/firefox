@@ -633,8 +633,21 @@ BounceTrackingState::OnContentBlockingEvent(nsIWebProgress* aWebProgress,
 
 nsresult BounceTrackingState::OnStartNavigation(
     nsIPrincipal* aTriggeringPrincipal,
-    const bool aHasValidUserGestureActivation) {
+    const bool aHasValidUserGestureActivation, uint64_t aLoadId) {
   NS_ENSURE_ARG_POINTER(aTriggeringPrincipal);
+
+  // A single logical navigation can reach this method more than once: it may go
+  // through a speculative parent load, switch process, or get re-opened, and
+  // each of these carries the same load id. Only advance the state machine for
+  // the first call of a given load id, otherwise we would double count and
+  // corrupt the extended navigation.
+  if (aLoadId != 0 && mLastStartedLoadId == Some(aLoadId)) {
+    MOZ_LOG_FMT(gBounceTrackingProtectionLog, LogLevel::Debug,
+                "{}: skipping duplicate call for load id {}", __FUNCTION__,
+                aLoadId);
+    return NS_OK;
+  }
+  mLastStartedLoadId = Some(aLoadId);
 
   // Logging
   if (MOZ_LOG_TEST(gBounceTrackingProtectionLog, LogLevel::Debug)) {
@@ -750,15 +763,14 @@ nsresult BounceTrackingState::OnResponseReceived(
                 siteListStr);
   }
 
-  // Record should exist by now. It gets created in OnStartNavigation.
-  // TODO: Bug 1894936
-  if (!mBounceTrackingRecord) {
+  // Record should exist by now. It gets created in OnStartNavigation which
+  // runs for every top level document load before the response is received.
+  if (NS_WARN_IF(!mBounceTrackingRecord)) {
     return NS_ERROR_FAILURE;
   }
 
   // Check if there is still an active timeout. This shouldn't happen since
   // OnStartNavigation already cancels it.
-  // TODO: Bug 1894936
   if (mClientBounceDetectionTimeout) {
     MOZ_LOG_FMT(gBounceTrackingProtectionLog, LogLevel::Debug,
                 "{}: mClientBounceDetectionTimeout->Cancel()", __FUNCTION__);
@@ -839,9 +851,10 @@ nsresult BounceTrackingState::OnDocumentLoaded(
                                                             this);
   }
 
-  // Assert: navigable’s bounce tracking record is not null.
-  // TODO: Bug 1894936
-  if (!mBounceTrackingRecord) {
+  // Assert: navigable’s bounce tracking record is not null. It gets created in
+  // OnStartNavigation which runs for every top level navigation before the
+  // document loads.
+  if (NS_WARN_IF(!mBounceTrackingRecord)) {
     return NS_ERROR_FAILURE;
   }
 

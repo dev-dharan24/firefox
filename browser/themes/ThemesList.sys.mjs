@@ -299,49 +299,50 @@ class ThemesList {
       return false;
     }
 
-    const addon = await lazy.AddonManager.getAddonByID(themeId);
-    if (!enabled) {
-      await addon?.disable();
-      return true;
-    }
-    if (addon) {
-      await addon.enable();
-      return true;
-    }
-
-    let installUrl;
-    let installName;
-    // TODO(Bug 2053220): restrict use of this testing url pref to non-release channels.
-    const testingBaseUrl = Services.prefs.getStringPref(
-      TESTING_XPI_BASE_URL,
-      ""
-    );
-    if (testingBaseUrl) {
-      installUrl = `${testingBaseUrl}/${themeId}.xpi`;
-      installName = themeId;
-    } else {
-      const [repoAddon] = await lazy.AddonRepository.getAddonsByIDs([themeId]);
-      if (!repoAddon?.sourceURI) {
-        // TODO: raise an error if we can't resolve the url to the XPI, so that
-        // callers can report to the user an install error.
-        console.error("Unable to resolve the XPI url for the theme", themeId);
-        return false;
-      }
-      installUrl = repoAddon.sourceURI.spec;
-      installName = repoAddon.name;
-    }
-
-    const install = await lazy.AddonManager.getInstallForURL(installUrl, {
-      name: installName,
-      telemetryInfo: {
-        source: this.#installSource,
-        method: "FirefoxThemesList",
-      },
-    });
-    if (installListener) {
-      install.addListener(installListener);
-    }
+    let install;
     try {
+      const addon = await lazy.AddonManager.getAddonByID(themeId);
+      if (!enabled) {
+        await addon?.disable();
+        return true;
+      }
+      if (addon) {
+        await addon.enable();
+        return true;
+      }
+
+      let installUrl;
+      let installName;
+      // TODO(Bug 2053220): restrict use of this testing url pref to non-release channels.
+      const testingBaseUrl = Services.prefs.getStringPref(
+        TESTING_XPI_BASE_URL,
+        ""
+      );
+      if (testingBaseUrl) {
+        installUrl = `${testingBaseUrl}/${themeId}.xpi`;
+        installName = themeId;
+      } else {
+        const [repoAddon] = await lazy.AddonRepository.getAddonsByIDs([
+          themeId,
+        ]);
+        if (!repoAddon?.sourceURI) {
+          console.error("Unable to resolve the XPI url for the theme", themeId);
+          return false;
+        }
+        installUrl = repoAddon.sourceURI.spec;
+        installName = repoAddon.name;
+      }
+
+      install = await lazy.AddonManager.getInstallForURL(installUrl, {
+        name: installName,
+        telemetryInfo: {
+          source: this.#installSource,
+          method: "FirefoxThemesList",
+        },
+      });
+      if (installListener) {
+        install.addListener(installListener);
+      }
       const theme = await install.install();
       await theme.enable();
       return true;
@@ -354,7 +355,7 @@ class ThemesList {
       return false;
     } finally {
       if (installListener) {
-        install.removeListener(installListener);
+        install?.removeListener(installListener);
       }
     }
   }

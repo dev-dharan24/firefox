@@ -878,6 +878,20 @@ void StyleSheet::SubjectSubsumesInnerPrincipal(nsIPrincipal& aSubjectPrincipal,
   }
 }
 
+bool StyleSheet::IsAdoptedBy(const dom::DocumentOrShadowRoot& aTree) const {
+  // Our adopter list and the tree's adopted stylesheet list answer the same
+  // question, and either can be arbitrarily long depending on the workload
+  // (one sheet adopted into many shadow roots vs. many sheets adopted into one
+  // tree), so scan whichever is shorter.
+  const auto& adopted = aTree.AdoptedStyleSheets();
+  const bool result = mAdopters.Length() <= adopted.Length()
+                          ? mAdopters.Contains(&aTree)
+                          : adopted.Contains(this);
+  MOZ_ASSERT(result == mAdopters.Contains(&aTree));
+  MOZ_ASSERT(result == adopted.Contains(this));
+  return result;
+}
+
 bool StyleSheet::IsDirectlyAssociatedTo(
     dom::DocumentOrShadowRoot& aTree) const {
   if (mParentSheet) {
@@ -888,11 +902,7 @@ bool StyleSheet::IsDirectlyAssociatedTo(
   }
   bool associated = false;
   if (IsConstructed()) {
-    // Idea is that the adopted stylesheet list is likely to be smaller than
-    // list of adopters of a single sheet, but we could reverse the check if
-    // needed.
-    associated = aTree.AdoptedStyleSheets().Contains(this);
-    MOZ_ASSERT(associated == mAdopters.Contains(&aTree));
+    associated = IsAdoptedBy(aTree);
   } else {
     associated = GetAssociatedDocumentOrShadowRoot() == &aTree;
   }

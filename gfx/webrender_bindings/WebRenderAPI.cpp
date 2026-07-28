@@ -1449,11 +1449,12 @@ void DisplayListBuilder::PushRoundedRect(const wr::LayoutRect& aBounds,
   wr::LayoutSideOffsets widths = {v, h, v, h};
   wr::BorderRadius radii = {{h, v}, {h, v}, {h, v}, {h, v},
                             1.0f,   1.0f,   1.0f,   1.0f};
+  wr::LayoutSideOffsets inset = EmptyLayoutSideOffsets();
 
   // Anti-aliased borders are required for rounded borders.
   wr_dp_push_border(mWrState, aBounds, aClip, aIsBackfaceVisible,
                     &mCurrentSpaceAndClipChain, wr::AntialiasBorder::Yes,
-                    widths, side, side, side, side, radii);
+                    widths, side, side, side, side, radii, inset);
 }
 
 void DisplayListBuilder::PushHitTest(
@@ -1669,20 +1670,18 @@ void DisplayListBuilder::PushIFrame(const LayoutDeviceRect& aDevPxBounds,
                     aIgnoreMissingPipeline);
 }
 
-void DisplayListBuilder::PushBorder(const wr::LayoutRect& aBounds,
-                                    const wr::LayoutRect& aClip,
-                                    bool aIsBackfaceVisible,
-                                    const wr::LayoutSideOffsets& aWidths,
-                                    const Range<const wr::BorderSide>& aSides,
-                                    const wr::BorderRadius& aRadius,
-                                    wr::AntialiasBorder aAntialias) {
+void DisplayListBuilder::PushBorder(
+    const wr::LayoutRect& aBounds, const wr::LayoutRect& aClip,
+    bool aIsBackfaceVisible, const wr::LayoutSideOffsets& aWidths,
+    const Range<const wr::BorderSide>& aSides, const wr::BorderRadius& aRadius,
+    const wr::LayoutSideOffsets& aInset, wr::AntialiasBorder aAntialias) {
   MOZ_ASSERT(aSides.length() == 4);
   if (aSides.length() != 4) {
     return;
   }
   wr_dp_push_border(mWrState, aBounds, aClip, aIsBackfaceVisible,
                     &mCurrentSpaceAndClipChain, aAntialias, aWidths, aSides[0],
-                    aSides[1], aSides[2], aSides[3], aRadius);
+                    aSides[1], aSides[2], aSides[3], aRadius, aInset);
 }
 
 void DisplayListBuilder::PushBorderImage(const wr::LayoutRect& aBounds,

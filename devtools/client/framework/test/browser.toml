@@ -187,6 +187,9 @@ skip-if = [
 fail-if = [
   "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
 ]
+skip-if = [
+  "nova", # Bug 2058111
+]
 
 ["browser_toolbox_hosts_telemetry.js"]
 

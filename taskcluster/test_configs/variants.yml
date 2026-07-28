@@ -667,12 +667,12 @@ privatebrowsing-inc-origin-init:
             extra-options:
                 - "--setpref=browser.privatebrowsing.autostart=true"
 
-nova:
-    description: "{description} with Nova enabled"
+no-nova:
+    description: "{description} with Nova disabled"
     component: "Firefox::Theme"
     expiration: "2026-12-31"
-    suffix: "nv"
+    suffix: "no-nv"
     merge:
         mozharness:
             extra-options:
-                - "--setpref=browser.nova.enabled=true"
+                - "--setpref=browser.nova.enabled=false"

@@ -115,8 +115,6 @@ The tool is built to be conservative about the number of tests to run, so if you
                             Set the features enabled for the profiler.
       --gecko-profile-threads GECKO_PROFILE_THREADS
                             Comma-separated list of threads to sample.
-      --native-profiling    Use OS-native profilers (Simpleperf for Android and xperf for Windows) when running tests. Only
-                            available in raptor-browsertime tests at the moment.
       paths                 Run tasks containing tests under the specified path(s).
       --allow-testfile-path
                             Opt in to pass a specific testfile path (ie not only a folder)

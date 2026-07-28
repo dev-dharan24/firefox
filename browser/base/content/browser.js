@@ -1527,96 +1527,6 @@ function CreateContainerTabMenu(event) {
   });
 }
 
-// Shared entry point for the "Add new container" menu items. Shows a panel,
-// hosting the same editor as the about:preferences container dialog, anchored
-// to the URL-bar container indicator (revealing it temporarily when the
-// current tab has no container).
-var gContainerCreation = {
-  _editor: null,
-
-  get _panel() {
-    return document.getElementById("containerCreation-panel");
-  },
-
-  get _anchorEl() {
-    return document.getElementById("userContext-icons");
-  },
-
-  // Honored by updateUserContextUIIndicator() so the temporarily-revealed
-  // indicator isn't hidden again while the panel is open.
-  isPillPinned: false,
-
-  async open() {
-    let panel = this._panel;
-    if (panel.state == "open" || panel.state == "showing") {
-      return;
-    }
-
-    let { ContainerEditor } =
-      await import("chrome://browser/content/usercontext/ContainerEditor.mjs");
-
-    let body = document.getElementById("containerCreation-panel-body");
-    body.replaceChildren();
-    this._editor = new ContainerEditor(body);
-    this._editor.render();
-
-    let createButton = document.getElementById(
-      "containerCreation-create-button"
-    );
-    let cancelButton = document.getElementById(
-      "containerCreation-cancel-button"
-    );
-
-    let updateValidity = () => {
-      createButton.disabled = !this._editor.isValid;
-    };
-    this._editor.form.addEventListener("input", updateValidity);
-    updateValidity();
-
-    let onCreate = () => {
-      this._editor.commit();
-      panel.hidePopup();
-    };
-    let onCancel = () => panel.hidePopup();
-    createButton.addEventListener("click", onCreate);
-    cancelButton.addEventListener("click", onCancel);
-
-    panel.addEventListener("popupshown", () => this._editor?.focus(), {
-      once: true,
-    });
-    panel.addEventListener(
-      "popuphidden",
-      () => {
-        createButton.removeEventListener("click", onCreate);
-        cancelButton.removeEventListener("click", onCancel);
-        body.replaceChildren();
-        this._editor = null;
-        this._unpinAnchor();
-      },
-      { once: true }
-    );
-
-    let anchor = this._anchorEl;
-    if (anchor.hidden) {
-      anchor.classList.add("container-anchor-pinned");
-      anchor.hidden = false;
-      this.isPillPinned = true;
-    }
-
-    panel.openPopup(anchor, "bottomright topright");
-  },
-
-  _unpinAnchor() {
-    if (!this.isPillPinned) {
-      return;
-    }
-    this.isPillPinned = false;
-    let anchor = this._anchorEl;
-    anchor.hidden = true;
-    anchor.classList.remove("container-anchor-pinned");
-  },
-};
-
 function FillHistoryMenu(event) {
   let parent = event.target;
 
@@ -3376,13 +3286,31 @@ var gUIDensity = {
     return Boolean(state && state.launcherVisible && !state.launcherExpanded);
   },
 
+  // Whether the device is currently in a tablet mode that should influence the
+  // UI density. Only Windows (Win10 or Win11) exposes such a signal.
+  _inTabletMode() {
+    if (AppConstants.platform != "win") {
+      return false;
+    }
+    return WindowsUIUtils.inWin10TabletMode || WindowsUIUtils.inWin11TabletMode;
+  },
+
   getCurrentDensity() {
-    // Automatically override the uidensity to touch in Windows tablet mode
-    // (either Win10 or Win11).
-    if (AppConstants.platform == "win") {
-      const inTablet =
-        WindowsUIUtils.inWin10TabletMode || WindowsUIUtils.inWin11TabletMode;
-      if (inTablet && Services.prefs.getBoolPref(this.autoTouchModePref)) {
+    // Automatically override the uidensity to touch in tablet mode. This
+    // happens when the density is automatic (the nova "Automatic" option, i.e.
+    // no explicit uidensity value) regardless of the browser.touchmode.auto
+    // pref, or when browser.touchmode.auto is set and the configured density is
+    // normal. The pref is the standard density's "use touch spacing for tablet
+    // mode" checkbox, so it must not override an explicit compact or touch
+    // choice.
+    if (this._inTabletMode()) {
+      const isAutomatic =
+        this.novaEnabled &&
+        !Services.prefs.prefHasUserValue(this.uiDensityPref);
+      const normalWithAutoTouch =
+        Services.prefs.getIntPref(this.uiDensityPref) == this.MODE_NORMAL &&
+        Services.prefs.getBoolPref(this.autoTouchModePref);
+      if (isAutomatic || normalWithAutoTouch) {
         return { mode: this.MODE_TOUCH, overridden: true };
       }
     }
@@ -3399,26 +3327,6 @@ var gUIDensity = {
       mode: Services.prefs.getIntPref(this.uiDensityPref),
       overridden: false,
     };
-  },
-
-  /**
-   * Sets the configured UI density to an explicit mode. If the density is
-   * currently overridden (e.g. forced to touch by tablet mode via the
-   * auto-touch-mode pref), the override is cleared so the explicit choice
-   * takes effect.
-   *
-   * @param {number} mode
-   *   One of the density mode constants - MODE_NORMAL, MODE_COMPACT or
-   *   MODE_TOUCH.
-   */
-  setUIDensity(mode) {
-    let overridden = this.getCurrentDensity().overridden;
-    Services.prefs.setIntPref(this.uiDensityPref, mode);
-    // If the user is choosing a UI density mode while the mode is overridden,
-    // remove the override so their explicit choice isn't ignored.
-    if (overridden) {
-      Services.prefs.setBoolPref(this.autoTouchModePref, false);
-    }
   },
 
   update(mode) {

@@ -1378,6 +1378,10 @@ export const tokensTable = {
       name: "--input-text-border-radius",
     },
     {
+      value: "var(--input-text-border-radius)",
+      name: "--input-search-border-radius",
+    },
+    {
       value: "var(--border-radius-small)",
       name: "--panel-menuitem-border-radius",
     },
@@ -4525,6 +4529,7 @@ export const variableLookupTable = {
   "input-text-icon-size": "var(--icon-size-xsmall)",
   "input-text-min-height": "var(--button-min-height)",
   "input-text-opacity-disabled": "var(--button-opacity-disabled)",
+  "input-search-border-radius": "var(--input-text-border-radius)",
   "input-width": "var(--size-item-small)",
   "link-color": {
     forcedColors: "LinkText",

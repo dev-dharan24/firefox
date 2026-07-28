@@ -5,6 +5,7 @@
 browser.jar:
     content/browser/usercontext/usercontext.css (content/usercontext.css)
     content/browser/usercontext/ContainerEditor.mjs (content/ContainerEditor.mjs)
+    content/browser/usercontext/ContainerCreationPanel.mjs (content/ContainerCreationPanel.mjs)
 
 % resource usercontext-content %content/ contentaccessible=yes
     content/briefcase.svg     (content/briefcase.svg)

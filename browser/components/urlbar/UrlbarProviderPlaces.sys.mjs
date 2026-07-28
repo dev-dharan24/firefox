@@ -186,7 +186,7 @@ function makeKeyForMatch(match) {
   let key, prefix;
   let action = lazy.PlacesUtils.parseActionUrl(match.value);
   if (!action) {
-    [key, prefix] = UrlbarUtils.stripPrefixAndTrim(match.value, {
+    [key, prefix] = lazy.UrlbarShared.stripPrefixAndTrim(match.value, {
       stripHttp: true,
       stripHttps: true,
       stripWww: true,
@@ -211,7 +211,7 @@ function makeKeyForMatch(match) {
       ].join(",");
       break;
     default:
-      [key, prefix] = UrlbarUtils.stripPrefixAndTrim(
+      [key, prefix] = lazy.UrlbarShared.stripPrefixAndTrim(
         action.params.url || match.value,
         {
           stripHttp: true,

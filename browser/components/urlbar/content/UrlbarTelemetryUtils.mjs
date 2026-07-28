@@ -117,7 +117,7 @@ export class UrlbarTelemetryUtils {
    */
   static startInteractionType(event, searchString) {
     if (event.type == "input") {
-      return lazy.UrlbarUtils.isPasteEvent(event) ? "pasted" : "typed";
+      return lazy.UrlbarShared.isPasteEvent(event) ? "pasted" : "typed";
     } else if (event.type == "drop") {
       return "dropped";
     } else if (event.type == "paste") {

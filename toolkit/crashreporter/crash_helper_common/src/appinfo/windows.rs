@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use std::{ffi::c_void, ptr::null_mut};
+use std::{ffi::c_void, mem::offset_of, ptr::null_mut};
 
 use windows_sys::Win32::{
     Foundation::{FALSE, HANDLE, INVALID_HANDLE_VALUE},
-    Security::{GetTokenInformation, TokenUser, TOKEN_QUERY},
+    Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER},
     System::Threading::{GetCurrentProcess, OpenProcessToken},
 };
 
@@ -56,10 +56,20 @@ impl ApplicationInfo {
             return None;
         }
 
+        let length = length as usize;
+
         // SAFETY: We have verified that the `GetTokenInformation()` call has
         // populated `length` bytes of this array.
-        unsafe { buffer.set_len(length as usize) };
-        let pseudo_user_id = buffer.iter().fold(0u64, |id, &byte| id + byte as u64);
+        unsafe { buffer.set_len(length) };
+
+        let offset = offset_of!(TOKEN_USER, User.Sid);
+
+        // The `User.Sid` pointer points within the buffer itself, but in the
+        // improbable case where it wouldn't then trim the offset to the length
+        // of the buffer. We'll get 0 as a pseudo user id but we'll not crash.
+        let pseudo_user_id = buffer[offset.min(length)..length]
+            .iter()
+            .fold(0u64, |id, &byte| id + byte as u64);
         Some(pseudo_user_id)
     }
 }

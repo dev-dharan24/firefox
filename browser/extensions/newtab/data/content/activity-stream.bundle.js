@@ -29361,6 +29361,8 @@ class BaseContent extends (external_React_default()).PureComponent {
   }
   async updateWallpaper() {
     const prefs = this.props.Prefs.values;
+    // Bump every call so a newer selection supersedes an in-flight decode.
+    const applyToken = this.nextWallpaperToken();
     const novaEnabled = prefs[Base_PREF_NOVA_ENABLED];
     const wallpapersEnabled = prefs["newtabWallpapers.enabled"];
     const wallpapersUserEnabled = prefs["newtabWallpapers.user.enabled"];
@@ -29384,6 +29386,11 @@ class BaseContent extends (external_React_default()).PureComponent {
       __webpack_require__.g.document?.body.style.removeProperty("--newtab-wallpaper-color");
       __webpack_require__.g.document?.body.style.removeProperty("--newtab-wallpaper-backgroundPosition");
       __webpack_require__.g.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
+      return;
+    }
+
+    // Keep the current background until the custom wallpaper's URL hydrates.
+    if (selectedWallpaper === "custom" && !uploadedWallpaperUrl) {
       return;
     }
 
@@ -29418,11 +29425,36 @@ class BaseContent extends (external_React_default()).PureComponent {
         }
       }
     }
+
+    // Decode a replacement before swapping so the current wallpaper stays up
+    // until it's ready; initial renders (nothing painted) apply synchronously.
+    if (selectedWallpaper === "custom" && url && __webpack_require__.g.document?.body.style.getPropertyValue("--newtab-wallpaper") && !(await this.decodeWallpaper(url, applyToken))) {
+      return;
+    }
     __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper", `url(${url})`);
     __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-backgroundPosition", backgroundPosition);
     __webpack_require__.g.document?.body.style.setProperty("--newtab-wallpaper-color", color || "transparent");
     __webpack_require__.g.document?.body.classList.remove("lightWallpaper", "darkWallpaper");
     __webpack_require__.g.document?.body.classList.add(newTheme === "dark" ? "darkWallpaper" : "lightWallpaper");
+  }
+
+  // Monotonic token to detect if a newer updateWallpaper ran mid-decode.
+  nextWallpaperToken() {
+    this._wallpaperApplyToken = (this._wallpaperApplyToken ?? 0) + 1;
+    return this._wallpaperApplyToken;
+  }
+
+  // Returns false if decode fails or a newer update supersedes this one, so the
+  // current wallpaper stays painted.
+  async decodeWallpaper(url, applyToken) {
+    try {
+      const image = new __webpack_require__.g.Image();
+      image.src = url;
+      await image.decode();
+    } catch {
+      return false;
+    }
+    return applyToken === this._wallpaperApplyToken;
   }
   toggleDownloadHighlight() {
     this.setState(prevState => {

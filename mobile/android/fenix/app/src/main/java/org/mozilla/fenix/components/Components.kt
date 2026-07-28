@@ -117,7 +117,10 @@ private const val AMO_COLLECTION_MAX_CACHE_AGE = 2 * 24 * 60L // Two days in min
  * Note: these aren't just "components" from "android-components": they're any "component" that
  * can be considered a building block of our app.
  */
-class Components(private val context: Context) {
+class Components(
+    private val context: Context,
+    private val currentTimeMillis: () -> Long = { System.currentTimeMillis() },
+) {
     val backgroundServices by lazyMonitored {
         BackgroundServices(
             context,
@@ -238,9 +241,6 @@ class Components(private val context: Context) {
                 context.getString(R.string.remote_settings_server_prod) -> RemoteSettingsServer.Prod.into()
                 context.getString(R.string.remote_settings_server_dev) -> RemoteSettingsServer.Dev.into()
                 context.getString(R.string.remote_settings_server_stage) -> RemoteSettingsServer.Stage.into()
-                context.getString(R.string.remote_settings_server_prod_v2) -> RemoteSettingsServer.ProdV2.into()
-                context.getString(R.string.remote_settings_server_dev_v2) -> RemoteSettingsServer.DevV2.into()
-                context.getString(R.string.remote_settings_server_stage_v2) -> RemoteSettingsServer.StageV2.into()
                 else -> RemoteSettingsServer.Prod.into()
             },
             channel = BuildConfig.BUILD_TYPE,
@@ -342,7 +342,7 @@ class Components(private val context: Context) {
                     CrashMiddleware(
                         cache = SettingsCrashReportCache(settings),
                         crashReporter = analytics.crashReporter,
-                        currentTimeInMillis = { System.currentTimeMillis() },
+                        currentTimeInMillis = currentTimeMillis,
                     ),
                 ),
                 HomeTelemetryMiddleware(),

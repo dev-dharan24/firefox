@@ -402,6 +402,13 @@ nsresult BounceTrackingProtection::RecordStatefulBounces(
         u"browserId"_ns, aBounceTrackingState->GetBrowserId());
     NS_ENSURE_SUCCESS(rv, rv);
 
+    // Number of hosts classified as bounce trackers in this call. Tests use
+    // this to distinguish a finalization that classified trackers from one that
+    // finalized an empty or fully exempt record.
+    rv = props->SetPropertyAsUint32(u"bounceTrackerCandidateCount"_ns,
+                                    classifiedHosts.Length());
+    NS_ENSURE_SUCCESS(rv, rv);
+
     rv = obsSvc->NotifyObservers(
         ToSupports(props), TEST_OBSERVER_MSG_RECORD_BOUNCES_FINISHED, nullptr);
     NS_ENSURE_SUCCESS(rv, rv);

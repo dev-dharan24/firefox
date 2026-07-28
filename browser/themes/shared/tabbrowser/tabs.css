@@ -31,7 +31,7 @@
   }
   @media -moz-pref("browser.nova.enabled") {
     &[uidensity="compact"] {
-      --tab-block-margin: 4px;
+      --tab-margin-block: 4px;
     }
   }
   --tab-group-counter-size: 24px;

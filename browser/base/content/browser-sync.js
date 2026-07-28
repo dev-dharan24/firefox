@@ -26,6 +26,7 @@ ChromeUtils.defineESModuleGetters(this, {
   FxAccounts: "resource://gre/modules/FxAccounts.sys.mjs",
   MenuMessage: "resource:///modules/asrouter/MenuMessage.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  Referrals: "resource:///modules/referrals/Referrals.sys.mjs",
   SyncedTabs: "resource://services-sync/SyncedTabs.sys.mjs",
   SyncedTabsManagement: "resource://services-sync/SyncedTabs.sys.mjs",
   Weave: "resource://services-sync/main.sys.mjs",
@@ -1620,6 +1621,9 @@ var gSync = {
         break;
       case "PanelUI-fxa-menu-vpn-button":
         this.openVPNLink(button);
+        break;
+      case "PanelUI-fxa-menu-share-firefox":
+        this.openShareFirefoxLink();
         break;
       case "PanelUI-fxa-menu-sendtab-sign-in-button":
         this.signInToSync(button);
@@ -3562,6 +3566,16 @@ var gSync = {
       );
     VpnPanelEl.hidden = !vpnEnabled;
 
+    // Share Firefox checks
+    let shareFirefoxPanelEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-share-firefox"
+    );
+    shareFirefoxPanelEl.hidden = !Services.prefs.getBoolPref(
+      "browser.referrals.enabled",
+      false
+    );
+
     // The services section carries its own leading separator, so only show the
     // privacy tools separator when that section is hidden (e.g. when signed
     // out) to keep the header visually separated from the section above.
@@ -3599,6 +3613,11 @@ var gSync = {
       new URL("https://www.mozilla.org/en-US/products/vpn/"),
       new URL("https://www.mozilla.org/en-US/products/vpn/")
     );
+  },
+
+  openShareFirefoxLink() {
+    Referrals.openReferralsTab(window);
+    PanelUI.hide();
   },
 
   // A generic opening based on

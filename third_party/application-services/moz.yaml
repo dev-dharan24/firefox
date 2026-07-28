@@ -59,7 +59,6 @@ vendoring:
     - gradlew.bat
     - build.gradle
     - gradle.properties
-    - proguard-rules-consumer-jna.pro
     - install-nimbus-cli.sh
     - rust-toolchain.toml
     - .cargo/**

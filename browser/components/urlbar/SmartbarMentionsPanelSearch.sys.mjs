@@ -7,7 +7,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   SessionStore: "resource:///modules/sessionstore/SessionStore.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlbarTokenizer:
     "moz-src:///browser/components/urlbar/UrlbarTokenizer.sys.mjs",
 });
@@ -174,7 +173,7 @@ export class SmartbarMentionsPanelSearch {
 
   #normalizeUrl(url) {
     try {
-      const [stripped] = lazy.UrlbarUtils.stripPrefixAndTrim(url, {
+      const [stripped] = lazy.UrlbarShared.stripPrefixAndTrim(url, {
         stripHttp: true,
         stripHttps: true,
         trimSlash: true,

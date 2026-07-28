@@ -287,7 +287,7 @@ class RuntimePage extends PureComponent {
 
 const mapStateToProps = state => {
   return {
-    collapsibilities: state.ui.debugTargetCollapsibilities,
+    collapsibilities: state.ui.mutableDebugTargetCollapsibilities,
     installedExtensions: state.debugTargets.installedExtensions,
     processes: state.debugTargets.processes,
     otherWorkers: state.debugTargets.otherWorkers,

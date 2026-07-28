@@ -7,7 +7,7 @@ import org.gradle.api.tasks.testing.Test
 plugins {
     id("com.gradle.plugin-publish") version "1.3.1"
     `java-gradle-plugin`
-    kotlin("jvm") version "2.3.10"
+    kotlin("jvm") version embeddedKotlinVersion
     `maven-publish`
 }
 

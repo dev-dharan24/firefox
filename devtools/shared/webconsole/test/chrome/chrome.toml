@@ -18,6 +18,9 @@ prefs = [
 ["test_basics.html"]
 
 ["test_cached_messages.html"]
+skip-if = [
+  "nova", # Bug 2058196
+]
 
 ["test_console_assert.html"]
 

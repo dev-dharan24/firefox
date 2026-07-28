@@ -9,7 +9,6 @@ const lazy = XPCOMUtils.declareLazy({
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
 });
 
 /**
@@ -346,7 +345,7 @@ export class UrlbarSearchOneOffs extends SearchOneOffs {
       if (!lazy.UrlbarPrefs.get(pref)) {
         continue;
       }
-      let name = lazy.UrlbarUtils.getResultSourceName(source);
+      let name = lazy.UrlbarShared.getResultSourceName(source);
       let button = this.document.createXULElement("button");
       button.id = `urlbar-engine-one-off-item-${name}`;
       button.setAttribute("class", "searchbar-engine-one-off-item");

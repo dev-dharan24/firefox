@@ -13,7 +13,7 @@ XPCOMUtils.defineLazyPreferenceGetter(
 );
 
 const REFERRAL_CODE_PREF = "browser.referrals.code";
-const REFERRAL_CODE_LENGTH = 10;
+const REFERRAL_CODE_LENGTH = 16;
 // Crockford base32
 const REFERRAL_CODE_CHARSET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 

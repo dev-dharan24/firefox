@@ -15,7 +15,6 @@ add_setup(async function () {
 });
 
 add_task(async function test_experiment_messaging_system_dismiss() {
-  const LOCALE = Services.locale.appLocaleAsBCP47;
   let doExperimentCleanup = await setupMSExperimentWithMessage({
     id: `PB_NEWTAB_MESSAGING_SYSTEM_${Math.random()}`,
     template: "pb_newtab",
@@ -40,18 +39,20 @@ add_task(async function test_experiment_messaging_system_dismiss() {
     targeting: "true",
   });
 
+  const selectors = getPromoSelectors();
+
   let { win: win1, tab: tab1 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab1, [LOCALE], async function () {
-    content.document.querySelector("#dismiss-btn").click();
+  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
+    content.document.querySelector(promo.dismissButton).click();
     info("button clicked");
   });
 
   let { win: win2, tab: tab2 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab2, [], async function () {
+  await SpecialPowers.spawn(tab2, [selectors], async function (promo) {
     is(
-      content.document.querySelector(".promo button"),
+      content.document.querySelector(promo.container),
       null,
       "should no longer render the experiment message after dismissing"
     );
@@ -90,32 +91,33 @@ add_task(async function test_experiment_messaging_show_default_on_dismiss() {
     targeting: "true",
   });
 
+  const selectors = getPromoSelectors();
+
   let { win: win1, tab: tab1 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab1, [], async function () {
+  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
     ok(
-      content.document.querySelector(".promo"),
+      content.document.querySelector(promo.container),
       "should render the promo experiment message"
     );
 
-    content.document.querySelector("#dismiss-btn").click();
+    content.document.querySelector(promo.dismissButton).click();
     info("button clicked");
   });
 
   let { win: win2, tab: tab2 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab2, [], async function () {
-    const promoHeader = content.document.getElementById("promo-header");
+  await SpecialPowers.spawn(tab2, [selectors], async function (promo) {
     ok(
-      content.document.querySelector(".promo"),
+      content.document.querySelector(promo.container),
       "should render the default promo message after dismissing experiment promo"
     );
-    is(
-      promoHeader.getAttribute("data-l10n-id"),
-      "about-private-browsing-cookie-banners-promo-heading",
-      "Correct default values are shown"
-    );
   });
+  await assertPromoHeader(
+    tab2,
+    "about-private-browsing-cookie-banners-promo-heading",
+    "Correct default values are shown"
+  );
 
   await BrowserTestUtils.closeWindow(win1);
   await BrowserTestUtils.closeWindow(win2);

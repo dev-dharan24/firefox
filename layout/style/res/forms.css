@@ -297,9 +297,10 @@ select:-moz-select-list-box {
   }
 }
 
+select:-moz-select-list-box::-moz-select-content,
 /* stylelint-disable-next-line selector-pseudo-element-no-unknown */
 select:-moz-select-list-box::picker-icon {
-  display: none;
+  display: none !important;
 }
 
 /* stylelint-disable-next-line selector-pseudo-element-no-unknown */

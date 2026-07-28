@@ -129,6 +129,7 @@ export class UrlbarChildController {
   get view() {
     return this.#view;
   }
+
   /**
    * The paired parent controller -- the real `UrlbarParentController` on the
    * direct path, or the `UrlbarParentControllerProxy` on the message path.
@@ -233,6 +234,9 @@ export class UrlbarChildController {
   }
   trackBounceBrowser(browserId) {
     return this.#parentController.trackBounceBrowser(browserId);
+  }
+  recordAutofillBackspace(url) {
+    return this.#parentController.recordAutofillBackspace(url);
   }
   recordSearchMode(searchMode) {
     return this.#parentController.recordSearchMode(searchMode);

@@ -63,7 +63,7 @@ SharedSurface_AndroidHardwareBuffer::Create(const SharedSurfaceDesc& desc) {
 
   const GLenum target = LOCAL_GL_TEXTURE_2D;
   auto fb = MozFramebuffer::CreateForBacking(desc.gl, desc.size, 0, false,
-                                             target, tex->name);
+                                             false, target, tex->name);
   if (!fb) {
     return nullptr;
   }

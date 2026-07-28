@@ -130,6 +130,11 @@ async function renderPromo({
  * Resolves a promo text value to a plain string. Values may either be a
  * "fluent:"-prefixed localization id or already-localized plain text.
  *
+ * A missing Fluent message resolves to an empty string rather than throwing,
+ * matching the legacy layout (which uses data-l10n-id and simply renders
+ * nothing for a missing message). Throwing here would abort promo rendering
+ * before the call-to-action click handler is attached.
+ *
  * @param {string} value The "fluent:"-prefixed id or plain text.
  * @returns {Promise<string>} The localized string.
  */
@@ -139,7 +144,14 @@ async function resolvePromoText(value) {
   }
   const fluentId = value.replace(/^fluent:/, "");
   if (fluentId !== value) {
-    return document.l10n.formatValue(fluentId);
+    try {
+      return (await document.l10n.formatValue(fluentId)) ?? "";
+    } catch (e) {
+      // formatValue throws for a missing message under automation; fall back to
+      // empty text so the promo still renders and stays interactive.
+      console.error(e);
+      return "";
+    }
   }
   return value;
 }

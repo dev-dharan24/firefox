@@ -16,7 +16,7 @@ const TEST_RESULTS = [
 ];
 
 const MAX_RESULTS = UrlbarPrefs.get("maxRichResults");
-const TIP_SPAN = UrlbarUtils.getSpanForResult({
+const TIP_SPAN = UrlbarShared.getSpanForResult({
   type: UrlbarShared.RESULT_TYPE.TIP,
 });
 

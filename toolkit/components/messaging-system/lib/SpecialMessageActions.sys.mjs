@@ -48,6 +48,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   IPProtection:
     // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
     "moz-src:///browser/components/ipprotection/IPProtection.sys.mjs",
+  MessagingSystemAllowlists:
+    "resource://messaging-system/lib/MessagingSystemAllowlists.sys.mjs",
   MigrationUtils: "resource:///modules/MigrationUtils.sys.mjs",
   ON_SERVICE_ENABLED_NOTIFICATION:
     "resource://gre/modules/FxAccountsCommon.sys.mjs",
@@ -430,12 +432,28 @@ export const SpecialMessageActions = {
       "termsofuse.acceptedDate",
     ];
 
-    const allowedPrefsList = onImpression
-      ? allowedSetOnImpressionPrefs
-      : allowedPrefs;
+    // The in-tree baseline allowlist can be extended off-train via Remote
+    // Settings, but not for onImpression prefs, which stay deliberately
+    // restricted to prefs reviewed in-tree. This check is synchronous and does
+    // not wait on the Remote Settings collection to load (see
+    // MessagingSystemAllowlists.ensureInit). Callers that dispatch SET_PREF
+    // outside of ASRouter's own message routing, namely about:welcome and
+    // Spotlight, do not await ASRouter's init sequence, so a pref granted only
+    // through Remote Settings may not be recognized yet if it fires before the
+    // collection has loaded for this session. If that happens the pref is
+    // simply namespaced like any other unlisted pref rather than being set
+    // under its real name. Note this case is unlikely outside of automated
+    // scenarios since user action is required to fire a SET_PREF action in
+    // these scenarios (onImpression prefs are not extendable via this method).
+    const allowedPrefsSet = onImpression
+      ? new Set(allowedSetOnImpressionPrefs)
+      : new Set([
+          ...allowedPrefs,
+          ...lazy.MessagingSystemAllowlists.getAllowedPrefs(),
+        ]);
 
     if (
-      !allowedPrefsList.includes(pref.name) &&
+      !allowedPrefsSet.has(pref.name) &&
       !pref.name.startsWith("messaging-system-action.")
     ) {
       pref.name = `messaging-system-action.${pref.name}`;

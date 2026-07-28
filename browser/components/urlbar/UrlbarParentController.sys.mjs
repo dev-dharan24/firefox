@@ -459,6 +459,18 @@ export class UrlbarParentController {
   }
 
   /**
+   * Records a backspace over an autofilled URL, which past a threshold blocks
+   * autofill for it. The bookkeeping and its Places write are parent-state, so
+   * the input hands the URL over here.
+   *
+   * @param {string} url
+   *   The autofill result URL whose backspace is being recorded.
+   */
+  recordAutofillBackspace(url) {
+    lazy.UrlbarUtils.recordAutofillBackspace(url);
+  }
+
+  /**
    * Records a visit to an engine's search form. The parent-side counterpart to
    * the content-side `BrowserSearchTelemetry.recordSearchForm()` call; the
    * engine is shipped by id and resolved here, and the source is this

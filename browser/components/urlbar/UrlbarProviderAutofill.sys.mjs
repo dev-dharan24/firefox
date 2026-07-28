@@ -937,7 +937,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
         let url = row.getResultByName("url");
         let strippedURL = row.getResultByName("stripped_url");
 
-        if (!UrlbarUtils.canAutofillURL(url, strippedURL, true)) {
+        if (!lazy.UrlbarShared.canAutofillURL(url, strippedURL, true)) {
           return null;
         }
 
@@ -1032,7 +1032,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
       let displaySpec = UrlbarUtils.prepareUrlForDisplay(finalCompleteValue, {
         trimURL: false,
       });
-      let [fallbackTitle] = UrlbarUtils.stripPrefixAndTrim(displaySpec, {
+      let [fallbackTitle] = lazy.UrlbarShared.stripPrefixAndTrim(displaySpec, {
         stripHttp: !trimHttps,
         stripHttps: trimHttps,
         trimEmptyQuery: true,
@@ -1082,7 +1082,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
 
     for (const aboutUrl of lazy.AboutPagesUtils.visibleAboutUrls) {
       if (aboutUrl.startsWith(`about:${this._searchString.toLowerCase()}`)) {
-        let [trimmedUrl] = UrlbarUtils.stripPrefixAndTrim(aboutUrl, {
+        let [trimmedUrl] = lazy.UrlbarShared.stripPrefixAndTrim(aboutUrl, {
           stripHttp: true,
           trimEmptyQuery: true,
           trimSlash: !this._searchString.includes("/"),

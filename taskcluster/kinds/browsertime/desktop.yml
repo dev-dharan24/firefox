@@ -382,7 +382,7 @@ browsertime-benchmark:
         apps: [firefox, chrome, safari, safari-tp, custom-car]
         subtests:
             by-variant:
-                nova:
+                no-nova:
                     - [speedometer3, sp3]
                 default:
                     by-test-platform:
@@ -472,7 +472,7 @@ browsertime-benchmark:
                                     - [webaudio, wa]
     treeherder-symbol: Btime()
     variants:
-        - nova
+        - no-nova
     tier:
         by-app:
             firefox:

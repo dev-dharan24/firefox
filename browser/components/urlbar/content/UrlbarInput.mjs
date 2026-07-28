@@ -2532,7 +2532,7 @@ ${
       this.focus();
     }
     let trimmedValue = value.trim();
-    let end = trimmedValue.search(lazy.UrlUtils.REGEXP_SPACES);
+    let end = trimmedValue.search(UrlbarShared.REGEXP_SPACES);
     let firstToken = end == -1 ? trimmedValue : trimmedValue.substring(0, end);
     // Enter search mode if the string starts with a restriction token.
     let searchMode = this.searchModeForToken(firstToken);
@@ -2550,7 +2550,7 @@ ${
         // in search mode.
         value = value.replace(firstToken, "");
       }
-      if (lazy.UrlUtils.REGEXP_SPACES.test(value[0])) {
+      if (UrlbarShared.REGEXP_SPACES.test(value[0])) {
         // If there was a trailing space after the restriction token/alias,
         // remove it.
         value = value.slice(1);
@@ -2798,7 +2798,7 @@ ${
         searchMode.source = UrlbarShared.RESULT_SOURCE.SEARCH;
       }
     } else if (source) {
-      let sourceName = lazy.UrlbarUtils.getResultSourceName(source);
+      let sourceName = UrlbarShared.getResultSourceName(source);
       if (sourceName) {
         searchMode = { source };
       } else {
@@ -3593,7 +3593,7 @@ ${
     // interpreted as search (e.g. unknown single word host, or domain suffix),
     // use the unmodified url instead. Otherwise, if the user edits the url
     // and confirms the new value, we may transform the url into a search.
-    let trimmedUrl = lazy.UrlbarUtils.stripPrefixAndTrim(url, { stripHttp })[0];
+    let trimmedUrl = UrlbarShared.stripPrefixAndTrim(url, { stripHttp })[0];
     let isSearch = !!this._getURIFixupInfo(trimmedUrl)?.keywordAsSent;
     if (isSearch) {
       // Although https-first might not respect the shown protocol, converting
@@ -3672,7 +3672,7 @@ ${
             .toLocaleLowerCase()
             .startsWith(value.toLocaleLowerCase());
       } else {
-        canAutofillPlaceholder = lazy.UrlbarUtils.canAutofillURL(
+        canAutofillPlaceholder = UrlbarShared.canAutofillURL(
           this._autofillPlaceholder.value,
           value
         );
@@ -4810,7 +4810,7 @@ ${
           history: "urlbar-placeholder-search-mode-other-history",
           tabs: "urlbar-placeholder-search-mode-other-tabs",
         };
-        let sourceName = lazy.UrlbarUtils.getResultSourceName(source);
+        let sourceName = UrlbarShared.getResultSourceName(source);
         let l10nID = `urlbar-search-mode-${sourceName}`;
         this.document.l10n.setAttributes(
           this._searchModeIndicatorTitle,
@@ -5436,10 +5436,9 @@ ${
       this.value === this.userTypedValue &&
       this._resultForCurrentValue?.payload?.url
     ) {
-      lazy.UrlbarUtils._lastRecordAutofillBackspacePromise =
-        lazy.UrlbarUtils.recordAutofillBackspace(
-          this._resultForCurrentValue.payload.url
-        );
+      this.controller.recordAutofillBackspace(
+        this._resultForCurrentValue.payload.url
+      );
     }
 
     let value = this.value;
@@ -5529,7 +5528,7 @@ ${
         compositionState !== UrlbarShared.COMPOSITION.COMPOSING) &&
       !event.inputType?.startsWith("delete") &&
       !event.inputType?.startsWith("history") &&
-      !lazy.UrlbarUtils.isPasteEvent(event) &&
+      !UrlbarShared.isPasteEvent(event) &&
       this._maybeAutofillPlaceholder(value);
 
     this.startQuery({
@@ -5686,7 +5685,7 @@ ${
       searchString,
       prohibitRemoteResults: !!(
         event &&
-        lazy.UrlbarUtils.isPasteEvent(event) &&
+        UrlbarShared.isPasteEvent(event) &&
         UrlbarPrefs.get("maxCharsForSearchSuggestions") < event.data?.length
       ),
     };

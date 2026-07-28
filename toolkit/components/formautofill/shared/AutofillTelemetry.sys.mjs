@@ -5,6 +5,11 @@
 import { FormAutofillUtils } from "resource://gre/modules/shared/FormAutofillUtils.sys.mjs";
 import { AutofillDataTypes } from "resource://gre/modules/shared/AutofillDataTypes.sys.mjs";
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  FormAutofillML: "resource://gre/modules/shared/FormAutofillML.sys.mjs",
+});
+
 const { FIELD_STATES } = FormAutofillUtils;
 
 class AutofillTelemetryBase {
@@ -38,6 +43,8 @@ class AutofillTelemetryBase {
 
       if (detail.reason == "autocomplete") {
         this.#setFormEventExtra(extra, detail.fieldName, "true");
+      } else if (detail.reason == "ml") {
+        this.#setFormEventExtra(extra, detail.fieldName, "ml");
       } else {
         // confidence exists only when a field is identified by fathom.
         let confidence =
@@ -274,6 +281,10 @@ export class AddressTelemetry extends AutofillTelemetryBase {
           extExtra[key] = value;
           delete extra[key];
         }
+      }
+
+      if (method == "detected") {
+        extExtra.mlversion = lazy.FormAutofillML.getModelVersion();
       }
     }
 

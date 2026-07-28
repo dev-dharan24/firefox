@@ -46,12 +46,14 @@ export class AboutaddonsThemesPicker extends MozLitElement {
     currentThemeId: { type: String },
     visibleRows: { type: Number },
     _expanded: { state: true },
+    _hasError: { state: true },
   };
 
   static queries = {
     pickerCard: "moz-card",
     themeCards: { all: ".theme-card" },
     expandToggle: ".expand-toggle",
+    errorBar: "moz-message-bar",
   };
 
   #prefObserver = {
@@ -89,6 +91,7 @@ export class AboutaddonsThemesPicker extends MozLitElement {
     this.currentThemeId = "";
     this.visibleRows = 3;
     this._expanded = false;
+    this._hasError = false;
   }
 
   connectedCallback() {
@@ -170,9 +173,12 @@ export class AboutaddonsThemesPicker extends MozLitElement {
   }
 
   async #onButtonClick(themeId) {
-    // TODO(Bug 2054548): account for download/install failures of the Nova Themes
-    // hosted on AMO
-    await this.#manager.updateThemeState(themeId, !this.#isActive(themeId));
+    this._hasError = false;
+    const success = await this.#manager.updateThemeState(
+      themeId,
+      !this.#isActive(themeId)
+    );
+    this._hasError = !success;
     await this.#loadThemes();
   }
 
@@ -189,6 +195,17 @@ export class AboutaddonsThemesPicker extends MozLitElement {
         rel="stylesheet"
         href="chrome://mozapps/content/extensions/components/aboutaddons-themes-picker.css"
       />
+      ${this._hasError
+        ? html`
+            <moz-message-bar
+              class="picker-error-bar"
+              type="error"
+              dismissable
+              data-l10n-id="aboutaddons-themes-picker-error-message"
+              @message-bar:user-dismissed=${() => (this._hasError = false)}
+            ></moz-message-bar>
+          `
+        : nothing}
       <moz-card
         id="aboutaddons-themes-picker-card"
         data-l10n-id="aboutaddons-themes-picker-heading"

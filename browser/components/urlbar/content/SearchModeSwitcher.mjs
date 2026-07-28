@@ -20,7 +20,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   OpenSearchManager:
     "moz-src:///browser/components/search/OpenSearchManager.sys.mjs",
   SearchUIUtils: "moz-src:///browser/components/search/SearchUIUtils.sys.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "SearchModeSwitcherL10n", () => {
@@ -456,6 +455,16 @@ export class SearchModeSwitcher {
   }
 
   /**
+   * Badges the unified search button to indicate that the current page offers
+   * engines that can be added.
+   *
+   * @param {boolean} show
+   */
+  toggleAddEnginesBadge(show) {
+    this.#button.toggleAttribute("addengines", show);
+  }
+
+  /**
    * Update the icon shown in the urlbar.
    *
    * @param {object} [options]
@@ -719,7 +728,7 @@ export class SearchModeSwitcher {
    * @returns {Promise<PanelItem>}
    */
   async #buildLocalSearchButton(mode) {
-    let sourceName = lazy.UrlbarUtils.getResultSourceName(mode.source);
+    let sourceName = UrlbarShared.getResultSourceName(mode.source);
     let { icon } = await this.#getDisplayedEngineDetails(mode);
     let menuitem = this.#createButton(icon);
     menuitem.classList.add(

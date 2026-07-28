@@ -367,7 +367,7 @@ UniquePtr<SharedSurface_D3D11Interop> SharedSurface_D3D11Interop::Create(
   }
 
   auto fbForDrawing = MozFramebuffer::CreateForBacking(
-      gl, size, 0, false, LOCAL_GL_RENDERBUFFER, data.interopRb->name);
+      gl, size, 0, false, false, LOCAL_GL_RENDERBUFFER, data.interopRb->name);
   if (!fbForDrawing) return nullptr;
 
   // -
@@ -387,7 +387,7 @@ UniquePtr<SharedSurface_D3D11Interop> SharedSurface_D3D11Interop::Create(
 
       // Our ShSurf tex or rb must be single-sampled.
       data.interopFbIfNeedsIndirect = std::move(fbForDrawing);
-      fbForDrawing = MozFramebuffer::Create(gl, size, 0, false);
+      fbForDrawing = MozFramebuffer::Create(gl, size, 0, false, false);
     }
   }
 

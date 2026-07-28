@@ -22,12 +22,12 @@ const {
 
 function UiState(
   locations = [],
-  debugTargetCollapsibilities = {},
+  mutableDebugTargetCollapsibilities = new Map(),
   showHiddenAddons = false
 ) {
   return {
     adbAddonStatus: null,
-    debugTargetCollapsibilities,
+    mutableDebugTargetCollapsibilities,
     isAdbReady: false,
     isScanningUsb: false,
     networkLocations: locations,
@@ -53,11 +53,8 @@ function uiReducer(state = UiState(), action) {
 
     case DEBUG_TARGET_COLLAPSIBILITY_UPDATED: {
       const { isCollapsed, key } = action;
-      const debugTargetCollapsibilities = new Map(
-        state.debugTargetCollapsibilities
-      );
-      debugTargetCollapsibilities.set(key, isCollapsed);
-      return Object.assign({}, state, { debugTargetCollapsibilities });
+      state.mutableDebugTargetCollapsibilities.set(key, isCollapsed);
+      return Object.assign({}, state);
     }
 
     case NETWORK_LOCATIONS_UPDATE_SUCCESS: {

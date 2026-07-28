@@ -8835,7 +8835,6 @@ var gCSSProperties = {
     type: CSS_TYPE_TRUE_SHORTHAND,
     applies_to_first_letter: true,
     applies_to_first_line: true,
-    applies_to_placeholder: true,
     subproperties: ["alignment-baseline", "baseline-shift", "baseline-source"],
     initial_values: ["baseline"],
     other_values: [
@@ -8868,7 +8867,6 @@ var gCSSProperties = {
     type: CSS_TYPE_LONGHAND,
     applies_to_first_letter: true,
     applies_to_first_line: true,
-    applies_to_placeholder: true,
     initial_values: ["baseline"],
     other_values: [
       "text-bottom",
@@ -8888,7 +8886,6 @@ var gCSSProperties = {
     type: CSS_TYPE_LONGHAND,
     applies_to_first_letter: true,
     applies_to_first_line: true,
-    applies_to_placeholder: true,
     initial_values: ["0"],
     other_values: [
       "sub",
@@ -8916,7 +8913,6 @@ var gCSSProperties = {
     type: CSS_TYPE_LONGHAND,
     applies_to_first_letter: true,
     applies_to_first_line: true,
-    applies_to_placeholder: true,
     initial_values: ["auto"],
     other_values: ["first", "last"],
     invalid_values: [],

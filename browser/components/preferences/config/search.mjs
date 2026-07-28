@@ -21,7 +21,6 @@ const lazy = XPCOMUtils.declareLazy({
   SearchUtils: "moz-src:///toolkit/components/search/SearchUtils.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
 });
 
 /**
@@ -833,7 +832,7 @@ Preferences.addSetting(
 
       let getIDs = (suffix = "") =>
         lazy.UrlbarShared.LOCAL_SEARCH_MODES.map(mode => {
-          let sourceName = lazy.UrlbarUtils.getResultSourceName(mode.source);
+          let sourceName = lazy.UrlbarShared.getResultSourceName(mode.source);
           return { id: `urlbar-search-mode-${sourceName}${suffix}` };
         });
 

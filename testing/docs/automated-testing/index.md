@@ -48,7 +48,6 @@ analysing the code with a linter.
    "``f8``", ":doc:`flake8 </code-quality/lint/linters/ruff>`", "All", "Python analyzed for style and correctness."
    "``stylelint``", ":doc:`Stylelint </code-quality/lint/linters/stylelint>`", "All", "CSS is analyzed for correctness."
    "``W``", ":doc:`wpt lint </web-platform/index>`", "Desktop", "web-platform-tests analyzed for style and manifest correctness"
-   "``WR(tidy)``", ":doc:`WebRender servo-tidy </testing/webrender/index>`", "Desktop", "Code in gfx/wr is run through servo-tidy."
    "``A``", ":doc:`Spotless </code-quality/lint/linters/android-format>`", "Android", "Java is analyzed for style and correctness."
 ```
 

@@ -42,6 +42,7 @@ const kPrefCustomizationDebug = "browser.uiCustomization.debug";
 const kPrefDrawInTitlebar = "browser.tabs.inTitlebar";
 const kPrefUIDensity = "browser.uidensity";
 const kPrefAutoTouchMode = "browser.touchmode.auto";
+const kPrefNovaEnabled = "browser.nova.enabled";
 const kPrefAutoHideDownloadsButton = "browser.download.autohideButton";
 const kPrefProtonToolbarVersion = "browser.proton.toolbar.version";
 const kPrefHomeButtonUsed = "browser.engagement.home-button.has-used";
@@ -184,6 +185,7 @@ var gUIStateBeforeReset = {
   uiDensity: null,
   uiDensityHadUserValue: null,
   autoTouchMode: null,
+  autoTouchModeHadUserValue: null,
   sidebarPositionStart: null,
 };
 
@@ -318,6 +320,8 @@ var CustomizableUIInternal = {
   initialize() {
     lazy.log.debug("Initializing");
 
+    this._setAutoTouchModeDefault();
+
     lazy.AddonManagerPrivate.databaseReady.then(async () => {
       lazy.AddonManager.addAddonListener(this);
 
@@ -446,6 +450,19 @@ var CustomizableUIInternal = {
     Services.prefs.addObserver(kPrefSidebarVerticalTabsEnabled, this);
     Services.prefs.addObserver(kPrefSidebarRevampEnabled, this);
     Services.prefs.addObserver(kPrefSidebarPositionStartEnabled, this);
+  },
+
+  // Sets the default for browser.touchmode.auto (whether the UI density
+  // auto-switches to touch in tablet mode) based on whether nova is enabled.
+  // The pref is sticky so that a user value is preserved even when it matches
+  // the default this derives at startup.
+  _setAutoTouchModeDefault() {
+    Services.prefs
+      .getDefaultBranch("")
+      .setBoolPref(
+        kPrefAutoTouchMode,
+        !Services.prefs.getBoolPref(kPrefNovaEnabled, false)
+      );
   },
 
   /**
@@ -4563,6 +4580,12 @@ var CustomizableUIInternal = {
         Services.prefs.prefHasUserValue(kPrefUIDensity);
       gUIStateBeforeReset.autoTouchMode =
         Services.prefs.getBoolPref(kPrefAutoTouchMode);
+      // browser.touchmode.auto is sticky, so an explicit value equal to the
+      // default still counts as a user value. Remember whether one was set so
+      // undoReset can faithfully restore the no-user-value state rather than
+      // pinning it with an explicit default-valued user pref.
+      gUIStateBeforeReset.autoTouchModeHadUserValue =
+        Services.prefs.prefHasUserValue(kPrefAutoTouchMode);
       gUIStateBeforeReset.currentTheme = gSelectedTheme;
       gUIStateBeforeReset.autoHideDownloadsButton = Services.prefs.getBoolPref(
         kPrefAutoHideDownloadsButton
@@ -4670,6 +4693,7 @@ var CustomizableUIInternal = {
       uiDensity,
       uiDensityHadUserValue,
       autoTouchMode,
+      autoTouchModeHadUserValue,
       autoHideDownloadsButton,
       sidebarPositionStart,
     } = gUIStateBeforeReset;
@@ -4686,7 +4710,11 @@ var CustomizableUIInternal = {
     } else {
       Services.prefs.clearUserPref(kPrefUIDensity);
     }
-    Services.prefs.setBoolPref(kPrefAutoTouchMode, autoTouchMode);
+    if (autoTouchModeHadUserValue) {
+      Services.prefs.setBoolPref(kPrefAutoTouchMode, autoTouchMode);
+    } else {
+      Services.prefs.clearUserPref(kPrefAutoTouchMode);
+    }
     Services.prefs.setBoolPref(
       kPrefAutoHideDownloadsButton,
       autoHideDownloadsButton

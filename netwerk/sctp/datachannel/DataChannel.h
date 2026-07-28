@@ -162,7 +162,7 @@ class DataChannelConnection : public net::NeckoTargetHolder {
     virtual void NotifyDataChannelClosed(DataChannel* aChannel) = 0;
 
     // Called when SCTP connects
-    virtual void NotifySctpConnected() = 0;
+    virtual void NotifySctpConnected(Maybe<uint16_t> aMaxChannels) = 0;
 
     // Called when SCTP closes
     virtual void NotifySctpClosed() = 0;
@@ -191,6 +191,10 @@ class DataChannelConnection : public net::NeckoTargetHolder {
   virtual void OnStreamOpen(uint16_t stream) = 0;
   // Called when the base class wants to raise the stream limit
   virtual bool RaiseStreamLimitTo(uint16_t aNewLimit) = 0;
+  // The exclusive upper bound on stream ids we will allocate. This is a
+  // per-stack constant (usrsctp grows toward it on demand; dcsctp announces the
+  // full range up front), and is safe to read from any thread.
+  virtual uint16_t GetStreamIdCeiling() const = 0;
   // Called when the base class wants to send a message; it is expected that
   // this will eventually result in a call/s to SendSctpPacket once the SCTP
   // packet is ready to be sent to the transport.

@@ -190,16 +190,18 @@ pub struct BorderInstanceGpuData {
     pub radius: DeviceSize,
     pub shape: f32,
     pub shape_offset: DeviceSize,
+    pub inset: DeviceSize,
 }
 
 impl BorderInstanceGpuData {
     pub fn write(&self, gpu_buffer_builder: &mut GpuBufferBuilderF) -> GpuBufferAddress {
-        let mut writer = gpu_buffer_builder.write_blocks(5);
+        let mut writer = gpu_buffer_builder.write_blocks(6);
         writer.push_one(self.local_rect);
         writer.push_one(self.color0);
         writer.push_one(self.color1);
         writer.push_one([self.widths.width, self.widths.height, self.radius.width, self.radius.height]);
         writer.push_one([self.shape, self.shape_offset.width, self.shape_offset.height, 0.0]);
+        writer.push_one([self.inset.width, self.inset.height, 0.0, 0.0]);
 
         writer.finish()
     }
@@ -225,7 +227,7 @@ pub struct PrimitiveInstanceData {
     data: [i32; 4],
 }
 
-// Keep these in sync with the correspondong #defines in shared.glsl
+// Keep these in sync with the corresponding #defines in shared.glsl
 /// Specifies that an RGB CompositeInstance or ScalingInstance's UV coordinates are normalized.
 const UV_TYPE_NORMALIZED: u32 = 0;
 /// Specifies that an RGB CompositeInstance or ScalingInstance's UV coordinates are not normalized.
@@ -673,10 +675,10 @@ impl GpuBufferDataF for QuadSegment {
 }
 
 
-/// The cooridnate space that the clip geometry (the quad rect) is relative to.
+/// The coordinate space that the clip geometry (the quad rect) is relative to.
 ///
 /// Not to confuse with the coordinate space of the primitive's pattern, for example
-/// the rounded rect, which is alreay relative to clip's spatial node.
+/// the rounded rect, which is already relative to clip's spatial node.
 #[derive(Copy, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "capture", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]

@@ -52,6 +52,7 @@ pref("pdfjs.enableUpdatedAddImage", false);
 pref("pdfjs.enableWebGPU", true);
 pref("pdfjs.enableXfa", true);
 pref("pdfjs.externalLinkTarget", 0);
+pref("pdfjs.featuresNotificationDismissed", false);
 pref("pdfjs.forcePageColors", false);
 pref("pdfjs.highlightEditorColors", "yellow=#FFFF98,green=#53FFBC,blue=#80EBFF,pink=#FFCBE6,red=#FF4F5F,yellow_HCM=#FFFFCC,green_HCM=#53FFBC,blue_HCM=#80EBFF,pink_HCM=#F6B8FF,red_HCM=#C50043");
 pref("pdfjs.historyUpdateUrl", false);

@@ -39,6 +39,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   MacAttribution:
     "moz-src:///browser/components/attribution/MacAttribution.sys.mjs",
   MenuMessage: "resource:///modules/asrouter/MenuMessage.sys.mjs",
+  MessagingSystemAllowlists:
+    "resource://messaging-system/lib/MessagingSystemAllowlists.sys.mjs",
   MomentsPageHub: "resource:///modules/asrouter/MomentsPageHub.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   PanelTestProvider: "resource:///modules/asrouter/PanelTestProvider.sys.mjs",
@@ -1253,6 +1255,7 @@ export class _ASRouter {
       initialized: false,
     });
     await this._updateMessageProviders();
+    await lazy.MessagingSystemAllowlists.ensureInit();
     await this.loadMessagesFromAllProviders();
     await MessageLoaderUtils.cleanupCache(this.state.providers, storage);
 
@@ -1616,6 +1619,12 @@ export class _ASRouter {
       // prompt will ask a user's consent to pin.
       "PIN_FIREFOX_TO_TASKBAR",
     ];
+    // The in-tree baseline allowlist can be extended off-train via Remote
+    // Settings. If the collection is unavailable the getter returns nothing.
+    const allowed = new Set([
+      ...ALLOWED_ACTION_MESSAGE_ACTIONS,
+      ...lazy.MessagingSystemAllowlists.getActionOnlyActions(),
+    ]);
     if (!action) {
       return false;
     }
@@ -1624,12 +1633,10 @@ export class _ASRouter {
       return (
         Array.isArray(actions) &&
         !!actions.length &&
-        actions.every(nested =>
-          ALLOWED_ACTION_MESSAGE_ACTIONS.includes(nested?.type)
-        )
+        actions.every(nested => allowed.has(nested?.type))
       );
     }
-    return ALLOWED_ACTION_MESSAGE_ACTIONS.includes(action.type);
+    return allowed.has(action.type);
   }
 
   routeCFRMessage(originalMessage, browser, trigger, force = false) {

@@ -404,7 +404,7 @@ uint16_t DataChannelConnection::FindFreeStream() const {
 
   // Find the lowest odd/even id that is not present in mStreamIds
   for (auto id : mStreamIds) {
-    if (i >= MAX_NUM_STREAMS) {
+    if (i >= GetStreamIdCeiling()) {
       return INVALID_STREAM;
     }
 
@@ -1023,9 +1023,10 @@ void DataChannelConnection::SetState(DataChannelConnectionState aState) {
   if (mState == DataChannelConnectionState::Open) {
     Dispatch(NS_NewCancelableRunnableFunction(
                  __func__,
-                 [this, self = RefPtr<DataChannelConnection>(this)]() {
+                 [this, self = RefPtr<DataChannelConnection>(this),
+                  maxChannels = Some(mNegotiatedIdLimit)]() {
                    if (mListener) {
-                     mListener->NotifySctpConnected();
+                     mListener->NotifySctpConnected(maxChannels);
                    }
                  }),
              NS_DISPATCH_FALLIBLE);

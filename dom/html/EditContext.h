@@ -182,6 +182,9 @@ class EditContext final : public DOMEventTargetHelper, public SupportsWeakPtr {
   // them immediately.
   void UnsuppressNotifyingIME();
 
+  friend std::ostream& operator<<(std::ostream& aStream,
+                                  const EditContext& aEditContext);
+
   RefPtr<nsGenericHTMLElement> mAssociatedElement;
   RefPtr<nsGenericHTMLElement> mTextContainer;
   // When character bounds are requested, we suppress notifying the IME
@@ -212,5 +215,8 @@ class EditContext final : public DOMEventTargetHelper, public SupportsWeakPtr {
 };
 
 }  // namespace mozilla::dom
+
+template <>
+struct fmt::formatter<mozilla::dom::EditContext> : fmt::ostream_formatter {};
 
 #endif

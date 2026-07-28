@@ -458,6 +458,7 @@
     --input-border-color: var(--border-color-interactive);
     --input-folder-gap: var(--space-medium);
     --input-height: var(--size-item-small);
+    --input-search-border-radius: var(--input-text-border-radius);
     --input-text-background-color-disabled: var(--button-background-color-disabled);
     --input-text-border: var(--border-width) solid var(--input-text-border-color);
     --input-text-border-color: var(--border-color);
@@ -1052,6 +1053,9 @@
 
       /** info-bar **/
       --info-bar-margin-block-end: 0;
+
+      /** input **/
+      --input-search-border-radius: var(--border-radius-circle);
 
       /** page **/
       --page-main-content-width: 664px;

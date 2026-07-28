@@ -14,6 +14,8 @@ const DESCRIPTOR_TYPES = require("resource://devtools/client/fronts/descriptors/
 add_task(async function () {
   // Enabled fission prefs
   await pushPref("devtools.browsertoolbox.scope", "everything");
+  // We use a commands object for the main process
+  await pushPref("devtools.chrome.enabled", true);
   // Disable the preloaded process as it gets created lazily and may interfere
   // with process count assertions
   await pushPref("dom.ipc.processPrelaunch.enabled", false);

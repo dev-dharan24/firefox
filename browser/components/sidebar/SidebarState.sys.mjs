@@ -168,7 +168,7 @@ export class SidebarState {
    * @returns {XULElement}
    */
   get #pinnedTabsItemsWrapper() {
-    return this.#pinnedTabsContainerEl.shadowRoot.querySelector(
+    return this.#pinnedTabsContainerEl?.shadowRoot?.querySelector(
       "[part=items-wrapper]"
     );
   }
@@ -797,11 +797,22 @@ export class SidebarState {
       }
       return;
     }
-    if (this.launcherExpanded && this.expandedPinnedTabsHeight) {
-      this.#pinnedTabsContainerEl.style.height = `${this.expandedPinnedTabsHeight}px`;
-    } else if (!this.launcherExpanded && this.collapsedPinnedTabsHeight) {
-      this.#pinnedTabsContainerEl.style.height = `${this.collapsedPinnedTabsHeight}px`;
+    const preferredHeight = this.launcherExpanded
+      ? this.expandedPinnedTabsHeight
+      : this.collapsedPinnedTabsHeight;
+    if (!preferredHeight || !this.#pinnedTabsContainerEl) {
+      return;
     }
+    const itemsWrapper = this.#pinnedTabsItemsWrapper;
+    const itemsWrapperHeight = itemsWrapper
+      ? this.#controllerGlobal.windowUtils.getBoundsWithoutFlushing(
+          itemsWrapper
+        ).height
+      : 0;
+    const clampedHeight = itemsWrapperHeight
+      ? Math.min(preferredHeight, itemsWrapperHeight)
+      : preferredHeight;
+    this.#pinnedTabsContainerEl.style.height = `${clampedHeight}px`;
   }
 
   /**

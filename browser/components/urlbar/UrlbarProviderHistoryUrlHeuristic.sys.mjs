@@ -8,10 +8,7 @@
  * the page title.
  */
 
-import {
-  UrlbarProvider,
-  UrlbarUtils,
-} from "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs";
+import { UrlbarProvider } from "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs";
 
 const lazy = {};
 
@@ -69,7 +66,7 @@ export class UrlbarProviderHistoryUrlHeuristic extends UrlbarProvider {
 
   async #getResult(queryContext) {
     const inputedURL = queryContext.fixupInfo.href;
-    const [strippedURL] = UrlbarUtils.stripPrefixAndTrim(inputedURL, {
+    const [strippedURL] = lazy.UrlbarShared.stripPrefixAndTrim(inputedURL, {
       stripHttp: true,
       stripHttps: true,
       stripWww: true,

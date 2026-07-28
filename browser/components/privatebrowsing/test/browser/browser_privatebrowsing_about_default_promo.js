@@ -43,8 +43,8 @@ add_task(async function test_privatebrowsing_asrouter_messages_state() {
 
   let { win, tab } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab, [], async function () {
-    const promoContainer = content.document.querySelector(".promo");
+  await SpecialPowers.spawn(tab, [getPromoSelectors()], async function (promo) {
+    const promoContainer = content.document.querySelector(promo.container);
     ok(promoContainer, "Promo is shown");
   });
 
@@ -75,32 +75,33 @@ add_task(async function test_privatebrowsing_asrouter_messages_state() {
 add_task(async function test_default_promo() {
   await resetState();
 
+  const selectors = getPromoSelectors();
+
   let { win: win1, tab: tab1 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab1, [], async function () {
-    const promoContainer = content.document.querySelector(".promo"); // container which is present if promo is enabled and should show
-    const promoHeader = content.document.getElementById("promo-header");
-
+  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
+    // container which is present if promo is enabled and should show
+    const promoContainer = content.document.querySelector(promo.container);
     ok(promoContainer, "Cookie banners promo is shown");
     ok(
       ContentTaskUtils.isVisible(promoContainer),
       "Promo container is visible"
     );
-    is(
-      promoHeader.getAttribute("data-l10n-id"),
-      "about-private-browsing-cookie-banners-promo-heading",
-      "Correct default values are shown"
-    );
   });
+  await assertPromoHeader(
+    tab1,
+    "about-private-browsing-cookie-banners-promo-heading",
+    "Correct default values are shown"
+  );
 
   let { win: win2 } = await openTabAndWaitForRender();
   let { win: win3 } = await openTabAndWaitForRender();
 
   let { win: win4, tab: tab4 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab4, [], async function () {
+  await SpecialPowers.spawn(tab4, [selectors], async function (promo) {
     is(
-      content.document.querySelector(".promo button"),
+      content.document.querySelector(promo.container),
       null,
       "should no longer render the promo after 3 impressions"
     );
@@ -117,11 +118,13 @@ add_task(async function test_default_promo() {
 add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   await resetState();
 
+  const selectors = getPromoSelectors();
+
   const { win, tab: tab1 } = await openTabAndWaitForRender();
 
-  await SpecialPowers.spawn(tab1, [], async function () {
+  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
     // container which is present if promo message is not blocked
-    const promoContainer = content.document.querySelector(".promo");
+    const promoContainer = content.document.querySelector(promo.container);
     ok(promoContainer, "Promo is shown in tab 1");
   });
 
@@ -129,10 +132,10 @@ add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   win.openTrustedLinkIn(win.BROWSER_NEW_TAB_URL, "tabshifted");
 
   // Block the promo in tab 1
-  await SpecialPowers.spawn(tab1, [], async function () {
-    content.document.getElementById("dismiss-btn").click();
+  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
+    content.document.querySelector(promo.dismissButton).click();
     await ContentTaskUtils.waitForCondition(() => {
-      return !content.document.querySelector(".promo");
+      return !content.document.querySelector(promo.container);
     }, "The promo container is removed.");
   });
 
@@ -143,12 +146,12 @@ add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   // Verify that the promo has now been removed from tab 2
   await SpecialPowers.spawn(
     win.gBrowser.tabs[1].linkedBrowser,
-    [],
+    [selectors],
     // The timing may be weird in Chaos Mode, so wait for it to be removed
     // instead of a single assertion.
-    async function () {
+    async function (promo) {
       await ContentTaskUtils.waitForCondition(
-        () => !content.document.querySelector(".promo"),
+        () => !content.document.querySelector(promo.container),
         "Promo is not shown in a new tab after being dismissed in another tab"
       );
     }
@@ -183,52 +186,62 @@ add_task(async function test_default_content_deferred_message_load() {
   const { win, tab } = await openAboutPrivateBrowsing();
   await messageRequestedPromise;
 
-  await SpecialPowers.spawn(tab, [], async function () {
-    const promoContainer = content.document.querySelector(".promo");
-    ok(
-      promoContainer && !promoContainer.classList.contains("promo-visible"),
-      "Promo is hidden but not removed"
-    );
-    const infoContainer = content.document.querySelector(".info");
-    ok(infoContainer && !infoContainer.hidden, "Info container is shown");
-    const infoTitle = content.document.getElementById("info-title");
-    ok(infoTitle && !infoTitle.hidden, "Info title is shown");
-    is(
-      infoTitle.getAttribute("data-l10n-id"),
-      "about-private-browsing-felt-privacy-v1-info-header",
-      "Info title has the correct Fluent id"
-    );
-    const infoBody = content.document.getElementById("info-body");
-    ok(infoBody, "Info body is shown");
-    is(
-      infoBody.getAttribute("data-l10n-id"),
-      "about-private-browsing-felt-privacy-v1-info-body",
-      "Info body has the correct Fluent id"
-    );
-    await ContentTaskUtils.waitForCondition(
-      () => infoBody.textContent,
-      "Info body has been translated"
-    );
-    const infoLink = content.document.getElementById("private-browsing-myths");
-    ok(infoLink, "Info link is shown");
-    is(
-      infoLink.getAttribute("data-l10n-id"),
-      "about-private-browsing-felt-privacy-v1-info-link",
-      "Info link has the correct Fluent id"
-    );
-    await ContentTaskUtils.waitForCondition(
-      () => infoLink.textContent && infoLink.href,
-      "Info link has been translated"
-    );
-  });
+  const selectors = getPromoSelectors();
+  const infoL10n = getInfoL10n();
+
+  await SpecialPowers.spawn(
+    tab,
+    [{ selectors, infoL10n }],
+    async function ({ selectors: promo, infoL10n: info }) {
+      const promoContainer = content.document.querySelector(promo.container);
+      // Both layouts build the promo while it is hidden and only reveal it once
+      // populated, so it should be present but not yet visible.
+      ok(
+        promoContainer && ContentTaskUtils.isHidden(promoContainer),
+        "Promo is hidden but not removed"
+      );
+      const infoContainer = content.document.querySelector(".info");
+      ok(infoContainer && !infoContainer.hidden, "Info container is shown");
+      const infoTitle = content.document.getElementById("info-title");
+      is(
+        infoTitle.hidden,
+        info.titleHidden,
+        "Info title visibility matches the layout"
+      );
+      const infoBody = content.document.getElementById("info-body");
+      ok(infoBody, "Info body is shown");
+      is(
+        infoBody.getAttribute("data-l10n-id"),
+        info.body,
+        "Info body has the correct Fluent id"
+      );
+      await ContentTaskUtils.waitForCondition(
+        () => infoBody.textContent,
+        "Info body has been translated"
+      );
+      const infoLink = content.document.getElementById(
+        "private-browsing-myths"
+      );
+      ok(infoLink, "Info link is shown");
+      is(
+        infoLink.getAttribute("data-l10n-id"),
+        info.link,
+        "Info link has the correct Fluent id"
+      );
+      await ContentTaskUtils.waitForCondition(
+        () => infoLink.textContent && infoLink.href,
+        "Info link has been translated"
+      );
+    }
+  );
 
   messageReadyPromiseResolver();
   await messageReadyPromise;
 
-  await SpecialPowers.spawn(tab, [], async function () {
+  await SpecialPowers.spawn(tab, [selectors], async function (promo) {
     await ContentTaskUtils.waitForCondition(() => {
-      const promoContainer = content.document.querySelector(".promo");
-      return promoContainer?.classList.contains("promo-visible");
+      const promoContainer = content.document.querySelector(promo.container);
+      return promoContainer && ContentTaskUtils.isVisible(promoContainer);
     }, "The promo container is shown.");
   });
 

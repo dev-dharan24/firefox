@@ -160,7 +160,7 @@ async function heuristicIsRestyled(
   } else if (source) {
     [actionText] = await document.l10n.formatValues([
       {
-        id: `urlbar-result-action-search-${UrlbarUtils.getResultSourceName(
+        id: `urlbar-result-action-search-${UrlbarShared.getResultSourceName(
           source
         )}`,
       },

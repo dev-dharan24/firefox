@@ -11,13 +11,13 @@ LOG = RaptorLogger(component="raptor-speedometer3-support")
 
 
 class Speedometer3Support(BasePythonSupport):
-    nova = None
+    no_nova = None
 
     def setup_test(self, test, args):
         super().setup_test(test, args)
 
-        if args.extra_prefs.get("browser.nova.enabled", False):
-            self.nova = True
+        if args.extra_prefs.get("browser.nova.enabled", True) is False:
+            self.no_nova = True
 
         if args.etw_profile:
             test["etw_profile"] = True
@@ -155,8 +155,8 @@ class Speedometer3Support(BasePythonSupport):
             for subtest in suite.get("subtests", []):
                 subtest["shouldAlert"] = False
 
-        if self.nova:
-            suite["extraOptions"].append("nova")
+        if self.no_nova:
+            suite["extraOptions"].append("no-nova")
 
     def modify_command(self, cmd, test):
         """Modify the browsertime command for speedometer 3.

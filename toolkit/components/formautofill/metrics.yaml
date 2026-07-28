@@ -904,6 +904,10 @@ address:
         description: >
           telephone
         type: string
+      mlversion:
+        description: >
+          ml model version
+        type: string
 
   filled_address_form_ext:
     type: event

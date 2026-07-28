@@ -692,7 +692,7 @@ void NativeLayerRootSnapshotterCA::UpdateSnapshot(const IntSize& aSize) {
   bool needToRedrawEverything = false;
   if (!mSnapshot || mSnapshot->Size() != aSize) {
     mSnapshot = nullptr;
-    auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false);
+    auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false, false);
     if (!fb) {
       return;
     }
@@ -767,7 +767,7 @@ bool NativeLayerRootSnapshotterCA::ReadbackPixels(
 
 already_AddRefed<profiler_screenshots::DownscaleTarget>
 NativeLayerRootSnapshotterCA::CreateDownscaleTarget(const IntSize& aSize) {
-  auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false);
+  auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false, false);
   if (!fb) {
     return nullptr;
   }

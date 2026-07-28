@@ -6,6 +6,10 @@
   display: block;
 }
 
+moz-message-bar.picker-error-bar {
+  margin-block-end: var(--space-small);
+}
+
 moz-card::part(heading) {
   margin: 0;
   font-size: var(--font-size-large);

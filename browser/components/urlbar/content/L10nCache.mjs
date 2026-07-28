@@ -5,7 +5,7 @@
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
 });
 
 /**
@@ -305,7 +305,7 @@ export class L10nCache {
 
       let span = element.ownerDocument.createElement("span");
       for (let key in argsHighlights) {
-        lazy.UrlbarUtils.addTextContentWithHighlights(
+        lazy.UrlbarShared.addTextContentWithHighlights(
           span,
           args[key],
           argsHighlights[key]

@@ -173,6 +173,10 @@ if CONFIG["OS_TARGET"] == "WINNT":
         if CONFIG["CC_TYPE"] == "clang-cl":
             sandbox_vars["ASFLAGS"] = ["-safeseh"]
 
+    sandbox_vars["DELAYLOAD_DLLS"] = [
+        "advapi32.dll",
+    ]
+
     DELAYLOAD_DLLS += [
         "winmm.dll",
     ]

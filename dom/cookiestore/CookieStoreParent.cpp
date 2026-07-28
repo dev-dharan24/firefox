@@ -24,6 +24,7 @@
 #include "nsICookieManager.h"
 #include "nsICookieService.h"
 #include "nsIEffectiveTLDService.h"
+#include "nsNetUtil.h"
 #include "nsProxyRelease.h"
 
 using namespace mozilla::ipc;
@@ -63,6 +64,16 @@ bool CheckContentProcessSecurity(ThreadsafeContentParentHandle* aParent,
   auto* cs = static_cast<CookieServiceParent*>(csParent);
 
   return cs->ContentProcessHasCookie(aDomain, aOriginAttributes);
+}
+
+bool SubscriptionPrincipalMatchesScope(nsIPrincipal* aPrincipal,
+                                       const nsACString& aScopeURL) {
+  nsCOMPtr<nsIURI> scopeURI;
+  if (NS_WARN_IF(NS_FAILED(NS_NewURI(getter_AddRefs(scopeURI), aScopeURL)))) {
+    return false;
+  }
+
+  return aPrincipal->IsSameOrigin(scopeURI);
 }
 
 }  // namespace
@@ -218,6 +229,10 @@ mozilla::ipc::IPCResult CookieStoreParent::RecvGetSubscriptionsRequest(
     return IPC_FAIL(this, "principal not allowed for remote type");
   }
 
+  if (!SubscriptionPrincipalMatchesScope(principal, aScopeURL)) {
+    return IPC_FAIL(this, "principal not same-origin with scope");
+  }
+
   InvokeAsync(GetMainThreadSerialEventTarget(), __func__,
               [self = RefPtr(this), aPrincipalInfo, aScopeURL]() {
                 CookieStoreSubscriptionService* service =
@@ -266,6 +281,10 @@ mozilla::ipc::IPCResult CookieStoreParent::RecvSubscribeOrUnsubscribeRequest(
   if (parent && !ValidatePrincipalCouldPotentiallyBeLoadedBy(
                     principal, parent->GetRemoteType())) {
     return IPC_FAIL(this, "principal not allowed for remote type");
+  }
+
+  if (!SubscriptionPrincipalMatchesScope(principal, aScopeURL)) {
+    return IPC_FAIL(this, "principal not same-origin with scope");
   }
 
   InvokeAsync(GetMainThreadSerialEventTarget(), __func__,

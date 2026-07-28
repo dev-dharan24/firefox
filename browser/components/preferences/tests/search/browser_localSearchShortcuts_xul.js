@@ -9,6 +9,7 @@
 
 ChromeUtils.defineESModuleGetters(this, {
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
+  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlbarTokenizer:
     "moz-src:///browser/components/urlbar/UrlbarTokenizer.sys.mjs",
@@ -302,7 +303,7 @@ async function checkRowVisibility() {
       row,
       gTree.columns.getNamedColumn("engineName")
     );
-    let name = UrlbarUtils.getResultSourceName(shortcut.source);
+    let name = UrlbarShared.getResultSourceName(shortcut.source);
     let l10nName = await gTree.ownerDocument.l10n.formatValue(
       `urlbar-search-mode-${name}`
     );

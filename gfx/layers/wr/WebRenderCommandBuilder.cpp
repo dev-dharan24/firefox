@@ -2800,13 +2800,31 @@ Maybe<wr::ImageMask> WebRenderCommandBuilder::BuildWrMaskImage(
 
   nsPoint maskOffset = aMaskItem->ToReferenceFrame() - bounds.TopLeft();
 
+  // The blob is rasterized against itemRect's grid but painted in absolute
+  // coordinates, so this sub-pixel offset is baked into its alpha. itemRect is
+  // an integer rect and maskOffset is translation invariant, so neither
+  // notices when it changes: an item nudged a sub-pixel distance without being
+  // invalidated (e.g. by a sibling's layout change) would otherwise keep alpha
+  // rasterized against the offset it had at the previous position, leaving the
+  // mask up to a device pixel out of place until something else invalidated it
+  // (bug 2057351). Before bug 1973192 rounding out meant such a move always
+  // resized itemRect, which tripped the check below on its own.
+  gfx::Point residual(
+      NSAppUnitsToFloatPixels(bounds.x, appUnitsPerDevPixel) * scale.xScale -
+          itemRect.x,
+      NSAppUnitsToFloatPixels(bounds.y, appUnitsPerDevPixel) * scale.yScale -
+          itemRect.y);
+  bool sameResidual =
+      gfx::FuzzyEqual(residual.x, maskData->mResidual.x, 0.01f) &&
+      gfx::FuzzyEqual(residual.y, maskData->mResidual.y, 0.01f);
+
   bool shouldHandleOpacity = aBuilder.GetInheritedOpacity() != 1.0f;
 
   nsRect dirtyRect;
   // If this mask item is being painted for the first time, some members of
   // WebRenderMaskData are still default initialized. This is intentional.
   if (aMaskItem->IsInvalid(dirtyRect) ||
-      !itemRect.IsEqualInterior(maskData->mItemRect) ||
+      !itemRect.IsEqualInterior(maskData->mItemRect) || !sameResidual ||
       !(aMaskItem->Frame()->StyleSVGReset()->mMask == maskData->mMaskStyle) ||
       maskOffset != maskData->mMaskOffset || !sameScale ||
       shouldHandleOpacity != maskData->mShouldHandleOpacity) {
@@ -2908,6 +2926,7 @@ Maybe<wr::ImageMask> WebRenderCommandBuilder::BuildWrMaskImage(
                          mManager->GetRenderRootStateManager(), aResources);
     if (maskIsComplete) {
       maskData->mItemRect = itemRect;
+      maskData->mResidual = residual;
       maskData->mMaskOffset = maskOffset;
       maskData->mScale = scale;
       maskData->mMaskStyle = aMaskItem->Frame()->StyleSVGReset()->mMask;

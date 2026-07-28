@@ -123,7 +123,7 @@ add_task(async function lastVisited() {
       url: URL_VISITED,
       formattedDate: {
         isRelative: false,
-        dateFormatType: UrlbarUtils.DATE_FORMAT_TYPE.ABSOLUTE,
+        dateFormatType: UrlbarShared.DATE_FORMAT_TYPE.ABSOLUTE,
         formattedDate: "May 11, 2013",
       },
       expected: {
@@ -138,7 +138,7 @@ add_task(async function lastVisited() {
       url: URL_VISITED,
       formattedDate: {
         isRelative: true,
-        dateFormatType: UrlbarUtils.DATE_FORMAT_TYPE.DAYS_WEEKS_MONTHS_AGO,
+        dateFormatType: UrlbarShared.DATE_FORMAT_TYPE.DAYS_WEEKS_MONTHS_AGO,
         formattedDate: "11 months ago",
       },
       expected: {
@@ -153,7 +153,7 @@ add_task(async function lastVisited() {
       url: URL_VISITED,
       formattedDate: {
         isRelative: true,
-        dateFormatType: UrlbarUtils.DATE_FORMAT_TYPE.YESTERDAY_TODAY_TOMORROW,
+        dateFormatType: UrlbarShared.DATE_FORMAT_TYPE.YESTERDAY_TODAY_TOMORROW,
         formattedDate: "Today",
       },
       expected: {
@@ -172,7 +172,7 @@ add_task(async function bookmark() {
       url: URL_BOOKMARKED,
       formattedDate: {
         isRelative: false,
-        dateFormatType: UrlbarUtils.DATE_FORMAT_TYPE.ABSOLUTE,
+        dateFormatType: UrlbarShared.DATE_FORMAT_TYPE.ABSOLUTE,
         formattedDate: "May 11, 2013",
       },
       expected: {
@@ -191,7 +191,7 @@ add_task(async function visitedAndBookmarked() {
       url: URL_BOOKMARKED_AND_VISITED,
       formattedDate: {
         isRelative: false,
-        dateFormatType: UrlbarUtils.DATE_FORMAT_TYPE.ABSOLUTE,
+        dateFormatType: UrlbarShared.DATE_FORMAT_TYPE.ABSOLUTE,
         formattedDate: "May 11, 2013",
       },
       expected: {
@@ -226,7 +226,10 @@ async function selectRow(row) {
 
 async function doTest(tests) {
   let sandbox = sinon.createSandbox();
-  let formatDateStub = sandbox.stub(UrlbarUtils, "formatDate");
+  let formatDateStub = sandbox.stub(
+    UrlbarTestUtils.getUrlbarShared(window),
+    "formatDate"
+  );
 
   for (let { url, formattedDate, expected } of tests) {
     formatDateStub.returns(formattedDate);

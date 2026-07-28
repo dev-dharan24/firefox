@@ -68,7 +68,7 @@ UniquePtr<SharedSurface_IOSurface> SharedSurface_IOSurface::Create(
   }
 
   auto fb = MozFramebuffer::CreateForBacking(desc.gl, desc.size, 0, false,
-                                             *target, tex->name);
+                                             false, *target, tex->name);
   if (!fb) return nullptr;
 
   return AsUnique(

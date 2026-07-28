@@ -21,8 +21,8 @@
  */
 
 /**
- * pdfjsVersion = 6.2.52
- * pdfjsBuild = 05e100c76
+ * pdfjsVersion = 6.2.80
+ * pdfjsBuild = 2ea8820d9
  */
 
 ;// ./web/ui_utils.js
@@ -700,6 +700,12 @@ const defaultOptions = {
     value: 0,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE
   },
+  ...{
+    featuresNotificationDismissed: {
+      value: false,
+      kind: OptionKind.VIEWER + OptionKind.PREFERENCE + OptionKind.EVENT_DISPATCH
+    }
+  },
   highlightEditorColors: {
     value: "yellow=#FFFF98,green=#53FFBC,blue=#80EBFF,pink=#FFCBE6,red=#FF4F5F," + "yellow_HCM=#FFFFCC,green_HCM=#53FFBC,blue_HCM=#80EBFF,pink_HCM=#F6B8FF,red_HCM=#C50043",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE
@@ -990,7 +996,7 @@ const {
 } = globalThis.pdfjsLib;
 
 ;// ./web/internal_evt.js
-const INTERNAL_EVT = "562b552e-9282-4e62-8059-cda7cc52ef53";
+const INTERNAL_EVT = "0d288276-083d-4230-bddf-4113e91c0fb0";
 const internalOpt = Object.freeze({
   internal: INTERNAL_EVT
 });
@@ -2319,6 +2325,9 @@ class ExternalServices extends BaseExternalServices {
   }
   dispatchGlobalEvent(event) {
     FirefoxCom.request("dispatchGlobalEvent", event);
+  }
+  openAboutPdfFeatures() {
+    FirefoxCom.request("openAboutPdfFeatures", null);
   }
 }
 
@@ -13230,7 +13239,7 @@ class PDFViewer {
   #savedPageViews = null;
   #deletedPageNumbers = null;
   constructor(options) {
-    const viewerVersion = "6.2.52";
+    const viewerVersion = "6.2.80";
     if (version !== viewerVersion) {
       throw new Error(`The API version "${version}" does not match the Viewer version "${viewerVersion}".`);
     }
@@ -17638,6 +17647,53 @@ const PDFViewerApplication = {
     if (appConfig.editorUndoBar) {
       this.editorUndoBar = new EditorUndoBar(appConfig.editorUndoBar, eventBus);
     }
+    if (!this.isViewerEmbedded && appConfig.featuresNotification && !AppOptions.get("featuresNotificationDismissed")) {
+      const {
+        featuresNotification
+      } = appConfig;
+      customElements.whenDefined("pdf-features-notification").then(() => {
+        if (AppOptions.get("featuresNotificationDismissed")) {
+          return;
+        }
+        featuresNotification.addEventListener("click", event => {
+          if (!event.target.closest(".cta")) {
+            return;
+          }
+          event.preventDefault();
+          externalServices.openAboutPdfFeatures();
+        }, {
+          signal: abortSignal
+        });
+        const barResizeObserver = new ResizeObserver(entries => {
+          const box = entries[0]?.borderBoxSize?.[0];
+          const height = box ? box.blockSize : entries[0]?.contentRect.height ?? 0;
+          docStyle.setProperty("--pfn-bar-height", `${Math.ceil(height)}px`);
+        });
+        barResizeObserver.observe(featuresNotification);
+        const hideBar = () => {
+          barResizeObserver.disconnect();
+          docStyle.setProperty("--pfn-bar-height", "0px");
+          featuresNotification.hidden = true;
+        };
+        featuresNotification.addEventListener("pdf-features-notification:dismissed", () => {
+          hideBar();
+          this.preferences.set("featuresNotificationDismissed", true);
+        }, {
+          once: true
+        });
+        eventBus.on("featuresnotificationdismissed", ({
+          value
+        }) => {
+          if (value) {
+            hideBar();
+          }
+        }, {
+          signal: abortSignal,
+          ...internalOpt
+        });
+        featuresNotification.show();
+      });
+    }
     const signatureManager = AppOptions.get("enableSignatureEditor") && appConfig.addSignatureDialog ? new SignatureManager(appConfig.addSignatureDialog, appConfig.editSignatureDialog, appConfig.annotationEditorParams?.editorSignatureAddSignature || null, overlayManager, l10n, externalServices.createSignatureStorage(eventBus, abortSignal), eventBus) : null;
     const commentManager = AppOptions.get("enableComment") && appConfig.editCommentDialog ? new CommentManager(appConfig.editCommentDialog, {
       learnMoreUrl: AppOptions.get("commentLearnMoreUrl"),
@@ -19724,6 +19780,9 @@ function getViewerConfiguration() {
       message: document.getElementById("editorUndoBarMessage"),
       undoButton: document.getElementById("editorUndoBarUndoButton"),
       closeButton: document.getElementById("editorUndoBarCloseButton")
+    },
+    ...{
+      featuresNotification: document.getElementById("pdfFeaturesNotification")
     },
     editCommentDialog: {
       dialog: document.getElementById("commentManagerDialog"),

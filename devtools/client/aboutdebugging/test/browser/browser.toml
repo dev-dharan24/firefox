@@ -91,14 +91,8 @@ skip-if = [
 ["browser_aboutdebugging_connection_prompt_setting.js"]
 
 ["browser_aboutdebugging_debug-target-pane_collapsibilities_interaction.js"]
-fail-if = [
-  "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
-]
 
 ["browser_aboutdebugging_debug-target-pane_collapsibilities_preference.js"]
-fail-if = [
-  "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
-]
 
 ["browser_aboutdebugging_debug-target-pane_empty.js"]
 
@@ -111,6 +105,9 @@ fail-if = [
 ["browser_aboutdebugging_devtoolstoolbox_concurrent.js"]
 
 ["browser_aboutdebugging_devtoolstoolbox_contextmenu.js"]
+skip-if = [
+  "nova", # Bug 2058109
+]
 
 ["browser_aboutdebugging_devtoolstoolbox_contextmenu_markupview.js"]
 

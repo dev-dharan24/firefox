@@ -204,7 +204,7 @@ class PeerConnectionImpl final
 
   void NotifyDataChannelClosed(DataChannel*) override;
 
-  void NotifySctpConnected() override;
+  void NotifySctpConnected(Maybe<uint16_t> aMaxChannels) override;
 
   void NotifySctpClosed() override;
 
@@ -822,6 +822,11 @@ class PeerConnectionImpl final
   void EnsureTransports(const JsepSession& aSession);
 
   void UpdateRTCDtlsTransports();
+  // Creates/updates mSctpTransport based on whether a data section has
+  // appeared in an SDP. May run in have-remote-offer, where the
+  // RTCSctpTransport has a null transport until UpdateRTCDtlsTransports fills
+  // it in.
+  void UpdateRTCSctpTransport();
   void SaveStateForRollback();
   void RestoreStateForRollback();
   std::set<RefPtr<dom::RTCDtlsTransport>> GetActiveTransports() const;

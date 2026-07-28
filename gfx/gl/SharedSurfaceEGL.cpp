@@ -54,7 +54,7 @@ UniquePtr<SharedSurface_EGLImage> SharedSurface_EGLImage::Create(
   const auto& context = gle->mContext;
   const auto& egl = *(gle->mEgl);
 
-  auto fb = MozFramebuffer::Create(desc.gl, desc.size, 0, false);
+  auto fb = MozFramebuffer::Create(desc.gl, desc.size, 0, false, false);
   if (!fb) return nullptr;
 
   const auto buffer = reinterpret_cast<EGLClientBuffer>(fb->ColorTex());

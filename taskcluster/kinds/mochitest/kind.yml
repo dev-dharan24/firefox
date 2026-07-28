@@ -328,8 +328,8 @@ tasks:
             - inc-origin-init
             - trainhop-beta
             - trainhop-release
-            - nova
-            - nova+vertical-tabs
+            - no-nova
+            - no-nova+vertical-tabs
         run-on-projects:
             by-variant:
                 trainhop-beta:
@@ -386,7 +386,7 @@ tasks:
                         windows1.*-64.*(-shippable)?/.*: ['autoland', 'mozilla-central']
                         default: []
                 inc-origin-init: []
-                nova:
+                no-nova:
                     by-test-platform:
                         .*-artifact.*: []
                         .*-asan.*: []
@@ -396,7 +396,7 @@ tasks:
                         macosx1[45].*64(-shippable)?(-qr)?/opt: ['mozilla-central']
                         windows11.*-64.*(-shippable)?/opt: ['trunk']
                         default: []
-                nova+vertical-tabs:
+                no-nova+vertical-tabs:
                     by-test-platform:
                         .*-artifact.*: []
                         .*-asan.*: []
@@ -637,7 +637,7 @@ tasks:
             - webrender-sw+1proc
             - standalone
             - inc-origin-init
-            - nova
+            - no-nova
         run-on-projects:
             by-variant:
                 webrender-sw+1proc:
@@ -663,7 +663,7 @@ tasks:
                         windows.*-64-[^-/]+/opt: ['autoland']
                         default: []
                 inc-origin-init: []
-                nova:
+                no-nova:
                     by-test-platform:
                         .*-artifact.*: []
                         .*-asan.*: []

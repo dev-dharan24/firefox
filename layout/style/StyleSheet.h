@@ -385,6 +385,9 @@ class StyleSheet final : public nsICSSLoaderObserver, public nsWrapperCache {
     return mConstructorDocument == &aDocument;
   }
 
+  // Whether the given doc or shadow root adopts this sheet.
+  bool IsAdoptedBy(const dom::DocumentOrShadowRoot&) const;
+
   // Add a document or shadow root to the list of adopters.
   // Adopters will be notified when styles are changed.
   void AddAdopter(dom::DocumentOrShadowRoot& aAdopter) {

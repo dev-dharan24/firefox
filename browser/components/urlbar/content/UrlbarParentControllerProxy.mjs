@@ -134,6 +134,19 @@ export class UrlbarParentControllerProxy {
   }
 
   /**
+   * Ships an autofill backspace to the parent. The counterpart to the
+   * controller's `recordAutofillBackspace()`.
+   *
+   * @param {string} url The autofill result URL that was backspaced over.
+   */
+  recordAutofillBackspace(url) {
+    this.#actor.sendAsyncMessage("RecordAutofillBackspace", {
+      instanceId: this.#instanceId,
+      url,
+    });
+  }
+
+  /**
    * Ships a search-form visit to the parent recorder, which resolves the engine
    * by name. The counterpart to the controller's `recordSearchForm()`.
    *

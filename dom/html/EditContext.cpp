@@ -900,4 +900,27 @@ void EditContext::NotifyActiveEditContextChanged(Document& aDocument) {
   // (Note that window may have been destroyed by UpdateIMEState.)
 }
 
+std::ostream& operator<<(std::ostream& aStream,
+                         const EditContext& aEditContext) {
+  nsAutoString debugText;
+  aEditContext.GetText(debugText);
+  if (debugText.Length() > 15) {
+    debugText.Truncate(12);
+    debugText.AppendLiteral(u"...");
+  }
+  debugText.ReplaceSubstring(u"\"", u"\\\"");
+  debugText.ReplaceSubstring(u"\\", u"\\\\");
+  debugText.ReplaceSubstring(u"\n", u"\\n");
+  aStream << "EditContext@" << &aEditContext << " { text=\"" << debugText
+          << "\", selection=" << aEditContext.SelectionStart() << "-"
+          << aEditContext.SelectionEnd() << ", associatedElement=";
+  if (Element* element = aEditContext.GetAssociatedElement()) {
+    aStream << *element;
+  } else {
+    aStream << "none";
+  }
+  return aStream << ", isComposing=" << TrueOrFalse(aEditContext.mIsComposing)
+                 << " }";
+}
+
 }  // namespace mozilla::dom

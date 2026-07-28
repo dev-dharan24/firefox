@@ -14,7 +14,6 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlUtils: "resource://gre/modules/UrlUtils.sys.mjs",
 });
 
@@ -53,7 +52,7 @@ export var UrlbarTokenizer = {
   async loadL10nRestrictKeywords() {
     let l10nKeywords = await lazy.gFluentStrings.formatValues(
       UrlbarShared.LOCAL_SEARCH_MODES.map(mode => {
-        let name = lazy.UrlbarUtils.getResultSourceName(mode.source);
+        let name = UrlbarShared.getResultSourceName(mode.source);
         return { id: `urlbar-search-mode-${name}` };
       })
     );
@@ -64,7 +63,7 @@ export var UrlbarTokenizer = {
 
     let englishKeywords = await englishSearchStrings.formatValues(
       UrlbarShared.LOCAL_SEARCH_MODES.map(mode => {
-        let name = lazy.UrlbarUtils.getResultSourceName(mode.source);
+        let name = UrlbarShared.getResultSourceName(mode.source);
         return { id: `urlbar-search-mode-${name}-en` };
       })
     );

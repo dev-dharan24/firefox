@@ -38,6 +38,7 @@ codespell:
         # good enough
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l codespell -f treeherder -f json:/builds/worker/mozlint.json .
     when:
         files-changed:
@@ -66,6 +67,7 @@ rejected-words:
         # good enough
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l rejected-words -f treeherder -f json:/builds/worker/mozlint.json .
     fetches:
         toolchain:
@@ -102,6 +104,7 @@ dot-mozilla-reference:
         # good enough
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l dot-mozilla-reference -f treeherder -f json:/builds/worker/mozlint.json .
 
     fetches:
@@ -175,6 +178,7 @@ eslint-build:
         tier: 2
     run:
         using: run-task
+        clone-with: git
         cwd: '{checkout}'
         use-caches: [checkout, pip, uv, npm]
         command: >
@@ -524,6 +528,7 @@ rumdl:
         # Allow follow-ups for Markdown style issues rather than backing patches out.
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l rumdl -f treeherder -f json:/builds/worker/mozlint.json .
     when:
         files-changed:
@@ -685,6 +690,7 @@ file-whitespace:
         # good enough
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l file-whitespace -f treeherder -f json:/builds/worker/mozlint.json .
     fetches:
         toolchain:
@@ -723,6 +729,7 @@ file-perm:
         # good enough
         tier: 2
     run:
+        clone-with: git
         mach: lint -v -l file-perm -f treeherder -f json:/builds/worker/mozlint.json .
     fetches:
         toolchain:

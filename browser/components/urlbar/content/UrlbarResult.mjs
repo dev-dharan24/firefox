@@ -55,7 +55,7 @@ export class UrlbarResult {
    * @param {Values<typeof UrlbarShared.RESULT_SOURCE>} params.source
    * @param {UrlbarAutofillData} [params.autofill]
    * @param {number} [params.exposureTelemetry]
-   * @param {Values<typeof lazy.UrlbarUtils.RESULT_GROUP>} [params.group]
+   * @param {Values<typeof UrlbarShared.RESULT_GROUP>} [params.group]
    * @param {boolean} [params.heuristic]
    * @param {boolean} [params.hideRowLabel]
    * @param {boolean} [params.isBestMatch]

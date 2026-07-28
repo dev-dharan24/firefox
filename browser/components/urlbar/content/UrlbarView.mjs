@@ -16,7 +16,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
   UrlbarSearchOneOffs:
     "moz-src:///browser/components/urlbar/UrlbarSearchOneOffs.sys.mjs",
-  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
 });
 
@@ -1366,7 +1365,7 @@ export class UrlbarView {
     while (rowIndex < this.#rows.children.length && resultsToInsert.length) {
       let row = this.#rows.children[rowIndex];
       if (this.#isElementVisible(row)) {
-        visibleSpanCount += lazy.UrlbarUtils.getSpanForResult(row.result);
+        visibleSpanCount += UrlbarShared.getSpanForResult(row.result);
       }
 
       if (!seenMisplacedResult) {
@@ -1415,7 +1414,7 @@ export class UrlbarView {
       let row = this.#rows.children[rowIndex];
       row.setAttribute("stale", "true");
       if (this.#isElementVisible(row)) {
-        visibleSpanCount += lazy.UrlbarUtils.getSpanForResult(row.result);
+        visibleSpanCount += UrlbarShared.getSpanForResult(row.result);
       }
     }
 
@@ -1452,7 +1451,7 @@ export class UrlbarView {
       }
       let newSpanCount =
         visibleSpanCount +
-        lazy.UrlbarUtils.getSpanForResult(result, {
+        UrlbarShared.getSpanForResult(result, {
           includeHiddenExposures: true,
         });
       let canBeVisible =
@@ -1627,7 +1626,7 @@ export class UrlbarView {
     let bookmarked = item._elements.get("explanationBookmarked");
     let hasBookmark = !!result.payload.bookmarkDateMs;
     if (hasBookmark) {
-      let { formattedDate } = lazy.UrlbarUtils.formatDate(
+      let { formattedDate } = UrlbarShared.formatDate(
         new Date(result.payload.bookmarkDateMs),
         { forceAbsoluteDate: true }
       );
@@ -1643,19 +1642,19 @@ export class UrlbarView {
     let lastVisited = item._elements.get("explanationLastVisited");
     let hasLastVisit = setURL && !!result.payload.lastVisit;
     if (hasLastVisit) {
-      let { formattedDate, dateFormatType } = lazy.UrlbarUtils.formatDate(
+      let { formattedDate, dateFormatType } = UrlbarShared.formatDate(
         new Date(result.payload.lastVisit)
       );
       let l10nId;
       switch (dateFormatType) {
-        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.YESTERDAY_TODAY_TOMORROW:
+        case UrlbarShared.DATE_FORMAT_TYPE.YESTERDAY_TODAY_TOMORROW:
           l10nId = "urlbar-result-explanation-last-visited-relative-2";
           break;
-        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.DAYS_WEEKS_MONTHS_AGO:
+        case UrlbarShared.DATE_FORMAT_TYPE.DAYS_WEEKS_MONTHS_AGO:
           l10nId =
             "urlbar-result-explanation-last-visited-days-weeks-months-ago";
           break;
-        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.ABSOLUTE:
+        case UrlbarShared.DATE_FORMAT_TYPE.ABSOLUTE:
           l10nId = "urlbar-result-explanation-last-visited-absolute-2";
           break;
         default:
@@ -2431,7 +2430,7 @@ export class UrlbarView {
           ...tags.map((tag, i) => {
             const element = this.#createElement("span");
             element.className = "urlbarView-tag";
-            lazy.UrlbarUtils.addTextContentWithHighlights(
+            UrlbarShared.addTextContentWithHighlights(
               element,
               tag,
               highlights[i]
@@ -2611,11 +2610,7 @@ export class UrlbarView {
         displayedUrl = "\u200e" + displayedUrl;
         highlights = this.#offsetHighlights(highlights, 1);
       }
-      lazy.UrlbarUtils.addTextContentWithHighlights(
-        url,
-        displayedUrl,
-        highlights
-      );
+      UrlbarShared.addTextContentWithHighlights(url, displayedUrl, highlights);
     } else {
       url.textContent = "";
       this.#updateOverflowTooltip(url, "");
@@ -2671,7 +2666,7 @@ export class UrlbarView {
       (result.type == UrlbarShared.RESULT_TYPE.SEARCH ||
         result.type == UrlbarShared.RESULT_TYPE.KEYWORD)
     ) {
-      return lazy.UrlbarShared.ICON.HISTORY;
+      return UrlbarShared.ICON.HISTORY;
     }
 
     if (iconUrlOverride) {
@@ -2692,17 +2687,17 @@ export class UrlbarView {
       result.type == UrlbarShared.RESULT_TYPE.SEARCH &&
       result.payload.trending
     ) {
-      return lazy.UrlbarShared.ICON.TRENDING;
+      return UrlbarShared.ICON.TRENDING;
     }
 
     if (
       result.type == UrlbarShared.RESULT_TYPE.SEARCH ||
       result.type == UrlbarShared.RESULT_TYPE.KEYWORD
     ) {
-      return lazy.UrlbarShared.ICON.SEARCH_GLASS;
+      return UrlbarShared.ICON.SEARCH_GLASS;
     }
 
-    return lazy.UrlbarShared.ICON.DEFAULT;
+    return UrlbarShared.ICON.DEFAULT;
   }
 
   #getBlobUrlForResult(result, blob) {
@@ -2780,7 +2775,7 @@ export class UrlbarView {
         this.#l10nCache.setElementL10n(node, update.l10n);
       } else if (update.hasOwnProperty("textContent")) {
         this.#l10nCache.removeElementL10n(node);
-        lazy.UrlbarUtils.addTextContentWithHighlights(
+        UrlbarShared.addTextContentWithHighlights(
           node,
           update.textContent,
           update.highlights
@@ -3540,7 +3535,7 @@ export class UrlbarView {
     let titleAndHighlights = result.getDisplayableValueAndHighlights("title", {
       tokens: this.#queryContext.tokens,
     });
-    lazy.UrlbarUtils.addTextContentWithHighlights(
+    UrlbarShared.addTextContentWithHighlights(
       titleNode,
       titleAndHighlights.value,
       titleAndHighlights.highlights
@@ -4015,7 +4010,7 @@ export class UrlbarView {
 
     let localSearchMode;
     if (source) {
-      localSearchMode = lazy.UrlbarShared.LOCAL_SEARCH_MODES.find(
+      localSearchMode = UrlbarShared.LOCAL_SEARCH_MODES.find(
         m => m.source == source
       );
     }
@@ -4113,7 +4108,7 @@ export class UrlbarView {
           history: "urlbar-result-action-search-history",
           tabs: "urlbar-result-action-search-tabs",
         };
-        let sourceName = lazy.UrlbarUtils.getResultSourceName(
+        let sourceName = UrlbarShared.getResultSourceName(
           localSearchMode.source
         );
         this.#l10nCache.setElementL10n(action, {
@@ -4134,7 +4129,7 @@ export class UrlbarView {
         if (item._originalActionSetter) {
           item._originalActionSetter();
           if (result.heuristic) {
-            favicon.src = result.payload.icon || lazy.UrlbarShared.ICON.DEFAULT;
+            favicon.src = result.payload.icon || UrlbarShared.ICON.DEFAULT;
           }
         } else {
           console.error("An item is missing the action setter");
@@ -4155,7 +4150,7 @@ export class UrlbarView {
       if (!iconOverride && (localSearchMode || engine)) {
         // For one-offs without an icon, do not allow restyled URL results to
         // use their own icons.
-        iconOverride = lazy.UrlbarShared.ICON.SEARCH_GLASS;
+        iconOverride = UrlbarShared.ICON.SEARCH_GLASS;
       }
       if (
         result.heuristic ||

@@ -43,6 +43,39 @@ async function navigateToContent(win, url = "https://example.com/") {
   await loaded;
 }
 
+// Enable the feature, open a Smart Window on a content tab, and add enough web
+// tabs for clustering to produce suggestions.
+async function openGroupingWindowWithTabs() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.smartwindow.autoTabGrouping.enabled", true]],
+  });
+  const win = await openAIWindow();
+  await navigateToContent(win);
+  await addWebTabs(win);
+  return win;
+}
+
+// Open the panel and wait for the two clustered suggestion rows to render.
+async function openPanelWithSuggestions(win) {
+  AIWindowUI.toggleGroupTabsPanel(win);
+  const panel = await TestUtils.waitForCondition(() =>
+    win.document.getElementById("smartwindow-group-tabs-panel")
+  );
+  await TestUtils.waitForCondition(
+    () =>
+      panel.querySelectorAll(".swgt-row:not(.swgt-create-all)").length === 2,
+    "Two suggested group rows render once clustering finishes"
+  );
+  return panel;
+}
+
+async function closePanel(win) {
+  AIWindowUI.toggleGroupTabsPanel(win);
+  await TestUtils.waitForCondition(
+    () => !win.document.getElementById("smartwindow-group-tabs-panel")
+  );
+}
+
 async function assertButtonHiddenOnContent(win, reason) {
   // The Ask button and the group-tabs button toggle together, so waiting for
   // the Ask button to show means the immersive view has been left; only then is
@@ -72,6 +105,7 @@ add_setup(async function setup() {
       ["browser.smartwindow.endpoint", "http://localhost:0/v1"],
       ["browser.smartwindow.firstrun.hasCompleted", true],
       ["browser.ml.enable", true],
+      ["browser.ml.modelHubRootUrl", "http://localhost:0/"],
       ["browser.tabs.groups.smart.enabled", true],
       ["browser.tabs.groups.smart.userEnabled", true],
       ["browser.tabs.groups.smart.optin", true],
@@ -89,6 +123,7 @@ describe("Auto Tab Grouping toolbar button", () => {
 
   beforeEach(() => {
     AutoTabGroupingSuggestions._manager = fakeTwoGroupManager();
+    Services.fog.testResetFOG();
   });
 
   afterEach(async () => {
@@ -113,6 +148,26 @@ describe("Auto Tab Grouping toolbar button", () => {
       Assert.ok(
         BrowserTestUtils.isHidden(button),
         "Group tabs button is hidden while the feature pref is off"
+      );
+    });
+
+    it("is not hidden in the immersive new-tab view", async () => {
+      await SpecialPowers.pushPrefEnv({
+        set: [["browser.smartwindow.autoTabGrouping.enabled", true]],
+      });
+
+      win = await openAIWindow();
+      const askButton = win.document.getElementById("smartwindow-ask-button");
+      const groupTabsButton = win.document.getElementById(
+        "smartwindow-group-tabs-button"
+      );
+      await TestUtils.waitForCondition(
+        () => BrowserTestUtils.isHidden(askButton),
+        "In the immersive new-tab view (the Ask button is hidden)"
+      );
+      Assert.ok(
+        !groupTabsButton.hidden,
+        "Group tabs button is not hidden in the immersive view"
       );
     });
 
@@ -168,13 +223,7 @@ describe("Auto Tab Grouping toolbar button", () => {
 
   describe("creating groups", () => {
     it("shows the button, lists suggestions, and creates all groups", async () => {
-      await SpecialPowers.pushPrefEnv({
-        set: [["browser.smartwindow.autoTabGrouping.enabled", true]],
-      });
-
-      win = await openAIWindow();
-      await navigateToContent(win);
-      await addWebTabs(win);
+      win = await openGroupingWindowWithTabs();
 
       const button = win.document.getElementById(
         "smartwindow-group-tabs-button-inner"
@@ -184,17 +233,7 @@ describe("Auto Tab Grouping toolbar button", () => {
         "Group tabs button is visible on a content tab with the pref on"
       );
 
-      AIWindowUI.toggleGroupTabsPanel(win);
-
-      const panel = await TestUtils.waitForCondition(() =>
-        win.document.getElementById("smartwindow-group-tabs-panel")
-      );
-      await TestUtils.waitForCondition(
-        () =>
-          panel.querySelectorAll(".swgt-row:not(.swgt-create-all)").length ===
-          2,
-        "Two suggested group rows render once clustering finishes"
-      );
+      const panel = await openPanelWithSuggestions(win);
 
       await TestUtils.waitForCondition(
         () => button.getAttribute("aria-expanded") === "true",
@@ -206,14 +245,8 @@ describe("Auto Tab Grouping toolbar button", () => {
 
       const groupsBefore = win.gBrowser.tabGroups.length;
       createAll.click();
-
       await TestUtils.waitForCondition(
         () => win.gBrowser.tabGroups.length === groupsBefore + 2,
-        "Both suggested groups are created"
-      );
-      Assert.equal(
-        win.gBrowser.tabGroups.length,
-        groupsBefore + 2,
         "Clicking 'Create all suggested groups' created both groups"
       );
 
@@ -221,10 +254,106 @@ describe("Auto Tab Grouping toolbar button", () => {
         () => !win.document.getElementById("smartwindow-group-tabs-panel"),
         "Panel closes after creating groups"
       );
-
       await TestUtils.waitForCondition(
         () => button.getAttribute("aria-expanded") === "false",
         "Button is no longer expanded once the panel closes"
+      );
+    });
+
+    it("records an 'offered' event, and re-offers when reopened", async () => {
+      win = await openGroupingWindowWithTabs();
+
+      await openPanelWithSuggestions(win);
+      const offered = Glean.smartWindow.autoTabGroupOffered.testGetValue();
+      Assert.equal(offered?.length, 1, "One 'offered' event recorded");
+      Assert.equal(offered[0].extra.count, "2", "Offered the two suggestions");
+      Assert.equal(offered[0].extra.median_tabs, "2", "Offered median size");
+      Assert.equal(offered[0].extra.mean_tabs, "2", "Offered mean size");
+      Assert.equal(
+        offered[0].extra.recomputed,
+        "false",
+        "First offer is not a recompute"
+      );
+
+      await closePanel(win);
+      await openPanelWithSuggestions(win);
+      const reoffered = Glean.smartWindow.autoTabGroupOffered.testGetValue();
+      Assert.equal(
+        reoffered.length,
+        2,
+        "Reopening recomputes and offers again"
+      );
+      Assert.equal(
+        reoffered[1].extra.recomputed,
+        "true",
+        "The reopened offer is a recompute"
+      );
+    });
+
+    it("records a 'created' event when creating all groups", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+
+      const groupsBefore = win.gBrowser.tabGroups.length;
+      panel.querySelector(".swgt-create-all").click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabGroups.length === groupsBefore + 2,
+        "Both groups created"
+      );
+
+      const created = Glean.smartWindow.autoTabGroupCreated.testGetValue();
+      Assert.equal(created?.length, 1, "One 'created' event recorded");
+      Assert.equal(created[0].extra.type, "all", "Recorded as a 'create all'");
+      Assert.equal(created[0].extra.count, "2", "Two groups created");
+      Assert.equal(created[0].extra.median_tabs, "2", "Created median size");
+      Assert.equal(created[0].extra.mean_tabs, "2", "Created mean size");
+    });
+
+    it("lists created groups under 'Just created' and ungroups them all", async () => {
+      win = await openGroupingWindowWithTabs();
+      let panel = await openPanelWithSuggestions(win);
+
+      const groupsBefore = win.gBrowser.tabGroups.length;
+      const tabsBefore = win.gBrowser.tabs.length;
+      panel.querySelector(".swgt-create-all").click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabGroups.length === groupsBefore + 2,
+        "Both groups created"
+      );
+      await TestUtils.waitForCondition(
+        () => !win.document.getElementById("smartwindow-group-tabs-panel")
+      );
+
+      // Reopening lists the created groups under "Just created".
+      AIWindowUI.toggleGroupTabsPanel(win);
+      panel = await TestUtils.waitForCondition(() =>
+        win.document.getElementById("smartwindow-group-tabs-panel")
+      );
+      await TestUtils.waitForCondition(
+        () => panel.querySelectorAll(".swgt-recent-row").length === 2,
+        "Both created groups are listed under 'Just created'"
+      );
+      Assert.ok(
+        panel.querySelector(".swgt-ungroup"),
+        "'Ungroup' footer is shown"
+      );
+
+      panel.querySelector(".swgt-ungroup").click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabGroups.length === groupsBefore,
+        "Ungroup reverses every created group"
+      );
+      Assert.equal(
+        win.gBrowser.tabs.length,
+        tabsBefore,
+        "Ungroup keeps the tabs open"
+      );
+      const undone = Glean.smartWindow.autoTabGroupUndone.testGetValue();
+      Assert.equal(undone?.length, 1, "One 'undone' event recorded");
+      Assert.equal(undone[0].extra.count, "2", "Both groups were ungrouped");
+      await TestUtils.waitForCondition(
+        () => !panel.querySelectorAll(".swgt-recent-row").length,
+        "The 'Just created' list is cleared"
       );
     });
   });
@@ -332,6 +461,40 @@ describe("Auto Tab Grouping toolbar button", () => {
   });
 
   describe("clustering edge cases", () => {
+    it("falls back to the empty state when clustering times out", async () => {
+      await SpecialPowers.pushPrefEnv({
+        set: [
+          ["browser.smartwindow.autoTabGrouping.enabled", true],
+          ["browser.smartwindow.autoTabGrouping.timeoutMs", 50],
+        ],
+      });
+
+      AutoTabGroupingSuggestions._manager = {
+        generateClusters() {
+          return new Promise(() => {});
+        },
+        async getPredictedLabelForGroup() {
+          return "Test Group";
+        },
+      };
+
+      win = await openAIWindow();
+      await navigateToContent(win);
+      await addWebTabs(win);
+
+      AIWindowUI.toggleGroupTabsPanel(win);
+      const panel = await TestUtils.waitForCondition(() =>
+        win.document.getElementById("smartwindow-group-tabs-panel")
+      );
+
+      await TestUtils.waitForCondition(
+        () =>
+          panel.querySelector(".swgt-message")?.getAttribute("data-l10n-id") ===
+          "smartwindow-group-tabs-empty",
+        "Panel falls back to the empty state after the clustering timeout"
+      );
+    });
+
     it("renders suggestions when reopened while clustering is still running", async () => {
       await SpecialPowers.pushPrefEnv({
         set: [["browser.smartwindow.autoTabGrouping.enabled", true]],

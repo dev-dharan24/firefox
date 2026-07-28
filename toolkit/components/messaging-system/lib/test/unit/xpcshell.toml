@@ -1,0 +1,5 @@
+[DEFAULT]
+tags = "messaging-system"
+firefox-appdir = "browser"
+
+["test_MessagingSystemAllowlists.js"]

@@ -6700,6 +6700,20 @@ body{
   transition-timing-function:var(--sidebar-transition-timing-function);
 }
 
+#viewerContainer:not(.pdfPresentationMode){
+  inset-block-start:calc(var(--toolbar-height) + var(--pfn-bar-height, 0px));
+}
+
+#outerContainer #toolbarContainer #loadingBar{
+  top:calc(var(--toolbar-height) + var(--pfn-bar-height, 0px));
+}
+
+#viewsManager{
+  inset-block-start:calc(
+    100% + var(--pfn-bar-height, 0px) + var(--sidebar-block-padding)
+  );
+}
+
 #sidebarContainer :is(input, button, select){
   font:message-box;
 }

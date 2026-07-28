@@ -1653,7 +1653,7 @@ popupnotificationcontent {
   border-radius: var(--border-radius-medium);
   padding-inline-end: var(--toolbarbutton-padding-inner);
 
-  > .toolbarbutton-icon {
+  &:is([cui-areatype="toolbar"]):not([overflowedItem]) > .toolbarbutton-icon {
     padding: var(--toolbarbutton-padding-inner);
 
     @media not -moz-pref("browser.nova.enabled") {
@@ -1677,11 +1677,11 @@ popupnotificationcontent {
     }
   }
 
-  /* Smart Window toggle */
+  /* Smart Window toggle in Smart Window */
   :root[ai-window] & {
     list-style-image: url("chrome://browser/skin/smart-window-simplified.svg");
 
-    > .toolbarbutton-icon {
+    &[cui-areatype="toolbar"]:not([overflowedItem]) > .toolbarbutton-icon {
       @media not -moz-pref("browser.nova.enabled") {
         /* Smart Window icon has additional 2px padding per side, to be slightly smaller than Classic Window icon when used in Switcher */
         padding: var(--toolbarbutton-padding-inner);

@@ -56,7 +56,7 @@ function makeMapKeyForTabResult(result) {
  * @returns {string} The stripped URL.
  */
 function stripUrlForDedupe(url) {
-  return UrlbarUtils.stripPrefixAndTrim(url, {
+  return lazy.UrlbarShared.stripPrefixAndTrim(url, {
     stripHttp: true,
     stripHttps: true,
     stripWww: true,
@@ -375,7 +375,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
           if (this._canAddResult(result, state)) {
             suggestedIndexResults ??= [];
             suggestedIndexResults.push(result);
-            const spanSize = UrlbarUtils.getSpanForResult(result);
+            const spanSize = lazy.UrlbarShared.getSpanForResult(result);
             span += spanSize;
             if (spanSize) {
               resultCount++;
@@ -839,8 +839,8 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
           trimSlash: true,
         };
         result.payload.dupedHeuristic =
-          UrlbarUtils.stripPrefixAndTrim(heuristicUrl, opts)[0] ==
-          UrlbarUtils.stripPrefixAndTrim(result.payload.url, opts)[0];
+          lazy.UrlbarShared.stripPrefixAndTrim(heuristicUrl, opts)[0] ==
+          lazy.UrlbarShared.stripPrefixAndTrim(result.payload.url, opts)[0];
         return !result.payload.dupedHeuristic;
       }
 
@@ -872,7 +872,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
       result.type == lazy.UrlbarShared.RESULT_TYPE.URL &&
       result.payload.url
     ) {
-      let [strippedUrl, prefix] = UrlbarUtils.stripPrefixAndTrim(
+      let [strippedUrl, prefix] = lazy.UrlbarShared.stripPrefixAndTrim(
         result.payload.url,
         {
           stripHttp: true,
@@ -950,7 +950,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
         let autofillHostname = new URL(
           state.context.heuristicResult.payload.url
         ).hostname;
-        let [autofillDomain] = UrlbarUtils.stripPrefixAndTrim(
+        let [autofillDomain] = lazy.UrlbarShared.stripPrefixAndTrim(
           autofillHostname,
           {
             stripWww: true,
@@ -965,7 +965,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
 
         // `searchUrlDomainWithoutSuffix` is the engine's domain with the public
         // suffix already stripped, for example "www.mozilla.".
-        let [engineDomain] = UrlbarUtils.stripPrefixAndTrim(
+        let [engineDomain] = lazy.UrlbarShared.stripPrefixAndTrim(
           result.payload.searchUrlDomainWithoutSuffix,
           {
             stripWww: true,
@@ -1216,7 +1216,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
     if (result.heuristic && this._canAddResult(result, state)) {
       state.maxHeuristicResultSpan = Math.max(
         state.maxHeuristicResultSpan,
-        UrlbarUtils.getSpanForResult(result)
+        lazy.UrlbarShared.getSpanForResult(result)
       );
     }
 
@@ -1229,7 +1229,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
       !result.isSuggestedIndexRelativeToGroup &&
       this._canAddResult(result, state)
     ) {
-      let span = UrlbarUtils.getSpanForResult(result);
+      let span = lazy.UrlbarShared.getSpanForResult(result);
       if (result.providerName == "UrlbarProviderTabToSearch") {
         state.maxTabToSearchResultSpan = Math.max(
           state.maxTabToSearchResultSpan,
@@ -1254,7 +1254,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
       result.payload.url &&
       (!result.heuristic || !lazy.UrlbarPrefs.get("experimental.hideHeuristic"))
     ) {
-      let [strippedUrl, prefix] = UrlbarUtils.stripPrefixAndTrim(
+      let [strippedUrl, prefix] = lazy.UrlbarShared.stripPrefixAndTrim(
         result.payload.url,
         {
           stripHttp: true,
@@ -1577,7 +1577,7 @@ class MuxerUnifiedComplete extends UrlbarMuxer {
    *   otherwise.
    */
   #updateUsedLimits(result, limits, usedLimits, state) {
-    let span = UrlbarUtils.getSpanForResult(result);
+    let span = lazy.UrlbarShared.getSpanForResult(result);
     let newUsedSpan = usedLimits.availableSpan + span;
     if (limits.availableSpan < newUsedSpan) {
       // Adding the result would exceed the available span.

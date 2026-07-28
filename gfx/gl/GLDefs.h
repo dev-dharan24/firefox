@@ -127,6 +127,9 @@ bool CheckContextLost(const GLContext* gl);
 #define LOCAL_EGL_LOW_POWER_ANGLE                       0x0001
 #define LOCAL_EGL_HIGH_POWER_ANGLE                      0x0002
 
+// EGL_ANGLE_metal_commands_scheduled_sync
+#define LOCAL_EGL_SYNC_METAL_COMMANDS_SCHEDULED_ANGLE   0x34E0
+
 // clang-format on
 
 #endif

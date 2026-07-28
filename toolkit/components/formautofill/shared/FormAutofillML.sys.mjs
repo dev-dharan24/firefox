@@ -8,6 +8,7 @@ import {
 } from "chrome://global/content/ml/EngineProcess.sys.mjs";
 
 import { FormAutofillUtils } from "resource://gre/modules/shared/FormAutofillUtils.sys.mjs";
+import { MLEngineParent } from "resource://gre/actors/MLEngineParent.sys.mjs";
 
 const FORM_AUTOFILL_FEATURE_ID = "formfill-classification";
 const ML_TASKNAME = "text-classification";
@@ -23,6 +24,12 @@ const FormFill_Config = {
 
 export class FormAutofillML {
   #engine;
+
+  static #modelVersion = "";
+
+  static getModelVersion() {
+    return this.#modelVersion;
+  }
 
   async detectFields(fieldDetails) {
     if (!this.#engine || this.#engine.engineStatus == "closed") {
@@ -44,6 +51,12 @@ export class FormAutofillML {
       } catch (ex) {
         return;
       }
+
+      let engineDetails = await MLEngineParent.getInferenceOptions(
+        FormFill_Config.featureId,
+        FormFill_Config.taskName
+      );
+      FormAutofillML.#modelVersion = engineDetails.modelRevision;
     }
 
     // Create a list of fields that have tokens and don't already have

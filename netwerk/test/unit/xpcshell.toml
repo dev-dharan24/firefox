@@ -863,6 +863,12 @@ skip-if = [
 ["test_happy_eyeballs_ip_preference.js"]
 run-sequentially = ["true"] # node server exceptions dont replay well
 
+["test_happy_eyeballs_local_addr_retry.js"]
+skip-if = [
+  "os == 'android'",
+  "os == 'win' && msix",
+]
+
 ["test_happy_eyeballs_tcp_fallback.js"]
 run-sequentially = ["true"] # node server exceptions dont replay well
 skip-if = [

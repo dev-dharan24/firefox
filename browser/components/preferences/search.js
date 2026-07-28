@@ -29,7 +29,6 @@ const lazy = XPCOMUtils.declareLazy({
     onUpdate: () => window.gSearchPane._engineStore.notifyRebuildViews(),
   },
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
-  UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UserSearchEngine:
     "moz-src:///toolkit/components/search/UserSearchEngine.sys.mjs",
@@ -493,7 +492,7 @@ class EngineView {
 
     let getIDs = (suffix = "") =>
       lazy.UrlbarShared.LOCAL_SEARCH_MODES.map(mode => {
-        let name = lazy.UrlbarUtils.getResultSourceName(mode.source);
+        let name = lazy.UrlbarShared.getResultSourceName(mode.source);
         return { id: `urlbar-search-mode-${name}${suffix}` };
       });
 
@@ -993,7 +992,7 @@ class EngineView {
       // the icons in CSS.
       let shortcut = this._getLocalShortcut(index);
       if (shortcut) {
-        return lazy.UrlbarUtils.getResultSourceName(shortcut.source);
+        return lazy.UrlbarShared.getResultSourceName(shortcut.source);
       }
     }
     return "";

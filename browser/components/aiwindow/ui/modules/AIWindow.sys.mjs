@@ -1039,9 +1039,7 @@ export const AIWindow = {
         false
       );
       groupTabsButton.hidden =
-        isImmersiveView ||
-        !groupTabsEnabled ||
-        !lazy.AutoTabGroupingSuggestions.isAvailable;
+        !groupTabsEnabled || !lazy.AutoTabGroupingSuggestions.isAvailable;
     }
 
     // Set attr on the specific browser that has content to override color scheme
@@ -1099,7 +1097,8 @@ export const AIWindow = {
     lazy.CustomizableUI.createWidget({
       id: "ai-window-toggle",
       l10nId: "toolbar-switcher-customizable-label",
-      type: "button",
+      type: "view",
+      viewId: "ai-window-toggle-view",
       defaultArea: lazy.CustomizableUI.AREA_TABSTRIP,
       removable: true,
       showInPrivateBrowsing: false,
@@ -1107,14 +1106,9 @@ export const AIWindow = {
         node.setAttribute("aria-haspopup", "true");
         this._updateButtonVisibility(node);
       },
-      onCommand: event => {
-        const win = event.view;
-        if (win.PanelUI.panel.state == "open") {
-          win.PanelUI.hide();
-        } else if (win.PanelUI.panel.state == "closed") {
-          this.handleAIWindowSwitcher(win);
-          win.PanelUI.showSubView("ai-window-toggle-view", event.target, event);
-        }
+      onViewShowing: event => {
+        const win = event.target.documentGlobal;
+        this.handleAIWindowSwitcher(win);
       },
     });
     this._switcherWidgetCreated = true;

@@ -1591,7 +1591,7 @@ void NativeLayerRootSnapshotterWayland::UpdateSnapshot(
 
   if (!mSnapshot || mSnapshot->Size() != aSize) {
     mSnapshot = nullptr;
-    auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false);
+    auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false, false);
     if (!fb) {
       return;
     }
@@ -1626,7 +1626,7 @@ already_AddRefed<profiler_screenshots::DownscaleTarget>
 NativeLayerRootSnapshotterWayland::CreateDownscaleTarget(
     const gfx::IntSize& aSize) {
   LOG("NativeLayerRootSnapshotterWayland::CreateDownscaleTarget()");
-  auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false);
+  auto fb = gl::MozFramebuffer::Create(mGL, aSize, 0, false, false);
   if (!fb) {
     return nullptr;
   }

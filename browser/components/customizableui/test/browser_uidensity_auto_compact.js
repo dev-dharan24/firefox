@@ -465,13 +465,22 @@ add_task(async function test_compact_shrinks_launcher_padding() {
 
   await withNewWindow(async win => {
     let medium = cssVar(win, "--space-medium");
-    let roundedMedium = `round(${medium}, 0.5px)`;
+    // Under nova (horizontal tabs) the normal-density launcher padding is a
+    // fixed 4px rather than --space-medium; see the sidebar.css rule added in
+    // bug 2044805. Pick the expected value accordingly so this passes once nova
+    // is enabled by default.
+    let expectedNormal = Services.prefs.getBoolPref(
+      "browser.nova.enabled",
+      false
+    )
+      ? "4px"
+      : `round(${medium}, 0.5px)`;
 
     win.gUIDensity.update(win.gUIDensity.MODE_NORMAL);
     is(
       cssVar(win, "--sidebar-launcher-button-padding-inline"),
-      roundedMedium,
-      "Launcher button padding matches --space-medium in normal density"
+      expectedNormal,
+      "Launcher button padding matches the normal-density value"
     );
 
     win.gUIDensity.update(win.gUIDensity.MODE_COMPACT);

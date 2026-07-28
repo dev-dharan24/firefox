@@ -1402,13 +1402,20 @@ IPCResult BrowserParent::RecvNewWindowGlobal(
   // NOTE: Keep this in sync with the similar check in
   // DocumentLoadListener::TriggerRedirectToRealChannel.
   EnumSet<ValidatePrincipalOptions> validationOptions = {};
-  // FIXME(bug 1698087): chrome://devtools/**/webextension-fallback.html
-  // Automation-Only: chrome://reftest/** + blank subframes
-  if (docURI->SchemeIs("chrome") ||
-      (xpc::IsInAutomation() && NS_IsAboutBlank(docURI) && parentWgp &&
-       parentWgp->Manager() == this &&
-       parentWgp->DocumentPrincipal()->IsSystemPrincipal())) {
-    validationOptions += ValidatePrincipalOptions::AllowSystem;
+  if (xpc::IsInAutomation()) {
+    // Automation-Only: chrome://reftest/** + blank subframes
+    bool isChromeReftest = false;
+    if (docURI->SchemeIs("chrome")) {
+      nsAutoCString host;
+      docURI->GetHost(host);
+      isChromeReftest = host.EqualsLiteral("reftest");
+    }
+
+    if (isChromeReftest ||
+        (NS_IsAboutBlank(docURI) && parentWgp && parentWgp->Manager() == this &&
+         parentWgp->DocumentPrincipal()->IsSystemPrincipal())) {
+      validationOptions += ValidatePrincipalOptions::AllowSystem;
+    }
   }
   if (!Manager()->ValidatePrincipal(aInit.principal(), validationOptions)) {
     return ContentParent::PrincipalValidationIpcFail(aInit.principal(), this,

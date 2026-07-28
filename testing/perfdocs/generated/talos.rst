@@ -569,7 +569,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -600,7 +600,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -626,7 +626,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -657,7 +657,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -688,7 +688,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -773,7 +773,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ❌
         - ❌
         - ❌
@@ -799,7 +799,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -841,7 +841,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -872,7 +872,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -903,7 +903,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ❌
         - ❌
         - ❌
@@ -1305,7 +1305,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1336,7 +1336,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -1362,7 +1362,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1393,7 +1393,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1424,7 +1424,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -1482,7 +1482,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1513,7 +1513,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -1539,7 +1539,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1570,7 +1570,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -1601,7 +1601,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6123,7 +6123,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6154,7 +6154,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6180,7 +6180,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6211,7 +6211,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6242,7 +6242,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6282,7 +6282,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-sessionrestore-many-windows-nv**
+      * - **talos-sessionrestore-many-windows-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6313,7 +6313,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-sessionrestore-many-windows-nv**
+      * - **talos-sessionrestore-many-windows-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6339,7 +6339,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-sessionrestore-many-windows-nv**
+      * - **talos-sessionrestore-many-windows-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6370,7 +6370,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-sessionrestore-many-windows-nv**
+      * - **talos-sessionrestore-many-windows-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6401,7 +6401,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-sessionrestore-many-windows-nv**
+      * - **talos-sessionrestore-many-windows-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6442,7 +6442,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6473,7 +6473,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6499,7 +6499,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6530,7 +6530,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6561,7 +6561,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6618,7 +6618,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6649,7 +6649,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6675,7 +6675,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6706,7 +6706,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6737,7 +6737,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6785,7 +6785,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6816,7 +6816,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -6842,7 +6842,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6873,7 +6873,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -6904,7 +6904,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7117,7 +7117,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -7148,7 +7148,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7174,7 +7174,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -7205,7 +7205,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -7236,7 +7236,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7349,7 +7349,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-tabswitch-nv**
+      * - **talos-tabswitch-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7380,7 +7380,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-tabswitch-nv**
+      * - **talos-tabswitch-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7406,7 +7406,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-tabswitch-nv**
+      * - **talos-tabswitch-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7437,7 +7437,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-tabswitch-nv**
+      * - **talos-tabswitch-no-nv**
         - ❌
         - ❌
         - ❌
@@ -7468,7 +7468,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-tabswitch-nv**
+      * - **talos-tabswitch-no-nv**
         - ❌
         - ❌
         - ❌
@@ -8436,7 +8436,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ❌
         - ❌
         - ❌
@@ -8462,7 +8462,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8504,7 +8504,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8535,7 +8535,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8566,7 +8566,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-chrome-nv**
+      * - **talos-chrome-no-nv**
         - ❌
         - ❌
         - ❌
@@ -8637,7 +8637,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8668,7 +8668,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -8694,7 +8694,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8725,7 +8725,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -8756,7 +8756,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -9802,7 +9802,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -9833,7 +9833,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌
@@ -9859,7 +9859,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -9890,7 +9890,7 @@ For the sample commands found below, note that the capitalization used is import
         - ✅
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ✅
         - ✅
         - ❌
@@ -9921,7 +9921,7 @@ For the sample commands found below, note that the capitalization used is import
         - ❌
         - ❌
         - ❌
-      * - **talos-other-nv**
+      * - **talos-other-no-nv**
         - ❌
         - ❌
         - ❌

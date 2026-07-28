@@ -103,6 +103,9 @@ export class UrlbarParent extends JSWindowActorParent {
       case "TrackBounceBrowser":
         controller.trackBounceBrowser(message.data.browserId);
         break;
+      case "RecordAutofillBackspace":
+        controller.recordAutofillBackspace(message.data.url);
+        break;
       case "RecordSearchMode":
         controller.recordSearchMode(message.data.searchMode);
         break;

@@ -242,7 +242,7 @@ export class UrlbarProviderTabToSearch extends UrlbarProvider {
     // enginesForDomainPrefix only matches against engine domains.
     // Remove trailing slashes and www. from the search string and check if the
     // resulting string is worth matching.
-    let [searchStr] = UrlbarUtils.stripPrefixAndTrim(
+    let [searchStr] = lazy.UrlbarShared.stripPrefixAndTrim(
       queryContext.searchString,
       {
         stripWww: true,
@@ -293,9 +293,12 @@ export class UrlbarProviderTabToSearch extends UrlbarProvider {
     for (let engine of engines) {
       // Trim the engine host. This will also be set as the result url, so the
       // Muxer can use it to filter.
-      let [host] = UrlbarUtils.stripPrefixAndTrim(engine.searchUrlDomain, {
-        stripWww: true,
-      });
+      let [host] = lazy.UrlbarShared.stripPrefixAndTrim(
+        engine.searchUrlDomain,
+        {
+          stripWww: true,
+        }
+      );
       // Check if the host may be autofilled.
       if (host.startsWith(searchStr.toLocaleLowerCase())) {
         if (onboardingInteractionsLeft > 0) {
@@ -374,7 +377,7 @@ function makeResult(context, engine, satisfiesAutofillThreshold = false) {
 }
 
 function searchUrlDomainWithoutSuffix(engine) {
-  let [value] = UrlbarUtils.stripPrefixAndTrim(engine.searchUrlDomain, {
+  let [value] = lazy.UrlbarShared.stripPrefixAndTrim(engine.searchUrlDomain, {
     stripWww: true,
   });
   return value.substr(0, value.length - engine.searchUrlPublicSuffix.length);

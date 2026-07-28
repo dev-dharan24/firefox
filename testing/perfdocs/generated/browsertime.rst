@@ -301,13 +301,7 @@ Raptor can also support profiling Browsertime tests with the following native (O
 - Simpleperf (Android)
 - Xperf (Windows)
 
-To use native profiling in CI, first run ``./mach try`` with the ``--native-profiling`` flag. For example:
-
-::
-
-  ./mach try fuzzy --native-profiling
-
-Then, select any test configured for native profiling. Currently, the following tests support native profiling:
+To use native profiling in CI, run ``./mach try`` with the ``--full`` flag and select any test with the ``-native-profiling`` suffix. Currently, the following tests support native profiling:
 
 ============= ============================ ==========
 Test          App                          Profiler
@@ -337,7 +331,7 @@ To configure a Browsertime script with Simpleperf profiling, wrap the test scrip
 
   }
 
-The Simpleperf commands are implemented with Simpleperf's `app_profiler.py <https://android.googlesource.com/platform/system/extras/+/47fec4c00e2556988ec8efe800ba7690a70720f7/simpleperf/scripts/app_profiler.py>`_. ``commands.simpleperf.start()`` can accept app profiler options and recording (``-r``) options. When creating a CI job with the test script, pass the ``--simpleperf`` Raptor flag into test configuration as a mozharness extra option (i.e. ``--add-option=--simpleperf``). When pushing to Try, the ``--native-profiling`` flag can now be used to enable the test's Simpleperf profiling.
+The Simpleperf commands are implemented with Simpleperf's `app_profiler.py <https://android.googlesource.com/platform/system/extras/+/47fec4c00e2556988ec8efe800ba7690a70720f7/simpleperf/scripts/app_profiler.py>`_. ``commands.simpleperf.start()`` can accept app profiler options and recording (``-r``) options. When creating a CI job with the test script, pass the ``--simpleperf`` Raptor flag into test configuration as a mozharness extra option (i.e. ``--add-option=--simpleperf``).
 
 Upgrading Browsertime In-Tree
 -----------------------------

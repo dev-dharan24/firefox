@@ -32,6 +32,8 @@ support-files = [
 
 ["browser_bouncetracking_oa_isolation.js"]
 
+["browser_bouncetracking_parent_initiated_load.js"]
+
 ["browser_bouncetracking_popup.js"]
 
 ["browser_bouncetracking_purge.js"]

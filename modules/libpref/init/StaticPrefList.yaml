@@ -3882,15 +3882,17 @@
 #endif
   mirror: always
 
+#if !defined(XP_DARWIN)
 # Whether a native event loop should be used in the content process.
-- name: dom.ipc.useNativeEventProcessing.content
-  type: RelaxedAtomicBool
-#if defined(XP_WIN) || defined(XP_DARWIN)
-  value: false
-#else
-  value: true
-#endif
-  mirror: always
+-   name: dom.ipc.useNativeEventProcessing.content
+    type: RelaxedAtomicBool
+  #if defined(XP_WIN)
+    value: false
+  #else
+    value: true
+  #endif
+    mirror: always
+#endif /* XP_DARWIN */
 
 # If this is true, keypress events for non-printable keys are dispatched only
 # for event listeners of the system event group in web content.
@@ -10662,7 +10664,7 @@
 # https://drafts.csswg.org/css-values-5/#attr-notation
 - name: layout.css.attr.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
   rust: true
 
@@ -18852,11 +18854,7 @@
 # 2: Enforce CT.
 - name: security.pki.certificate_transparency.mode
   type: RelaxedAtomicUint32
-#if defined(ANDROID) && !defined(EARLY_BETA_OR_EARLIER)
-  value: 0
-#else
   value: 2
-#endif
   mirror: always
 
 # A comma-separated list of host names to not enforce certificate transparency

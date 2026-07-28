@@ -37,3 +37,8 @@ smartwindow-group-tabs-suggestion =
             [one] Create group { $groupLabel }, { $tabCount } tab
            *[other] Create group { $groupLabel }, { $tabCount } tabs
         }
+# Heading for the list of groups the user just created (and can still undo).
+smartwindow-group-tabs-just-created-heading = Just created
+# Footer action that dissolves every group in the "Just created" list. The tabs
+# stay open; only the grouping is removed.
+smartwindow-group-tabs-ungroup = Ungroup
