@@ -1178,9 +1178,6 @@ void CodeGenerator::visitFloat32ToInt32(LFloat32ToInt32* lir) {
 
 void CodeGenerator::visitInt32ToIntPtr(LInt32ToIntPtr* lir) {
 #ifdef JS_64BIT
-  // This LIR instruction is only used if the input can be negative.
-  MOZ_ASSERT(lir->mir()->canBeNegative());
-
   Register output = ToRegister(lir->output());
   const LAllocation* input = lir->input();
   if (input->isGeneralReg()) {
@@ -2251,6 +2248,7 @@ static void UpdateRegExpStatics(MacroAssembler& masm, Register regexp,
     masm.store8(Imm32(1), invalidatedAddress);
     masm.jump(&done);
     masm.bind(&legacyFeaturesEnabled);
+    masm.store8(Imm32(0), invalidatedAddress);
   }
 
   masm.guardedCallPreBarrier(pendingInputAddress, MIRType::String);
@@ -11903,14 +11901,36 @@ void CodeGenerator::visitModD(LModD* ins) {
 
   FloatRegister lhs = ToFloatRegister(ins->lhs());
   FloatRegister rhs = ToFloatRegister(ins->rhs());
+  FloatRegister output = ToFloatRegister(ins->output());
+  Register temp1 = ToRegister(ins->temp0());
+  Register temp2 = ToRegister(ins->temp1());
 
-  MOZ_ASSERT(ToFloatRegister(ins->output()) == ReturnDoubleReg);
+  LiveRegisterSet liveRegisterSet = liveVolatileRegs(ins);
 
-  using Fn = double (*)(double a, double b);
-  masm.setupAlignedABICall();
-  masm.passABIArg(lhs, ABIType::Float64);
-  masm.passABIArg(rhs, ABIType::Float64);
-  masm.callWithABI<Fn, NumberMod>(ABIType::Float64);
+  Label call, done;
+  // The fast path's internal integer division may itself call out to a runtime
+  // routine (on ARM without a hardware divide), and needs the volatile live set
+  // to know which of our registers to preserve across that call.
+  masm.modDoubleIntegerFastPath(lhs, rhs, output, temp1, temp2, liveRegisterSet,
+                                &call);
+  masm.jump(&done);
+
+  masm.bind(&call);
+  {
+    LiveRegisterSet save = liveRegisterSet;
+    save.takeUnchecked(output);
+
+    masm.PushRegsInMask(save);
+    using Fn = double (*)(double a, double b);
+    masm.setupUnalignedABICall(temp1);
+    masm.passABIArg(lhs, ABIType::Float64);
+    masm.passABIArg(rhs, ABIType::Float64);
+    masm.callWithABI<Fn, NumberMod>(ABIType::Float64);
+    masm.storeCallFloatResult(output);
+    masm.PopRegsInMask(save);
+  }
+
+  masm.bind(&done);
 }
 
 void CodeGenerator::visitModPowTwoD(LModPowTwoD* ins) {
@@ -21766,11 +21786,23 @@ void CodeGenerator::visitAsyncAwait(LAsyncAwait* lir) {
 
 void CodeGenerator::visitCanSkipAwait(LCanSkipAwait* lir) {
   ValueOperand value = ToValue(lir->value());
+  Register scratch = ToRegister(lir->temp0());
+
+  // The await can only be skipped when this is the first frame of its
+  // activation. See js::CanSkipAwait.
+  Label notEntryFrame, done;
+  masm.branchIfNotActivationEntryFrame(scratch, &notEntryFrame);
 
   pushArg(value);
 
   using Fn = bool (*)(JSContext*, HandleValue, bool* canSkip);
   callVM<Fn, js::CanSkipAwait>(lir);
+  masm.jump(&done);
+
+  masm.bind(&notEntryFrame);
+  masm.move32(Imm32(0), ReturnReg);
+
+  masm.bind(&done);
 }
 
 void CodeGenerator::visitMaybeExtractAwaitValue(LMaybeExtractAwaitValue* lir) {
@@ -23338,7 +23370,6 @@ void CodeGenerator::visitWasmStoreInstanceScratch2xI32(
 }
 #endif
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 void CodeGenerator::visitAddDisposableResource(LAddDisposableResource* lir) {
   Register environment = ToRegister(lir->environment());
   ValueOperand resource = ToValue(lir->resource());
@@ -23367,7 +23398,6 @@ void CodeGenerator::visitTakeDisposeCapability(LTakeDisposeCapability* lir) {
   masm.loadValue(capabilityAddr, output);
   masm.storeValue(JS::UndefinedValue(), capabilityAddr);
 }
-#endif
 
 #ifdef FUZZING_JS_FUZZILLI
 void CodeGenerator::emitFuzzilliHashObject(LInstruction* lir, Register obj,

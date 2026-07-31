@@ -301,8 +301,12 @@ void EditContext::UpdateCharacterBounds(
     mCodepointRects.AppendElement(ToRect(rect));
   }
 
-  mCodepointRectsTextChanged = false;
-  mControlBoundsAtLastUpdateCharacterBounds = GetControlBoundsOrClientRect();
+  // Reset last requested character bounds.
+  // If we request the bounds for some range A, and then later
+  // the web app provides bounds for range B which we didn't request,
+  // then we want the character bounds for range A again, we should fire
+  // another characterboundsupdate event.
+  mLastRequestedCharacterBoundsRange = {};
 
   if (!mExpectingCharacterBounds && IsActive()) {
     // Web app sent new character bounds of its own accord, without
@@ -359,7 +363,7 @@ void EditContext::UpdateText(uint32_t aRangeStart, uint32_t aRangeEnd,
   // If the text being changed is after the last stored codepoint rect,
   // then the codepoint rects most likely won't be affected, so we don't
   // need to fire characterboundsupdate again.
-  if (start < mCodepointRectsStartIndex + mCodepointRects.Length()) {
+  if (start < CodepointRectsEndIndex()) {
     mCodepointRectsTextChanged = true;
   }
   // XXX: Perhaps mSelectionStart/End should be clamped to new length
@@ -553,7 +557,7 @@ void EditContext::FireTextFormatUpdate(const TextRangeArray* aRanges,
   eventOptions.mBubbles = false;
   eventOptions.mCancelable = true;
   if (aRanges) {
-    for (const TextRange& range : *aRanges) {
+    for (const mozilla::TextRange& range : *aRanges) {
       if (range.Length() == 0) {
         // Empty ranges probably aren't useful?
         continue;
@@ -618,6 +622,29 @@ void EditContext::UnsuppressNotifyingIME() {
   }
 }
 
+bool EditContext::ShouldFireNewCharacterBoundsUpdateForRange(
+    TextRange aRange) const {
+  if (mCodepointRectsTextChanged) {
+    // Text at or before existing rects has changed, so we should fire again.
+    return true;
+  }
+  if (mControlBoundsAtLastCharacterBoundsUpdate !=
+      GetControlBoundsOrClientRect()) {
+    // Control bounds changed, so we should fire again.
+    return true;
+  }
+  if (aRange.IsContainedIn(mCodepointRectsStartIndex,
+                           CodepointRectsEndIndex())) {
+    // We already have these character bounds.
+    return false;
+  }
+  if (aRange.IsContainedIn(mLastRequestedCharacterBoundsRange)) {
+    // We already requested these character bounds.
+    return false;
+  }
+  return true;
+}
+
 nsresult EditContext::FireCharacterBoundsUpdateIfNeeded(
     uint32_t aStart, uint32_t aEnd,
     AutoSuppressIMENotifications* aSuppressIMENotifications) {
@@ -673,15 +700,20 @@ nsresult EditContext::FireCharacterBoundsUpdateIfNeeded(
     }
   }
 
-  // If we already have the requested character bounds and nothing relevant has
-  // changed, don't fire characterboundsupdate again.
-  if (!(mCodepointRectsTextChanged ||
-        mControlBoundsAtLastUpdateCharacterBounds !=
-            GetControlBoundsOrClientRect() ||
-        aStart < mCodepointRectsStartIndex ||
-        aEnd > mCodepointRectsStartIndex + mCodepointRects.Length())) {
+  // If we already have the requested character bounds or we already
+  // requested them, and nothing relevant has changed, don't fire
+  // characterboundsupdate again.
+  const TextRange requestRange(startExtendedToGraphemeCluster,
+                               endExtendedToGraphemeCluster);
+  if (!ShouldFireNewCharacterBoundsUpdateForRange(requestRange)) {
     return NS_OK;
   }
+  // We set all this stuff here instead of in updateCharacterBounds(),
+  // since we don't want to fire characterupdatebounds repeatedly even
+  // if the web app never calls updateCharacterBounds().
+  mControlBoundsAtLastCharacterBoundsUpdate = GetControlBoundsOrClientRect();
+  mLastRequestedCharacterBoundsRange = requestRange;
+  mCodepointRectsTextChanged = false;
 
   if (aSuppressIMENotifications) {
     // We want to suppress notifying the IME of
@@ -709,8 +741,7 @@ nsresult EditContext::FireCharacterBoundsUpdateIfNeeded(
   event->SetTrusted(true);
   DispatchEvent(*event);
   if ((mCodepointRectsStartIndex > startExtendedToGraphemeCluster ||
-       mCodepointRectsStartIndex + mCodepointRects.Length() <
-           endExtendedToGraphemeCluster) &&
+       CodepointRectsEndIndex() < endExtendedToGraphemeCluster) &&
       !mWarnedAboutUpdateCharacterBoundsNotCalled) {
     // characterboundsupdate handler didn't provide the requested bounds
     // synchronously.
@@ -898,6 +929,27 @@ void EditContext::NotifyActiveEditContextChanged(Document& aDocument) {
   IMEStateManager::UpdateIMEState(newStateOrError.unwrapOr(defaultState),
                                   focusedElement, *editor);
   // (Note that window may have been destroyed by UpdateIMEState.)
+}
+
+bool EditContext::IsCanvas() const {
+  return mAssociatedElement &&
+         mAssociatedElement->IsHTMLElement(nsGkAtoms::canvas);
+}
+
+Maybe<LayoutDeviceIntRect> EditContext::GetCharacterBound(
+    uint32_t aOffset) const {
+  if (!mAssociatedElement || !mAssociatedElement->GetPrimaryFrame()) {
+    return Nothing();
+  }
+  nsPresContext* presContext =
+      mAssociatedElement->GetPrimaryFrame()->PresContext();
+  if (aOffset >= mCodepointRectsStartIndex &&
+      aOffset < CodepointRectsEndIndex()) {
+    return Some(ToRootRelativeDeviceRect(
+        *presContext, mCodepointRects[aOffset - mCodepointRectsStartIndex]));
+  } else {
+    return Nothing();
+  }
 }
 
 std::ostream& operator<<(std::ostream& aStream,

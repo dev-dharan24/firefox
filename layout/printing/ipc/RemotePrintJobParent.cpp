@@ -40,11 +40,10 @@ mozilla::ipc::IPCResult RemotePrintJobParent::RecvInitializePrint(
 #if defined(ACCESSIBILITY) && defined(MOZ_ENABLE_SKIA_PDF)
   if (auto* builder =
           mozilla::a11y::PdfStructTreeBuilder::Get(aBrowsingContextId)) {
-    nsString title;
-    title.Assign(aDocumentTitle);
     RefPtr{builder->GetReadyPromise()}->Then(
         GetMainThreadSerialEventTarget(), __func__,
-        [self = RefPtr{this}, title, aBrowsingContextId, aStartPage, aEndPage] {
+        [self = RefPtr{this}, title = nsString(aDocumentTitle),
+         aBrowsingContextId, aStartPage, aEndPage] {
           self->InitializePrint(title, aBrowsingContextId, aStartPage,
                                 aEndPage);
         });

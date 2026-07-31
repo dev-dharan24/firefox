@@ -94,7 +94,7 @@ class HTMLImageElement final : public nsGenericHTMLElement,
   uint32_t NaturalHeight() { return NaturalSize().height; }
   uint32_t NaturalWidth() { return NaturalSize().width; }
 
-  bool Complete();
+  bool Complete() const;
   uint32_t Hspace() {
     return GetDimensionAttrAsUnsignedInt(nsGkAtoms::hspace, 0);
   }
@@ -389,8 +389,7 @@ class HTMLImageElement final : public nsGenericHTMLElement,
   void SetLazyLoading();
 
   bool IsInPicture() const {
-    return GetParentElement() &&
-           GetParentElement()->IsHTMLElement(nsGkAtoms::picture);
+    return mParent && mParent->IsHTMLElement(nsGkAtoms::picture);
   }
 
   void InvalidateAttributeMapping();

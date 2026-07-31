@@ -37,6 +37,7 @@
 #include "vm/Interpreter.h"
 #include "vm/JSFunction.h"
 #include "vm/Logging.h"
+#include "vm/Stack.h"  // js::ResumeFrameArgs
 #include "vm/Time.h"
 #ifdef MOZ_VTUNE
 #  include "vtune/VTuneWrapper.h"
@@ -5100,6 +5101,45 @@ void BaselineInterpreterCodeGen::jumpToResumeEntry(Register resumeIndex,
 }
 
 template <>
+void BaselineCompilerCodeGen::loadResumeArgsBase(Register dest) {
+  if (handler.isFunction()) {
+    size_t nformals = handler.nargs();
+    masm.computeEffectiveAddress(
+        Address(FramePointer, int32_t(JitFrameLayout::offsetOfActualArgs() +
+                                      nformals * sizeof(Value))),
+        dest);
+  } else {
+    masm.computeEffectiveAddress(
+        Address(FramePointer, JitFrameLayout::offsetOfModuleResumeSlots()),
+        dest);
+  }
+}
+
+template <>
+void BaselineInterpreterCodeGen::loadResumeArgsBase(Register dest) {
+  Label isModule, done;
+  masm.loadPtr(frame.addressOfCalleeToken(), dest);
+  masm.branchTestPtr(Assembler::NonZero, dest, Imm32(CalleeTokenScriptBit),
+                     &isModule);
+  {
+    masm.andPtr(Imm32(uint32_t(CalleeTokenMask)), dest);
+    masm.loadFunctionArgCount(dest, dest);
+    masm.computeEffectiveAddress(
+        BaseIndex(FramePointer, dest, TimesEight,
+                  JitFrameLayout::offsetOfActualArgs()),
+        dest);
+    masm.jump(&done);
+  }
+  masm.bind(&isModule);
+  {
+    masm.computeEffectiveAddress(
+        Address(FramePointer, JitFrameLayout::offsetOfModuleResumeSlots()),
+        dest);
+  }
+  masm.bind(&done);
+}
+
+template <>
 template <typename F1, typename F2>
 [[nodiscard]] bool BaselineCompilerCodeGen::emitDebugInstrumentation(
     const F1& ifDebuggee, const Maybe<F2>& ifNotDebuggee) {
@@ -5317,7 +5357,6 @@ bool BaselineCodeGen<Handler>::emit_LeaveWith() {
   return callVM<Fn, jit::LeaveWith>();
 }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 template <typename Handler>
 bool BaselineCodeGen<Handler>::emit_AddDisposable() {
   frame.syncStack(0);
@@ -5380,7 +5419,6 @@ bool BaselineCodeGen<Handler>::emit_CreateSuppressedError() {
   frame.push(R0);
   return true;
 }
-#endif
 
 template <typename Handler>
 bool BaselineCodeGen<Handler>::emit_Exception() {
@@ -5568,6 +5606,12 @@ bool BaselineCodeGen<Handler>::emit_ToAsyncIter() {
 template <typename Handler>
 bool BaselineCodeGen<Handler>::emit_CanSkipAwait() {
   frame.syncStack(0);
+
+  // The await can only be skipped when this is the first frame of its
+  // activation. See js::CanSkipAwait.
+  Label notEntryFrame, done;
+  masm.branchIfNotActivationEntryFrame(R1.scratchReg(), &notEntryFrame);
+
   masm.loadValue(frame.addressOfStackValue(-1), R0);
 
   prepareVMCall();
@@ -5577,7 +5621,12 @@ bool BaselineCodeGen<Handler>::emit_CanSkipAwait() {
   if (!callVM<Fn, js::CanSkipAwait>()) {
     return false;
   }
+  masm.jump(&done);
 
+  masm.bind(&notEntryFrame);
+  masm.move32(Imm32(0), ReturnReg);
+
+  masm.bind(&done);
   masm.tagValue(JSVAL_TYPE_BOOLEAN, ReturnReg, R0);
   frame.push(R0, JSVAL_TYPE_BOOLEAN);
   return true;
@@ -6346,55 +6395,8 @@ void BaselineInterpreterCodeGen::emitJumpToInterpretOpLabel() {
 }
 
 template <typename Handler>
-bool BaselineCodeGen<Handler>::emitEnterGeneratorCode(Register script,
-                                                      Register resumeIndex,
-                                                      Register scratch) {
-  // Resume in either the BaselineScript (if present) or Baseline Interpreter.
-
-  static_assert(CompilingScript == 0x5,
-                "Comparison below requires specific sentinel encoding");
-
-  // Initialize the icScript slot in the baseline frame.
-  masm.loadJitScript(script, scratch);
-  masm.computeEffectiveAddress(Address(scratch, JitScript::offsetOfICScript()),
-                               scratch);
-  Address icScriptAddr(FramePointer, BaselineFrame::reverseOffsetOfICScript());
-  masm.storePtr(scratch, icScriptAddr);
-
-  Label noBaselineScript;
-  // Needed if running in interpreter or if generator is realm-independent,
-  // but it's faster to set it than to check every time
-  masm.storePtr(script, frame.addressOfInterpreterScript());
-
-  masm.loadJitScript(script, scratch);
-  masm.loadPtr(Address(scratch, JitScript::offsetOfBaselineScript()), scratch);
-  masm.branchPtr(Assembler::BelowOrEqual, scratch,
-                 ImmPtr(BaselineCompilingScriptPtr), &noBaselineScript);
-
-  masm.load32(Address(scratch, BaselineScript::offsetOfResumeEntriesOffset()),
-              script);
-  masm.addPtr(scratch, script);
-  masm.loadPtr(
-      BaseIndex(script, resumeIndex, ScaleFromElemWidth(sizeof(uintptr_t))),
-      scratch);
-  masm.jump(scratch);
-
-  masm.bind(&noBaselineScript);
-
-  // Initialize interpreter frame fields.
-  masm.or32(Imm32(BaselineFrame::RUNNING_IN_INTERPRETER),
-            frame.addressOfFlags());
-  // interpreterScript_ is set above
-
-  // Initialize pc and jump to it.
-  emitInterpJumpToResumeEntry(script, resumeIndex, scratch);
-  return true;
-}
-
-template <typename Handler>
-bool BaselineCodeGen<Handler>::emit_Resume() {
-  frame.syncStack(0);
-  masm.assertStackAlignment(sizeof(Value), 0);
+void BaselineCodeGen<Handler>::emitGeneratorResumePrologueBody() {
+  JSScript* maybeScript = handler.maybeScript();
 
   AllocatableGeneralRegisterSet regs(GeneralRegisterSet::All());
   MOZ_ASSERT(!regs.has(FramePointer));
@@ -6402,154 +6404,53 @@ bool BaselineCodeGen<Handler>::emit_Resume() {
     regs.take(InterpreterPCReg);
   }
 
-  saveInterpreterPCReg();
+  // Locate the three resume args (value, generator, resumeKind) on the stack.
+  Register argsBase = regs.takeAny();
+  loadResumeArgsBase(argsBase);
+  Address argValue(argsBase, ResumeFrameArgs::offsetOfResumeValue());
+  Address argGen(argsBase, ResumeFrameArgs::offsetOfGenerator());
+  Address argResumeKind(argsBase, ResumeFrameArgs::offsetOfResumeKind());
 
-  // Load generator object.
   Register genObj = regs.takeAny();
-  masm.unboxObject(frame.addressOfStackValue(-3), genObj);
+  masm.unboxObject(argGen, genObj);
 
-  // Load callee.
-  Register callee = regs.takeAny();
-  masm.unboxObject(
-      Address(genObj, AbstractGeneratorObject::offsetOfCalleeSlot()), callee);
-
-  // Save a pointer to the JSOp::Resume operand stack Values.
-  Register callerStackPtr = regs.takeAny();
-  masm.computeEffectiveAddress(frame.addressOfStackValue(-1), callerStackPtr);
-
-  // Branch to |interpret| to resume the generator in the C++ interpreter if the
-  // script does not have a JitScript.
-  Label interpret;
   Register scratch1 = regs.takeAny();
-  masm.loadPrivate(Address(callee, JSFunction::offsetOfJitInfoOrScript()),
-                   scratch1);
-  masm.branchIfScriptHasNoJitScript(scratch1, &interpret);
-
-  // Push |undefined| for all formals.
   Register scratch2 = regs.takeAny();
-  Label loop, loopDone;
-  masm.loadFunctionArgCount(callee, scratch2);
-
-  static_assert(sizeof(Value) == 8);
-#ifndef JS_CODEGEN_NONE
-  static_assert(JitStackAlignment == 16 || JitStackAlignment == 8);
-#endif
-  // If JitStackValueAlignment == 1, then we were already correctly aligned on
-  // entry, as guaranteed by the assertStackAlignment at the entry to this
-  // function.
-  if (JitStackValueAlignment > 1) {
-    Register alignment = regs.takeAny();
-    masm.moveStackPtrTo(alignment);
-    masm.alignJitStackBasedOnNArgs(scratch2, false);
-
-    // Compute alignment adjustment.
-    masm.subStackPtrFrom(alignment);
-
-    // Some code, like BaselineFrame::trace, will inspect the whole range of
-    // the stack frame. In order to ensure that garbage data left behind from
-    // previous activations doesn't confuse other machinery, we zero out the
-    // alignment bytes.
-    Label alignmentZero;
-    masm.branchPtr(Assembler::Equal, alignment, ImmWord(0), &alignmentZero);
-
-    // Since we know prior to the stack alignment that the stack was 8 byte
-    // aligned, and JitStackAlignment is 8 or 16 bytes, if we are doing an
-    // alignment then we -must- have aligned by subtracting 8 bytes from
-    // the stack pointer.
-    //
-    // So we can freely store a valid double here.
-    masm.storeValue(DoubleValue(0), Address(masm.getStackPointer(), 0));
-    masm.bind(&alignmentZero);
-  }
-
-  masm.branchTest32(Assembler::Zero, scratch2, scratch2, &loopDone);
-  masm.bind(&loop);
-  {
-    masm.pushValue(UndefinedValue());
-    masm.branchSub32(Assembler::NonZero, Imm32(1), scratch2, &loop);
-  }
-  masm.bind(&loopDone);
-
-  // Push |undefined| for |this|.
-  masm.pushValue(UndefinedValue());
-
-#ifdef DEBUG
-  // Update BaselineFrame debugFrameSize field.
-  masm.mov(FramePointer, scratch2);
-  masm.subStackPtrFrom(scratch2);
-  masm.store32(scratch2, frame.addressOfDebugFrameSize());
-#endif
-
-  masm.PushCalleeToken(callee, /* constructing = */ false);
-  masm.push(FrameDescriptor(FrameType::BaselineJS, /* argc = */ 0));
-
-  // PushCalleeToken bumped framePushed. Reset it.
-  MOZ_ASSERT(masm.framePushed() == sizeof(uintptr_t));
-  masm.setFramePushed(0);
-
-  regs.add(callee);
-
-  // Push a fake return address on the stack. We will resume here when the
-  // generator returns.
-  Label genStart, returnTarget;
-#ifdef JS_USE_LINK_REGISTER
-  const CodeOffset retAddr = masm.call(&genStart);
-#else
-  masm.callAndPushReturnAddress(&genStart);
-  const CodeOffset retAddr = CodeOffset(masm.currentOffset());
-#endif
-
-  // Record the return address so the return offset -> pc mapping works.
-  if (!handler.recordCallRetAddr(RetAddrEntry::Kind::IC, retAddr.offset())) {
-    return false;
-  }
-
-  masm.jump(&returnTarget);
-  masm.bind(&genStart);
-#ifdef JS_USE_LINK_REGISTER
-  masm.pushReturnAddress();
-#endif
-
-  // Construct BaselineFrame.
-  masm.push(FramePointer);
-  masm.moveStackPtrTo(FramePointer);
-
-  // If profiler instrumentation is on, update lastProfilingFrame on
-  // current JitActivation
-  {
-    Register scratchReg = scratch2;
-    Label skip;
-    AbsoluteAddress addressOfEnabled(
-        runtime->geckoProfiler().addressOfEnabled());
-    masm.branch32(Assembler::Equal, addressOfEnabled, Imm32(0), &skip);
-    masm.loadJSContext(scratchReg);
-    masm.loadPtr(Address(scratchReg, JSContext::offsetOfProfilingActivation()),
-                 scratchReg);
-    masm.storePtr(
-        FramePointer,
-        Address(scratchReg, JitActivation::offsetOfLastProfilingFrame()));
-    masm.bind(&skip);
-  }
-
-  masm.subFromStackPtr(Imm32(BaselineFrame::Size()));
-  masm.assertStackAlignment(sizeof(Value), 0);
 
   // Store flags and env chain.
-  masm.store32(Imm32(BaselineFrame::HAS_INITIAL_ENV), frame.addressOfFlags());
+  uint32_t flags = BaselineFrame::Flags::HAS_INITIAL_ENV;
+  if (handler.realmIndependentJitcode()) {
+    flags |= BaselineFrame::Flags::REALM_INDEPENDENT;
+  }
+  if (!maybeScript) {
+    flags |= BaselineFrame::Flags::RUNNING_IN_INTERPRETER;
+  }
+  if (maybeScript && maybeScript->needsArgsObj()) {
+    // The arguments object is stored below.
+    flags |= BaselineFrame::Flags::HAS_ARGS_OBJ;
+  }
+  masm.store32(Imm32(flags), frame.addressOfFlags());
   masm.unboxObject(
       Address(genObj, AbstractGeneratorObject::offsetOfEnvironmentChainSlot()),
       scratch2);
   masm.storePtr(scratch2, frame.addressOfEnvironmentChain());
 
   // Store the arguments object if there is one.
-  Label noArgsObj;
   Address argsObjSlot(genObj, AbstractGeneratorObject::offsetOfArgsObjSlot());
-  masm.fallibleUnboxObject(argsObjSlot, scratch2, &noArgsObj);
-  {
-    masm.storePtr(scratch2, frame.addressOfArgsObj());
-    masm.or32(Imm32(BaselineFrame::HAS_ARGS_OBJ), frame.addressOfFlags());
+  if (maybeScript) {
+    if (maybeScript->needsArgsObj()) {
+      masm.unboxObject(argsObjSlot, scratch2);
+      masm.storePtr(scratch2, frame.addressOfArgsObj());
+    }
+  } else {
+    Label noArgsObj;
+    masm.fallibleUnboxObject(argsObjSlot, scratch2, &noArgsObj);
+    {
+      masm.storePtr(scratch2, frame.addressOfArgsObj());
+      masm.or32(Imm32(BaselineFrame::HAS_ARGS_OBJ), frame.addressOfFlags());
+    }
+    masm.bind(&noArgsObj);
   }
-  masm.bind(&noArgsObj);
 
   // Push locals and expression slots if needed.
   Label noStackStorage;
@@ -6578,48 +6479,199 @@ bool BaselineCodeGen<Handler>::emit_Resume() {
     masm.bind(&loopDone);
     regs.add(initLength);
   }
-
   masm.bind(&noStackStorage);
 
-  // Push arg, generator, resumeKind stack Values, in that order.
-  masm.pushValue(Address(callerStackPtr, sizeof(Value)));
-  masm.pushValue(JSVAL_TYPE_OBJECT, genObj);
-  masm.pushValue(Address(callerStackPtr, 0));
+  // Push the resume operands (value, generator, resumeKind) on the operand
+  // stack, where JSOp::AfterYield and JSOp::CheckResumeKind expect them.
+  masm.pushValue(argValue);
+  masm.pushValue(argGen);
+  masm.pushValue(argResumeKind);
 
-  masm.switchToObjectRealm(genObj, scratch2);
-
-  // Load script in scratch1.
-  masm.unboxObject(
-      Address(genObj, AbstractGeneratorObject::offsetOfCalleeSlot()), scratch1);
-  masm.loadPrivate(Address(scratch1, JSFunction::offsetOfJitInfoOrScript()),
-                   scratch1);
-
-  // Load resume index in scratch2 and mark generator as running.
+  // Load resume index (scratch2) and mark the generator as running.
   Address resumeIndexSlot(genObj,
                           AbstractGeneratorObject::offsetOfResumeIndexSlot());
   masm.unboxInt32(resumeIndexSlot, scratch2);
   masm.storeValue(Int32Value(AbstractGeneratorObject::RESUME_INDEX_RUNNING),
                   resumeIndexSlot);
 
-  if (!emitEnterGeneratorCode(scratch1, scratch2, regs.getAny())) {
-    return false;
+  // Initialize the icScript_ field, and for realm-independent code also
+  // interpreterScript_ (which the code below uses to load the script).
+  Register scratch3 = regs.getAny();
+  if (handler.realmIndependentJitcode()) {
+    Label moduleScript, scriptDone;
+    masm.loadPtr(frame.addressOfCalleeToken(), scratch1);
+    masm.branchTestPtr(Assembler::NonZero, scratch1,
+                       Imm32(CalleeTokenScriptBit), &moduleScript);
+    {
+      masm.andPtr(Imm32(uint32_t(CalleeTokenMask)), scratch1);
+      masm.loadPrivate(Address(scratch1, JSFunction::offsetOfJitInfoOrScript()),
+                       scratch1);
+      masm.jump(&scriptDone);
+    }
+    masm.bind(&moduleScript);
+    masm.andPtr(Imm32(uint32_t(CalleeTokenMask)), scratch1);
+    masm.bind(&scriptDone);
+
+    masm.loadJitScript(scratch1, scratch3);
+    masm.computeEffectiveAddress(
+        Address(scratch3, JitScript::offsetOfICScript()), scratch3);
+    masm.storePtr(scratch3, Address(FramePointer,
+                                    BaselineFrame::reverseOffsetOfICScript()));
+    masm.storePtr(scratch1, frame.addressOfInterpreterScript());
+  } else {
+    masm.storePtr(ImmPtr(maybeScript->jitScript()->icScript()),
+                  frame.addressOfICScript());
   }
 
-  // Call into the VM to resume the generator in the C++ interpreter if there's
-  // no JitScript.
-  masm.bind(&interpret);
+  // Jump to the resume point.
+  jumpToResumeEntry(scratch2, scratch1, scratch3);
+}
 
-  prepareVMCall();
-
-  pushArg(callerStackPtr);
-  pushArg(genObj);
-
-  using Fn = bool (*)(JSContext*, HandleObject, Value*, MutableHandleValue);
-  if (!callVM<Fn, jit::InterpretResume>()) {
-    return false;
+template <>
+void BaselineCompilerCodeGen::emitGeneratorResumePrologue() {
+  // No-op for non-generator/async scripts.
+  if (!handler.script()->isGenerator() && !handler.script()->isAsync()) {
+    return;
   }
 
-  masm.bind(&returnTarget);
+  // Keep the resume path as the fall-through and let the initial call take the
+  // branch.
+  Label notResume;
+  masm.branchTest32(Assembler::Zero, frame.addressOfDescriptor(),
+                    Imm32(FrameDescriptor::IsResumingGenerator), &notResume);
+  emitGeneratorResumePrologueBody();
+  masm.bind(&notResume);
+}
+
+template <>
+void BaselineInterpreterCodeGen::emitGeneratorResumePrologue() {
+  // The interpreter's prologue is shared by all scripts, so almost no frame
+  // entering here is resuming. Keep the body out of line.
+  masm.branchTest32(Assembler::NonZero, frame.addressOfDescriptor(),
+                    Imm32(FrameDescriptor::IsResumingGenerator),
+                    handler.generatorResumePrologueLabel());
+}
+
+template <typename Handler>
+bool BaselineCodeGen<Handler>::emit_Resume() {
+  frame.syncStack(0);
+  masm.assertStackAlignment(sizeof(Value), 0);
+
+  AllocatableGeneralRegisterSet regs(GeneralRegisterSet::All());
+  MOZ_ASSERT(!regs.has(FramePointer));
+  if (HasInterpreterPCReg()) {
+    regs.take(InterpreterPCReg);
+  }
+
+  saveInterpreterPCReg();
+
+  // Load generator object.
+  Register genObj = regs.takeAny();
+  masm.unboxObject(frame.addressOfStackValue(-3), genObj);
+
+  // Load callee. Note that JSOp::Resume is never used for modules.
+  Register callee = regs.takeAny();
+  masm.unboxObject(
+      Address(genObj, AbstractGeneratorObject::offsetOfCalleeOrModuleSlot()),
+      callee);
+
+  // Save a pointer to the JSOp::Resume operand stack Values.
+  Register callerStackPtr = regs.takeAny();
+  masm.computeEffectiveAddress(frame.addressOfStackValue(-1), callerStackPtr);
+
+  // The pushed argument Values are the formals (all |undefined|) and the resume
+  // args stored after the formals.
+  Register scratch1 = regs.takeAny();
+  masm.loadFunctionArgCount(callee, scratch1);
+
+  static_assert(sizeof(Value) == 8);
+#ifndef JS_CODEGEN_NONE
+  static_assert(JitStackAlignment == 16 || JitStackAlignment == 8);
+#endif
+  // If JitStackValueAlignment == 1, then we were already correctly aligned on
+  // entry, as guaranteed by the assertStackAlignment at the entry to this
+  // function.
+  if (JitStackValueAlignment > 1) {
+    Register alignment = regs.takeAny();
+    masm.moveStackPtrTo(alignment);
+    masm.alignJitStackBasedOnNArgs(scratch1, /* countIncludesThis = */ false,
+                                   /* extraArgs = */ ResumeFrameArgs::NumSlots);
+
+    // Compute alignment adjustment.
+    masm.subStackPtrFrom(alignment);
+
+    // Some code, like BaselineFrame::trace, will inspect the whole range of
+    // the stack frame. In order to ensure that garbage data left behind from
+    // previous activations doesn't confuse other machinery, we zero out the
+    // alignment bytes.
+    Label alignmentZero;
+    masm.branchPtr(Assembler::Equal, alignment, ImmWord(0), &alignmentZero);
+
+    // Since we know prior to the stack alignment that the stack was 8 byte
+    // aligned, and JitStackAlignment is 8 or 16 bytes, if we are doing an
+    // alignment then we -must- have aligned by subtracting 8 bytes from
+    // the stack pointer.
+    //
+    // So we can freely store a valid double here.
+    masm.storeValue(DoubleValue(0), Address(masm.getStackPointer(), 0));
+    masm.bind(&alignmentZero);
+    regs.add(alignment);
+  }
+
+  // Push the ResumeFrameArgs first, high to low. callerStackPtr points to the
+  // JSOp::Resume expression stack slots:
+  //
+  //   [..., generator, value, resumeKind] <= callerStackPtr
+  static_assert(ResumeFrameArgs::NumSlots == 3);
+  static_assert(ResumeFrameArgs::ResumeKindSlot == 2);
+  static_assert(ResumeFrameArgs::GeneratorSlot == 1);
+  static_assert(ResumeFrameArgs::ResumeValueSlot == 0);
+  masm.pushValue(Address(callerStackPtr, 0));
+  masm.pushValue(JSVAL_TYPE_OBJECT, genObj);
+  masm.pushValue(Address(callerStackPtr, sizeof(Value)));
+
+  // Push |undefined| for the formals and for |this|. Because |this| is also
+  // pushed, we count down to -1 so we always push at least one Value.
+  Label loop;
+  masm.bind(&loop);
+  {
+    masm.pushValue(UndefinedValue());
+    masm.branchSub32(Assembler::NotSigned, Imm32(1), scratch1, &loop);
+  }
+
+#ifdef DEBUG
+  // Update BaselineFrame debugFrameSize field.
+  masm.mov(FramePointer, scratch1);
+  masm.subStackPtrFrom(scratch1);
+  masm.store32(scratch1, frame.addressOfDebugFrameSize());
+#endif
+
+  masm.PushCalleeToken(callee, /* constructing = */ false);
+  masm.push(FrameDescriptor(FrameType::BaselineJS, /* argc = */ 0,
+                            /* hasInlined = */ false,
+                            /* isResumingGenerator = */ true));
+
+  // PushCalleeToken bumped framePushed. Reset it.
+  MOZ_ASSERT(masm.framePushed() == sizeof(uintptr_t));
+  masm.setFramePushed(0);
+
+  // Load the code to call. We can't use jitCodeRaw unconditionally because it
+  // may point to Ion code and the Ion prologue doesn't support resuming a
+  // generator.
+  Register code = regs.takeAny();
+  masm.loadJitCodeRawNoIon(callee, code, scratch1);
+  regs.add(callee);
+
+  masm.switchToObjectRealm(genObj, scratch1);
+
+  // Call the callee's Baseline entry. Its prologue sees the descriptor bit and
+  // dispatches to the resume point.
+  uint32_t callOffset = masm.callJit(code);
+
+  // Record the return address so the return offset -> pc mapping works.
+  if (!handler.recordCallRetAddr(RetAddrEntry::Kind::IC, callOffset)) {
+    return false;
+  }
 
   // Restore Stack pointer
   masm.computeEffectiveAddress(frame.addressOfStackValue(-1),
@@ -6755,25 +6807,14 @@ bool BaselineInterpreterCodeGen::emit_JumpTarget() {
   return true;
 }
 
-template <>
-bool BaselineCompilerCodeGen::emit_AfterYield() {
+template <typename Handler>
+bool BaselineCodeGen<Handler>::emit_AfterYield() {
   if (!emit_JumpTarget()) {
     return false;
   }
 
-  if (handler.realmIndependentJitcode()) {
-    masm.or32(Imm32(BaselineFrame::Flags::REALM_INDEPENDENT),
-              frame.addressOfFlags());
-  }
-
-  return emitAfterYieldDebugInstrumentation(R0.scratchReg());
-}
-
-template <>
-bool BaselineInterpreterCodeGen::emit_AfterYield() {
-  if (!emit_JumpTarget()) {
-    return false;
-  }
+  masm.andPtr(Imm32(~int32_t(FrameDescriptor::IsResumingGenerator)),
+              frame.addressOfDescriptor());
 
   return emitAfterYieldDebugInstrumentation(R0.scratchReg());
 }
@@ -6911,18 +6952,6 @@ bool BaselineCodeGen<Handler>::emit_DynamicImport() {
   return true;
 }
 
-template <>
-bool BaselineCompilerCodeGen::emit_ForceInterpreter() {
-  // Caller is responsible for checking script->hasForceInterpreterOp().
-  MOZ_CRASH("JSOp::ForceInterpreter in baseline");
-}
-
-template <>
-bool BaselineInterpreterCodeGen::emit_ForceInterpreter() {
-  masm.assumeUnreachable("JSOp::ForceInterpreter");
-  return true;
-}
-
 template <typename Handler>
 bool BaselineCodeGen<Handler>::emitPrologue() {
   AutoCreatedBy acb(masm, "BaselineCodeGen<Handler>::emitPrologue");
@@ -6940,6 +6969,8 @@ bool BaselineCodeGen<Handler>::emitPrologue() {
   emitProfilerEnterFrame();
 
   masm.subFromStackPtr(Imm32(BaselineFrame::Size()));
+
+  emitGeneratorResumePrologue();
 
   // Initialize BaselineFrame. Also handles env chain pre-initialization (in
   // case GC gets run during stack check). For global and eval scripts, the env
@@ -7306,6 +7337,16 @@ void BaselineInterpreterGenerator::emitOutOfLineCodeCoverageInstrumentation() {
   masm.ret();
 }
 
+void BaselineInterpreterGenerator::emitOutOfLineGeneratorResumePrologue() {
+  // Note: unlike the other out-of-line blocks, this one is jumped to (not
+  // called) and never returns: the body ends in a jump to the resume point.
+  AutoCreatedBy acb(masm,
+                    "BaselineInterpreterGenerator::"
+                    "emitOutOfLineGeneratorResumePrologue");
+  masm.bind(handler.generatorResumePrologueLabel());
+  emitGeneratorResumePrologueBody();
+}
+
 bool BaselineInterpreterGenerator::generate(JSContext* cx,
                                             BaselineInterpreter& interpreter) {
   AutoCreatedBy acb(masm, "BaselineInterpreterGenerator::generate");
@@ -7336,6 +7377,9 @@ bool BaselineInterpreterGenerator::generate(JSContext* cx,
 
   perfSpewer_.recordOffset(masm, "OOLPostBarrierSlot");
   emitOutOfLinePostBarrierSlot();
+
+  perfSpewer_.recordOffset(masm, "OOLGeneratorResumePrologue");
+  emitOutOfLineGeneratorResumePrologue();
 
   perfSpewer_.recordOffset(masm, "OOLCodeCoverageInstrumentation");
   emitOutOfLineCodeCoverageInstrumentation();

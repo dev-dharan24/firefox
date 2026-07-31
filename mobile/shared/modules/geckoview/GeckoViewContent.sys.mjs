@@ -25,6 +25,7 @@ export class GeckoViewContent extends GeckoViewModule {
       "GeckoView:IsPdfJs",
       "GeckoView:GetBrokenSiteReport",
       "GeckoView:GetWebCompatInfo",
+      "GeckoView:SendGleanBrokenSiteReport",
       "GeckoView:SendMoreWebCompatInfo",
     ]);
   }
@@ -286,6 +287,9 @@ export class GeckoViewContent extends GeckoViewModule {
       case "GeckoView:GetWebCompatInfo":
         this._getWebCompatInfo(aCallback);
         break;
+      case "GeckoView:SendGleanBrokenSiteReport":
+        this._sendGleanBrokenSiteReport(aData, aCallback);
+        break;
       case "GeckoView:SendMoreWebCompatInfo":
         this._sendMoreWebCompatInfo(aData, aCallback);
         break;
@@ -457,6 +461,22 @@ export class GeckoViewContent extends GeckoViewModule {
       aCallback.onSuccess(JSON.stringify(info));
     } catch (error) {
       aCallback.onError(`Cannot get web compat info, error: ${error}`);
+    }
+  }
+
+  async _sendGleanBrokenSiteReport(aData, aCallback) {
+    try {
+      const actor =
+        this.browser.browsingContext.currentWindowGlobal.getActor(
+          "ReportBrokenSite"
+        );
+
+      actor.sendBrokenSiteReport(aData);
+      aCallback.onSuccess();
+    } catch (error) {
+      aCallback.onError(
+        `Cannot send broken site report via Glean, error: ${error}`
+      );
     }
   }
 

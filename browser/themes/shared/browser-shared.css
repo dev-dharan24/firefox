@@ -101,11 +101,13 @@ body {
     min-width: 804px;
   }
 
+  /* z-indices that fight on the browser container */
+  --browser-container-z-index-devtools-toolbox: 1;
+  --browser-container-z-index-devtools-splitter: 2;
+
   /* z-indices that fight on the browser stack */
-  --browser-stack-z-index-devtools-splitter: 1;
   --browser-stack-z-index-dialog-stack: 2;
-  --browser-stack-z-index-rdm-toolbar: 3;
-  --browser-stack-z-index-screenshots-panel: 4;
+  --browser-stack-z-index-screenshots-panel: 3;
 
   /* z-indices that fight in the general browser / toolbox area */
   --browser-area-z-index-toolbox: 0;
@@ -1837,8 +1839,6 @@ popupnotificationcontent {
   }
 }
 
-/* immersive view styles exclusive for first run (nav-bar/urlbar hiding is
-   shared with new-window above) */
 :root[ai-window][aiwindow-first-run] {
   #sidebar-button,
   #PanelUI-button {

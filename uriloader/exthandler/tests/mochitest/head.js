@@ -250,6 +250,51 @@ async function waitForProtocolAppChooserDialog(browser, state) {
   );
 }
 
+/**
+ * Wait for either protocol dialog (app chooser or permission) to open/close.
+ * Use when a test only cares that some confirmation dialog appears (e.g. for
+ * its placement), not which one: without user activation mailto now shows the
+ * permission dialog, with activation the app chooser (bug 299116).
+ *
+ * @param {MozBrowser} browser - Browser element the dialog belongs to.
+ * @param {boolean} state - true: dialog open, false: dialog close
+ * @returns {Promise<SubDialog>} - Returns a promise which resolves with the
+ * SubDialog object of the dialog which closed or opened.
+ */
+async function waitForProtocolDialog(browser, state) {
+  let eventStr = state ? "dialogopen" : "dialogclose";
+
+  let eventTarget;
+  if (browser.tabContainer) {
+    eventTarget = browser.tabContainer.ownerDocument.documentElement;
+  } else {
+    let tabDialogBox = browser.documentGlobal.gBrowser.getTabDialogBox(browser);
+    eventTarget = tabDialogBox.getTabDialogManager()._dialogStack;
+  }
+
+  let checkFn;
+  if (state) {
+    checkFn = dialogEvent =>
+      [
+        "chrome://mozapps/content/handling/appChooser.xhtml",
+        "chrome://mozapps/content/handling/permissionDialog.xhtml",
+      ].includes(dialogEvent.detail.dialog?._openedURL);
+  }
+
+  let event = await BrowserTestUtils.waitForEvent(
+    eventTarget,
+    eventStr,
+    true,
+    checkFn
+  );
+
+  let { dialog } = event.detail;
+  if (!state) {
+    await dialog._closingPromise;
+  }
+  return dialog;
+}
+
 async function promiseDownloadFinished(list, stopFromOpening) {
   return new Promise(resolve => {
     list.addView({
@@ -531,6 +576,18 @@ function runExtProtocolSandboxTest(options) {
     "https://example.com"
   );
 
+  // Only triggers backed by a real user gesture take the mailto silent-launch
+  // shortcut (and would reach the app chooser directly). Without activation,
+  // mailto falls back to the permission dialog (bug 299116). The default
+  // triggerMethod ("trustedClick") carries activation.
+  let hasUserActivation =
+    triggerMethod == undefined ||
+    triggerMethod == "trustedClick" ||
+    triggerMethod == "trustedLocationAPI";
+  let waitForDialog = hasUserActivation
+    ? waitForProtocolAppChooserDialog
+    : waitForProtocolPermissionDialog;
+
   info("runSandboxTest options: " + JSON.stringify(options));
   return BrowserTestUtils.withNewTab(
     testPath + "/protocol_custom_sandbox_helper.sjs",
@@ -550,10 +607,7 @@ function runExtProtocolSandboxTest(options) {
           "Should not show the dialog for iframe with sandbox " + sandbox
         );
       } else {
-        let dialogWindowOpenPromise = waitForProtocolAppChooserDialog(
-          browser,
-          true
-        );
+        let dialogWindowOpenPromise = waitForDialog(browser, true);
         await navigateExternalProtoFromIframe(
           browser,
           sandbox,
@@ -565,10 +619,7 @@ function runExtProtocolSandboxTest(options) {
         ok(dialog, "Should show the dialog for sandbox " + sandbox);
 
         // Close dialog before closing the tab to avoid intermittent failures.
-        let dialogWindowClosePromise = waitForProtocolAppChooserDialog(
-          browser,
-          false
-        );
+        let dialogWindowClosePromise = waitForDialog(browser, false);
 
         dialog.close();
         await dialogWindowClosePromise;

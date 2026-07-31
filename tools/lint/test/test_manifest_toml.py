@@ -92,8 +92,12 @@ def test_unsorted_fix(lint, paths, create_temp_file):
     results = lint([path], fix=True)
     assert len(results) == 5
     i: int = 0
-    assert results[i].message == "The manifest sections are not in alphabetical order."
+    assert results[i].message == (
+        "The manifest sections are not in alphabetical order; "
+        "[aaa.js] should come before [browser_test_resolution.js]."
+    )
     assert results[i].level == WARNING
+    assert results[i].lineno == 14
     i += 1
     assert (
         results[i].message == "linux condition requires display == 'x11' or 'wayland'"

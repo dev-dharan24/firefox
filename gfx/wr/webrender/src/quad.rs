@@ -19,7 +19,7 @@ use crate::gpu_types::{PrimitiveInstanceData, QuadHeader, QuadInstance, QuadPrim
 use crate::intern::DataStore;
 use crate::internal_types::TextureSource;
 use crate::pattern::{Pattern, PatternBuilder, PatternBuilderContext, PatternBuilderState, PatternKind, PatternShaderInput};
-use crate::prim_store::{NinePatchDescriptor, PrimitiveInstanceIndex, PrimitiveScratchBuffer};
+use crate::prim_store::{NinePatchDescriptor, PrimitiveScratchBuffer};
 use crate::render_task::{RenderTask, RenderTaskAddress, RenderTaskKind};
 use crate::render_task_cache::{RenderTaskCacheKey, RenderTaskCacheKeyKind, RenderTaskParent};
 use crate::render_task_graph::{RenderTaskGraph, RenderTaskGraphBuilder, RenderTaskId, SubTaskRange};
@@ -29,7 +29,7 @@ use crate::space::SpaceMapper;
 use crate::spatial_tree::{CoordinateSpaceMapping, SpatialNodeIndex, SpatialTree};
 use crate::transform::GpuTransformId;
 use crate::util::{extract_inner_rect_k, MaxRect, ScaleOffset};
-use crate::visibility::compute_conservative_visible_rect;
+use crate::visibility::{compute_conservative_visible_rect, PrimitiveDrawIndex};
 
 /// This type reflects the unfortunate situation with quad coordinates where we
 /// sometimes use layout and sometimes device coordinates.
@@ -203,7 +203,7 @@ pub enum QuadRenderStrategy {
 pub fn prepare_quad(
     pattern_builder: &dyn PatternBuilder,
     desc: &QuadDescriptor,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     cache_key: &Option<QuadCacheKey>,
     clip_chain: &ClipChainInstance,
     transform: &mut QuadTransformState,
@@ -218,7 +218,6 @@ pub fn prepare_quad(
 ) {
     let pattern_ctx = PatternBuilderContext {
         spatial_tree: frame_context.spatial_tree,
-        fb_config: frame_context.fb_config,
         prim_origin: desc.local_rect.min,
     };
 
@@ -248,7 +247,7 @@ pub fn prepare_quad(
         strategy,
         &pattern,
         desc,
-        prim_instance_index,
+        draw_index,
         cache_key,
         clip_chain,
 
@@ -268,7 +267,7 @@ pub fn prepare_repeatable_quad(
     desc: &QuadDescriptor,
     stretch_size: LayoutSize,
     tile_spacing: LayoutSize,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     cache_key: &Option<QuadCacheKey>,
     clip_chain: &ClipChainInstance,
     transform: &mut QuadTransformState,
@@ -283,7 +282,6 @@ pub fn prepare_repeatable_quad(
 ) {
     let pattern_ctx = PatternBuilderContext {
         spatial_tree: frame_context.spatial_tree,
-        fb_config: frame_context.fb_config,
         prim_origin: desc.local_rect.min,
     };
 
@@ -336,7 +334,7 @@ pub fn prepare_repeatable_quad(
             strategy,
             &pattern,
             &stretched_desc,
-            prim_instance_index,
+            draw_index,
             &cache_key,
             clip_chain,
             transform,
@@ -433,7 +431,7 @@ pub fn prepare_repeatable_quad(
             strategy,
             &repeat_pattern,
             desc,
-            prim_instance_index,
+            draw_index,
             &None,
             clip_chain,
             transform,
@@ -462,7 +460,17 @@ pub fn prepare_repeatable_quad(
     let repetitions = crate::image_tiling::repetitions(&desc.local_rect, &visible_rect, stride);
     for tile in repetitions {
         let tile_rect = LayoutRect::from_origin_and_size(tile.origin, stretch_size);
-        let clip_rect = desc.local_clip_rect.intersection_unchecked(&tile_rect);
+        // The last tile of each row/column typically extends past the primitive
+        // rect, so clip against it in addition to the local clip rect. We can't
+        // rely on the local clip rect bounding the primitive: some primitives
+        // (radial gradients, see `optimize_radial_gradient`) shrink their local
+        // rect without shrinking the clip rect.
+        let clip_rect = desc.local_clip_rect
+            .intersection_unchecked(&tile_rect)
+            .intersection_unchecked(&desc.local_rect);
+        if clip_rect.is_empty() {
+            continue;
+        }
         let pattern_offset = tile.origin - desc.local_rect.min;
         let pattern = pattern_builder.build(
             None,
@@ -483,7 +491,7 @@ pub fn prepare_repeatable_quad(
                 aligned_aa_edges: desc.aligned_aa_edges & tile.edge_flags,
                 transformed_aa_edges: desc.transformed_aa_edges & tile.edge_flags,
             },
-            prim_instance_index,
+            draw_index,
             // Bug 2017832 - Caching breaks manually repeated patterns
             // with SWGL for some reason.
             &None,
@@ -504,7 +512,7 @@ pub fn prepare_border_nine_patch(
     pattern_builder: &dyn PatternBuilder,
     desc: &QuadDescriptor,
     stretch_size: LayoutSize,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     clip_chain: &ClipChainInstance,
     transform: &mut QuadTransformState,
 
@@ -518,7 +526,6 @@ pub fn prepare_border_nine_patch(
 ) {
     let pattern_ctx = PatternBuilderContext {
         spatial_tree: frame_context.spatial_tree,
-        fb_config: frame_context.fb_config,
         prim_origin: desc.local_rect.min,
     };
 
@@ -609,7 +616,7 @@ pub fn prepare_border_nine_patch(
                 aligned_aa_edges: desc.aligned_aa_edges & side,
                 transformed_aa_edges: desc.transformed_aa_edges & side,
             },
-            prim_instance_index,
+            draw_index,
             &None,
             clip_chain,
 
@@ -629,7 +636,7 @@ fn prepare_quad_impl(
     strategy: QuadRenderStrategy,
     pattern: &Pattern,
     desc: &QuadDescriptor,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     cache_key: &Option<QuadCacheKey>,
     clip_chain: &ClipChainInstance,
 
@@ -714,7 +721,7 @@ fn prepare_quad_impl(
                 pattern.kind,
                 pattern.shader_input,
                 pattern.texture_input.task_ids,
-                crate::prim_store::storage::Index::from_u32(prim_instance_index.0),
+                draw_index,
                 main_prim_address,
                 transform_id,
                 quad_flags,
@@ -803,7 +810,7 @@ fn prepare_quad_impl(
 
             add_composite_prim(
                 pattern.blend_mode,
-                prim_instance_index,
+                draw_index,
                 &clipped_surface_rect,
                 frame_state,
                 targets,
@@ -812,7 +819,7 @@ fn prepare_quad_impl(
         }
         QuadRenderStrategy::Tiled => {
             prepare_tiles(
-                prim_instance_index,
+                draw_index,
                 &local_bounds,
                 &local_pattern_rect,
                 &clipped_surface_rect,
@@ -831,7 +838,7 @@ fn prepare_quad_impl(
         }
         QuadRenderStrategy::NinePatch { clip_rect, radius } => {
             prepare_nine_patch(
-                prim_instance_index,
+                draw_index,
                 &local_bounds,
                 &local_pattern_rect,
                 &clipped_surface_rect,
@@ -942,7 +949,7 @@ fn prepare_indirect_pattern(
 }
 
 fn prepare_nine_patch(
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     local_bounds: &LayoutRect,
     local_pattern_rect: &LayoutRect,
     clipped_surface_rect: &DeviceRect,
@@ -1098,7 +1105,7 @@ fn prepare_nine_patch(
         add_pattern_prim(
             pattern,
             local_to_device.inverse(),
-            prim_instance_index,
+            draw_index,
             &device_bounds,
             &device_pattern_rect,
             pattern.is_opaque,
@@ -1111,7 +1118,7 @@ fn prepare_nine_patch(
     if !scratch.frame.quad_indirect_segments.is_empty() {
         add_composite_prim(
             pattern.blend_mode,
-            prim_instance_index,
+            draw_index,
             &device_bounds,
             frame_state,
             targets,
@@ -1121,7 +1128,7 @@ fn prepare_nine_patch(
 }
 
 fn prepare_tiles(
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     local_bounds: &LayoutRect,
     local_pattern_rect: &LayoutRect,
     device_bounds: &DeviceRect,
@@ -1368,7 +1375,7 @@ fn prepare_tiles(
         add_pattern_prim(
             pattern,
             local_to_device.inverse(),
-            prim_instance_index,
+            draw_index,
             &device_bounds,
             &device_pattern_rect,
             pattern.is_opaque,
@@ -1381,7 +1388,7 @@ fn prepare_tiles(
     if !scratch.frame.quad_indirect_segments.is_empty() {
         add_composite_prim(
             pattern.blend_mode,
-            prim_instance_index,
+            draw_index,
             device_bounds,
             frame_state,
             targets,
@@ -1657,7 +1664,7 @@ fn add_render_task_with_mask(
 fn add_pattern_prim(
     pattern: &Pattern,
     pattern_transform: ScaleOffset,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     coverage_rect: &DeviceRect,
     pattern_rect: &DeviceRect,
     is_opaque: bool,
@@ -1688,7 +1695,7 @@ fn add_pattern_prim(
             pattern.kind,
             pattern.shader_input,
             pattern.texture_input.task_ids,
-            crate::prim_store::storage::Index::from_u32(prim_instance_index.0),
+            draw_index,
             prim_address,
             GpuTransformId::IDENTITY,
             quad_flags,
@@ -1702,7 +1709,7 @@ fn add_pattern_prim(
 
 fn add_composite_prim(
     blend_mode: BlendMode,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     rect: &DeviceRect,
     frame_state: &mut FrameBuildingState,
     targets: &[CommandBufferIndex],
@@ -1737,7 +1744,7 @@ fn add_composite_prim(
                 crate::pattern::TEXTURED_SHADER_MAP_TO_SEGMENT,
             ),
             [RenderTaskId::INVALID; 3],
-            crate::prim_store::storage::Index::from_u32(prim_instance_index.0),
+            draw_index,
             composite_prim_address,
             GpuTransformId::IDENTITY,
             quad_flags,

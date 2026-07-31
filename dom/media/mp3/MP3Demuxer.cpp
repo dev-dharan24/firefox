@@ -392,8 +392,9 @@ media::NullableTimeUnit MP3TrackDemuxer::Duration() const {
         media::TimeUnit::FromSeconds(static_cast<double>(size) * 8 / mBitrate));
   }
 
-  if (AverageFrameLength() > 0) {
-    numFrames = std::lround(AssertedCast<double>(size) / AverageFrameLength());
+  const double averageFrameLength = AverageFrameLength();
+  if (averageFrameLength > 0) {
+    numFrames = std::lround(AssertedCast<double>(size) / averageFrameLength);
   }
 
   return NothingIfNegative(Duration(numFrames) - (EncoderDelay() + Padding()));

@@ -1326,6 +1326,7 @@ export const tokensTable = {
       value: {
         light: "var(--color-gray-70)",
         dark: "var(--border-color-interactive)",
+        prefersContrast: "var(--border-color-interactive)",
         forcedColors: "var(--border-color-interactive)",
         default:
           "light-dark(var(--color-gray-70), var(--border-color-interactive))",
@@ -5146,6 +5147,7 @@ export const variableLookupTable = {
   "toggle-border-color": {
     light: "var(--color-gray-70)",
     dark: "var(--border-color-interactive)",
+    prefersContrast: "var(--border-color-interactive)",
     forcedColors: "var(--border-color-interactive)",
     default:
       "light-dark(var(--color-gray-70), var(--border-color-interactive))",

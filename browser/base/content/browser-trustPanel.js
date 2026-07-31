@@ -680,7 +680,10 @@ class TrustPanel {
       // If the URL has changed while executing the query above, abort.
       return;
     }
-    this.#isFirstVisit = rows.length === 0;
+    // Also treat as a first visit if the tracker count has never been shown,
+    // so the user gets the long-form UI even on a return visit.
+    this.#isFirstVisit =
+      rows.length === 0 || !UrlbarPrefs.get("trackerCountShown");
     this.#updateUrlbarIcon();
   }
 

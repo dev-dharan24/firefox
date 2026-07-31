@@ -465,6 +465,7 @@ macosx1500-64-tests:
 
 macosx1500-aarch64-tests:
     - cppunittest
+    - gtest
     - firefox-ui-functional
     - jsreftest
     - marionette-integration
@@ -523,7 +524,6 @@ macosx1500-aarch64-vms-tests:
 
 macosx1470-64-tests:
     - cppunittest
-    - gtest
 
 macosx1015-64-qr-tests:
     - cppunittest

@@ -577,15 +577,6 @@ static bool GetBuildConfiguration(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-  value = BooleanValue(true);
-#else
-  value = BooleanValue(false);
-#endif
-  if (!JS_SetProperty(cx, info, "explicit-resource-management", value)) {
-    return false;
-  }
-
   value = BooleanValue(true);
   if (!JS_SetProperty(cx, info, "source-phase-imports", value)) {
     return false;

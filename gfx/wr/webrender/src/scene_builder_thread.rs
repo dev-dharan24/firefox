@@ -41,7 +41,7 @@ use std::thread;
 use std::time::Duration;
 
 fn rasterize_blobs(txn: &mut TransactionMsg, is_low_priority: bool, tile_pool: &mut api::BlobTilePool) {
-    profile_scope!("rasterize_blobs");
+    tracy_rs::profile_scope!("rasterize_blobs");
 
     if let Some(ref mut rasterizer) = txn.blob_rasterizer {
         let mut rasterized_blobs = rasterizer.rasterize(&txn.blob_requests, is_low_priority, tile_pool);
@@ -108,8 +108,13 @@ pub enum SceneBuilderRequest {
     SimulateLongSceneBuild(u32),
     ExternalEvent(RenderBackendId, ExternalEvent),
     WakeUp,
-    StopRenderBackend,
     ShutDown(Option<Sender<()>>),
+    /// Stop producing results for a window without unregistering it.
+    ///
+    /// Sent on the low-priority scene channel by `stop_render_backend` and
+    /// forwarded to the render backend, so that it cannot overtake work queued
+    /// earlier on either scene channel. See `RenderApi::stop_render_backend`.
+    StopWindow(RenderBackendId, Sender<()>),
     Flush(Sender<()>),
     SetFlags(DebugFlags),
     SetFrameBuilderConfig(RenderBackendId, FrameBuilderConfig),
@@ -141,7 +146,9 @@ pub enum SceneBuilderResult {
     GetGlyphDimensions(RenderBackendId, GlyphDimensionRequest),
     GetGlyphIndices(RenderBackendId, GlyphIndexRequest),
     SetParameter(RenderBackendId, Parameter),
-    StopRenderBackend,
+    /// Forwarded `SceneBuilderRequest::StopWindow`. The backend marks the window
+    /// stopped and acks on the channel, releasing `stop_render_backend`.
+    StopWindow(RenderBackendId, Sender<()>),
     ShutDown(Option<Sender<()>>),
 
     #[cfg(feature = "capture")]
@@ -346,12 +353,15 @@ impl SceneBuilderThread {
         // simultaneously.
 
         loop {
-            tracy_begin_frame!("scene_builder_thread");
+            tracy_rs::tracy_begin_frame!("scene_builder_thread");
 
             match self.rx.recv() {
                 Ok(SceneBuilderRequest::WakeUp) => {}
                 Ok(SceneBuilderRequest::Flush(tx)) => {
                     self.send(SceneBuilderResult::FlushComplete(tx));
+                }
+                Ok(SceneBuilderRequest::StopWindow(backend_id, tx)) => {
+                    self.send(SceneBuilderResult::StopWindow(backend_id, tx));
                 }
                 Ok(SceneBuilderRequest::SetFlags(debug_flags)) => {
                     self.debug_flags = debug_flags;
@@ -396,9 +406,6 @@ impl SceneBuilderThread {
                 }
                 Ok(SceneBuilderRequest::GetGlyphIndices(backend_id, request)) => {
                     self.send(SceneBuilderResult::GetGlyphIndices(backend_id, request));
-                }
-                Ok(SceneBuilderRequest::StopRenderBackend) => {
-                    self.send(SceneBuilderResult::StopRenderBackend);
                 }
                 Ok(SceneBuilderRequest::ShutDown(sync)) => {
                     self.send(SceneBuilderResult::ShutDown(sync));
@@ -457,7 +464,7 @@ impl SceneBuilderThread {
                 hooks.poke();
             }
 
-            tracy_end_frame!("scene_builder_thread");
+            tracy_rs::tracy_end_frame!("scene_builder_thread");
         }
 
         // SB is exiting; deregister any still-installed hooks. In a
@@ -587,7 +594,7 @@ impl SceneBuilderThread {
 
     /// Do the bulk of the work of the scene builder thread.
     fn process_transaction(&mut self, mut txn: TransactionMsg) -> Box<BuiltTransaction> {
-        profile_scope!("process_transaction");
+        tracy_rs::profile_scope!("process_transaction");
         let win_id_opt = self.doc_to_window.get(&txn.document_id).copied();
 
         // Dispatch pre_scene_build to the hooks for this transaction's

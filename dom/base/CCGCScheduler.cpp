@@ -699,7 +699,7 @@ JS::SliceBudget CCGCScheduler::ComputeCCSliceBudget(
 
   if (aPrevSliceEndTime.IsNull()) {
     // The first slice gets the standard slice time.
-    return JS::SliceBudget(JS::TimeBudget(baseBudget));
+    return JS::SliceBudget(baseBudget);
   }
 
   // Only run a limited slice if we're within the max running time.
@@ -728,8 +728,8 @@ JS::SliceBudget CCGCScheduler::ComputeCCSliceBudget(
   // Note: We may have already overshot the deadline, in which case
   // baseBudget will be negative and we will end up returning
   // laterSliceBudget.
-  return JS::SliceBudget(JS::TimeBudget(
-      std::max({delaySliceBudget, laterSliceBudget, baseBudget})));
+  return JS::SliceBudget(
+      std::max({delaySliceBudget, laterSliceBudget, baseBudget}));
 }
 
 JS::SliceBudget CCGCScheduler::ComputeInterSliceGCBudget(TimeStamp aDeadline,
@@ -755,7 +755,7 @@ JS::SliceBudget CCGCScheduler::ComputeInterSliceGCBudget(TimeStamp aDeadline,
   }
 
   // If the budget is being extended, do not allow it to be interrupted.
-  auto result = JS::SliceBudget(JS::TimeBudget(extendedBudget), nullptr);
+  auto result = JS::SliceBudget(extendedBudget, nullptr);
   result.idle = !aDeadline.IsNull();
   result.extended = true;
   return result;

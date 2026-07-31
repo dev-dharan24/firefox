@@ -3640,7 +3640,7 @@ nsresult nsFocusManager::DetermineElementToMoveFocus(
 
   int32_t tabIndex = forward ? 1 : 0;
   nsCOMPtr<nsIContent> focusedContent = startContent;
-  bool skipFocusedContent = false;
+  bool startingFromDescendantOfFocusedContent = false;
   if (startContent) {
     nsIFrame* frame = startContent->GetPrimaryFrame();
     tabIndex = (frame && !startContent->IsHTMLElement(nsGkAtoms::area))
@@ -3653,13 +3653,10 @@ nsresult nsFocusManager::DetermineElementToMoveFocus(
       GetSequentialFocusNavigationStartingPoint(doc, focusedContent, forward,
                                                 getter_AddRefs(startContent),
                                                 &considerStartingPoint);
-      // We may end up returning to the focused content when doing
-      // backwards navigation from a point inside the focused content.
-      // In this case, we don't want to get stuck.
-      skipFocusedContent = true;
       // Should always have a starting point, since there is focused content.
       MOZ_ASSERT(startContent);
       if (focusedContent != startContent) {
+        startingFromDescendantOfFocusedContent = true;
         // not starting from focused content - ignore tabindex
         ignoreTabIndex = true;
         if (considerStartingPoint && startContent->IsElement() &&
@@ -3848,7 +3845,17 @@ nsresult nsFocusManager::DetermineElementToMoveFocus(
 
       // found a content node to focus.
       if (nextFocus) {
-        if (skipFocusedContent && nextFocus == focusedContent) {
+        if (startingFromDescendantOfFocusedContent && tabIndex >= 0 &&
+            ignoreTabIndex &&
+            !nextFocus->IsInclusiveFlatTreeDescendantOf(focusedContent)) {
+          // We started from the selection inside the focused content,
+          // but we ended up outside of the focused content's subtree.
+          // So we should start again without ignoring tab index.
+          ignoreTabIndex = false;
+          continue;
+        }
+        if (startingFromDescendantOfFocusedContent &&
+            nextFocus == focusedContent) {
           // Got back to the original focused content. This can happen with
           // backward navigation if selection is inside the focused element,
           // and there is nothing else focusable before it.
@@ -3860,7 +3867,7 @@ nsresult nsFocusManager::DetermineElementToMoveFocus(
           // we can end up looping around the whole document and reaching the
           // focused content again. In these cases, we don't want to loop
           // infinitely.
-          skipFocusedContent = false;
+          startingFromDescendantOfFocusedContent = false;
           continue;
         }
 

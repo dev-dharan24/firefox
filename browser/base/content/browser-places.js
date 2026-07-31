@@ -865,6 +865,13 @@ var BookmarksEventHandler = {
       // Only record interactions through the Bookmarks Toolbar
       if (target.closest("#PersonalToolbar")) {
         Glean.browserEngagement.bookmarksToolbarBookmarkOpened.add(1);
+        if (
+          gBookmarksToolbarVisibility == "newtab" &&
+          AIWindow.isAIWindowActive(window) &&
+          AIWindow.isAIWindowNewTabPage(gBrowser.currentURI)
+        ) {
+          Glean.smartWindow.bookmarkbar.opened.add(1);
+        }
       }
     } else if (eventAction) {
       switch (eventAction) {
@@ -1557,8 +1564,12 @@ var BookmarkingUI = {
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
       newTabURLs.push("about:privatebrowsing");
     }
-    return newTabURLs.some(newTabUriString =>
-      this._newTabURI(newTabUriString)?.equalsExceptRef(uri)
+    // In a Smart Window, the new tab is a chrome document rather than
+    // about:newtab; isAIWindowNewTabPage matches it (and excludes firstrun).
+    return (
+      newTabURLs.some(newTabUriString =>
+        this._newTabURI(newTabUriString)?.equalsExceptRef(uri)
+      ) || AIWindow.isAIWindowNewTabPage(uri)
     );
   },
 

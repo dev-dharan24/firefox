@@ -61,6 +61,8 @@ clang_checkers:
     reliability: high
   - name: bugprone-redundant-branch-condition
     reliability: high
+  - name: bugprone-use-after-move
+    reliability: high
   - name: misc-definitions-in-headers
     reliability: high
   - name: performance-for-range-copy
@@ -73,6 +75,8 @@ clang_checkers:
   - name: performance-inefficient-vector-operation
     reliability: high
   - name: performance-trivially-destructible
+    reliability: high
+  - name: performance-unnecessary-copy-initialization
     reliability: high
   - name: modernize-use-nullptr
     reliability: high

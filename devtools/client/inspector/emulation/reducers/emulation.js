@@ -7,11 +7,13 @@
 const {
   SET_COLOR_SCHEME_SIMULATION,
   SET_PRINT_SIMULATION_ENABLED,
+  SET_REDUCED_MOTION_EMULATION,
 } = require("resource://devtools/client/inspector/emulation/actions/index.js");
 
 const INITIAL_EMULATION_STATE = {
   colorSchemeSimulation: null,
   printSimulationEnabled: false,
+  reducedMotionEmulation: null,
 };
 
 function emulation(state = INITIAL_EMULATION_STATE, action) {
@@ -26,6 +28,12 @@ function emulation(state = INITIAL_EMULATION_STATE, action) {
       return {
         ...state,
         printSimulationEnabled: action.enabled,
+      };
+
+    case SET_REDUCED_MOTION_EMULATION:
+      return {
+        ...state,
+        reducedMotionEmulation: action.reducedMotion,
       };
 
     default:

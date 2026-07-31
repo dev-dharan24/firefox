@@ -405,7 +405,12 @@ void DocAccessibleParent::ShutdownOrPrepareForMove(RemoteAccessible* aAcc) {
     // Even if some children are kept, those will be re-attached when we handle
     // the show event. For now, clear all of them by moving them to a temporary.
     auto children{std::move(aAcc->mChildren)};
-    for (RemoteAccessible* child : children) {
+    for (RefPtr<RemoteAccessible>& childRef : children) {
+      RemoteAccessible* child = childRef.get();
+      // Drop our reference before recursing so that if child is being
+      // removed, the refcount assertion in its Shutdown() reflects only
+      // mDoc's reference.
+      childRef = nullptr;
       if (child == aAcc) {
         MOZ_ASSERT_UNREACHABLE(
             "Somehow an accessible got added as a child of itself!");
@@ -1181,7 +1186,12 @@ void DocAccessibleParent::Destroy() {
       CachedTableAccessible::Invalidate(acc);
     }
     ProxyDestroyed(acc);
-    // mAccessibles owns acc, so removing it deletes acc.
+    // acc and its parent/children hold strong references to each other, so
+    // clear acc's children to break that cycle. Once every node in this loop
+    // has done the same and had its mAccessibles entry removed below, no
+    // references remain and every node is destroyed.
+    acc->mChildren.Clear();
+    acc->mDoc = nullptr;
     iter.Remove();
   }
 
@@ -1556,7 +1566,9 @@ DocAccessibleParent::CollectReports(nsIHandleReportCallback* aHandleReport,
   return NS_OK;
 }
 
-NS_IMPL_ISUPPORTS(DocAccessibleParent, nsIMemoryReporter);
+NS_IMPL_QUERY_INTERFACE(DocAccessibleParent, nsIMemoryReporter)
+NS_IMPL_ADDREF_INHERITED(DocAccessibleParent, RemoteAccessible)
+NS_IMPL_RELEASE_INHERITED(DocAccessibleParent, RemoteAccessible)
 
 #ifdef MOZ_ENABLE_SKIA_PDF
 mozilla::ipc::IPCResult DocAccessibleParent::RecvPrinting() {

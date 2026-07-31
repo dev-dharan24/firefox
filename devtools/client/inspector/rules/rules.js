@@ -28,6 +28,7 @@ const CssLogic = require("resource://devtools/shared/inspector/css-logic.js");
 const {
   setColorSchemeSimulation,
   setPrintSimulationEnabled,
+  setReducedMotionEmulation,
 } = require("resource://devtools/client/inspector/emulation/actions/emulation.js");
 
 loader.lazyRequireGetter(
@@ -117,6 +118,8 @@ const MDN_PRINT_MEDIA_URL =
   "https://developer.mozilla.org/docs/Web/CSS/Reference/At-rules/@media";
 const MDN_PREFERS_COLOR_SCHEME_URL =
   "https://developer.mozilla.org/docs/Web/CSS/@media/prefers-color-scheme";
+const MDN_PREFERS_REDUCED_MOTION_URL =
+  "https://developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion";
 
 /**
  * Our model looks like this:
@@ -223,6 +226,9 @@ class CssRuleView extends EventEmitter {
     this.emulationPrintHeading = doc.getElementById("emulation-print-heading");
     this.emulationColorSchemeHeading = doc.getElementById(
       "emulation-color-scheme-heading"
+    );
+    this.emulationReducedMotionHeading = doc.getElementById(
+      "emulation-reduced-motion-heading"
     );
     this.#printSimulationCheckbox = doc.getElementById(
       "print-simulation-enabled"
@@ -758,9 +764,11 @@ class CssRuleView extends EventEmitter {
     if (!this.inspector.commands.descriptorFront.isTabDescriptor) {
       return;
     }
+
     this.#colorSchemeLightSimulationButton.removeAttribute("hidden");
     this.#colorSchemeDarkSimulationButton.removeAttribute("hidden");
     this.emulationToggle.removeAttribute("hidden");
+
     const { signal } = this.#abortController;
     const baseEventConfig = { signal };
 
@@ -775,6 +783,13 @@ class CssRuleView extends EventEmitter {
 
     this.emulationColorSchemeHeading.href = `${MDN_PREFERS_COLOR_SCHEME_URL}?${mdnLinkParams}`;
     this.emulationColorSchemeHeading.addEventListener(
+      "click",
+      e => this.#onHeadingLinkClick(e),
+      baseEventConfig
+    );
+
+    this.emulationReducedMotionHeading.href = `${MDN_PREFERS_REDUCED_MOTION_URL}?${mdnLinkParams}`;
+    this.emulationReducedMotionHeading.addEventListener(
       "click",
       e => this.#onHeadingLinkClick(e),
       baseEventConfig
@@ -797,6 +812,18 @@ class CssRuleView extends EventEmitter {
       this.#colorSchemeLightRadio.setAttribute("disabled", true);
       this.#colorSchemeDarkRadio.setAttribute("disabled", true);
       console.warn("Color scheme simulation is disabled in RFP mode.");
+    }
+
+    // @backward-compat { version 155 } Once 155 hits release, we can remove this boolean
+    // and always consider it true (i.e. only keep the code inside the if block)
+    const hasReducedMotionEmulationSupport =
+      await this.inspector.commands.targetConfigurationCommand.supports(
+        "reducedMotionEmulation"
+      );
+    if (hasReducedMotionEmulationSupport) {
+      this.styleDocument
+        .getElementById("emulation-reduced-motion-container")
+        .removeAttribute("hidden");
     }
   }
 
@@ -2418,6 +2445,8 @@ class CssRuleView extends EventEmitter {
       this.#updatePrintSimulation(this.#printSimulationCheckbox.checked);
     } else if (target.name === "color-scheme-simulation") {
       this.#updateColorSchemeSimulation(target.value || null);
+    } else if (target.name === "reduced-motion-emulation") {
+      this.#updateReducedMotionEmulation(target.value || null);
     }
   };
 
@@ -2451,6 +2480,24 @@ class CssRuleView extends EventEmitter {
     await this.inspector.commands.targetConfigurationCommand.updateConfiguration(
       {
         colorSchemeSimulation: colorScheme,
+      }
+    );
+
+    this.refreshPanel();
+  }
+
+  /**
+   * Called when the reduced motion emulation radios are toggled and update the reduced motion emulation accordingly.
+   *
+   * @param {string|null} value
+   *        Reduced motion emulation value.
+   */
+  async #updateReducedMotionEmulation(value) {
+    setReducedMotionEmulation(value);
+
+    await this.inspector.commands.targetConfigurationCommand.updateConfiguration(
+      {
+        reducedMotionEmulation: value,
       }
     );
 

@@ -1206,7 +1206,6 @@ JSContext::JSContext(JSRuntime* runtime, const JS::ContextOptions& options)
       jobQueue(this, nullptr),
       internalJobQueue(this),
       canSkipEnqueuingJobs(this, false),
-      asyncResumeDepth(this, 0),
       promiseRejectionTrackerCallback(this, nullptr),
       promiseRejectionTrackerCallbackData(this, nullptr),
       oomStackTraceBuffer_(this, nullptr),

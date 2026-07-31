@@ -135,6 +135,9 @@ For more information about the review process, see the {ref}`Code Review FAQ`.
    * - #gfx-reviewers
      - Graphics code
      - `Member list <https://phabricator.services.mozilla.com/project/members/122/>`__
+   * - #gtk-reviewers
+     - GTK/Linux-specific widget code (widget/gtk)
+     - `Member list <https://phabricator.services.mozilla.com/project/members/249/>`__
    * - #intermittent-reviewers
      - Test manifest changes
      - `Member list <https://phabricator.services.mozilla.com/project/members/110/>`__

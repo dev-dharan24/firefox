@@ -15,6 +15,7 @@
 #include "mozilla/dom/ClientInfo.h"
 #include "mozilla/dom/DOMRect.h"
 #include "mozilla/dom/PWindowGlobalParent.h"
+#include "mozilla/dom/PrefetchMatchWaiter.h"
 #include "mozilla/dom/WindowContext.h"
 #include "mozilla/dom/WindowGlobalActor.h"
 #include "mozilla/dom/WindowGlobalActorsBinding.h"
@@ -40,6 +41,7 @@ class CrossProcessPaint;
 namespace dom {
 
 class BrowserParent;
+class PrefetchRecordParent;
 class WindowGlobalChild;
 class JSWindowActorParent;
 class JSActorMessageMeta;
@@ -421,6 +423,40 @@ class WindowGlobalParent final : public WindowContext,
   already_AddRefed<dom::PDigitalCredentialParent>
   AllocPDigitalCredentialParent();
 
+  // Spec: https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record
+  already_AddRefed<dom::PPrefetchRecordParent> AllocPPrefetchRecordParent(
+      const dom::SpeculativePrefetchArgs& aArgs);
+
+  // Called when a prefetch record's state changes (complete or canceled).
+  // Wakes PrefetchMatchWaiters registered via WaitForMatchingPrefetchRecord.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
+  void NotifyPrefetchStateChanged(dom::PrefetchRecordParent* aRec);
+  void DedupePrefetchRecords(dom::PrefetchRecordParent* aJustCompleted);
+
+  // "Find a matching complete prefetch record": synchronous lookup of a
+  // completed prefetch record for navigation.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#find-a-matching-complete-prefetch-record
+  dom::PrefetchRecordParent* FindMatchingPrefetchRecord(nsIURI* aURI);
+
+  // "Wait for a matching prefetch record": async wait; resolves when a match
+  // completes or timeout expires.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
+  RefPtr<PrefetchMatchPromise> WaitForMatchingPrefetchRecord(
+      nsIURI* aURI, TimeDuration aTimeout);
+
+  // Whether some ongoing prefetch record could still become a matching
+  // prefetch record for aURI once it completes. Used by
+  // WaitForMatchingPrefetchRecord and by PrefetchMatchWaiter to decide
+  // whether to keep waiting or give up early.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
+  bool HasPotentialPrefetchMatch(nsIURI* aURI);
+
+  void RemoveWaiter(PrefetchMatchWaiter* aWaiter);
+
   void UpdateFullscreenKeyboardLockStatus(FullscreenKeyboardLock aStatus);
 
  private:
@@ -508,6 +544,7 @@ class WindowGlobalParent final : public WindowContext,
   // counters will contribute to.  (If we are a top-level document, this
   // will point to ourselves.)
   RefPtr<WindowGlobalParent> mPageUseCountersWindow;
+  nsTArray<RefPtr<PrefetchMatchWaiter>> mPrefetchWaiters;
 
   // Our page use counters, if we are a top-level document.
   UniquePtr<PageUseCounters> mPageUseCounters;

@@ -75,9 +75,7 @@ const JSClass ErrorObject::protoClasses[JSEXN_ERROR_LIMIT] = {
     IMPLEMENT_ERROR_PROTO_CLASS(EvalError),
     IMPLEMENT_ERROR_PROTO_CLASS(RangeError),
     IMPLEMENT_ERROR_PROTO_CLASS(ReferenceError),
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
     IMPLEMENT_ERROR_PROTO_CLASS(SuppressedError),
-#endif
     IMPLEMENT_ERROR_PROTO_CLASS(SyntaxError),
     IMPLEMENT_ERROR_PROTO_CLASS(TypeError),
     IMPLEMENT_ERROR_PROTO_CLASS(URIError),
@@ -136,9 +134,7 @@ IMPLEMENT_NATIVE_ERROR_PROPERTIES(AggregateError)
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(EvalError)
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(RangeError)
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(ReferenceError)
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(SuppressedError)
-#endif
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(SyntaxError)
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(TypeError)
 IMPLEMENT_NATIVE_ERROR_PROPERTIES(URIError)
@@ -180,9 +176,7 @@ const ClassSpec ErrorObject::classSpecs[JSEXN_ERROR_LIMIT] = {
     IMPLEMENT_NATIVE_ERROR_SPEC(EvalError),
     IMPLEMENT_NATIVE_ERROR_SPEC(RangeError),
     IMPLEMENT_NATIVE_ERROR_SPEC(ReferenceError),
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
     IMPLEMENT_NATIVE_ERROR_SPEC(SuppressedError),
-#endif
     IMPLEMENT_NATIVE_ERROR_SPEC(SyntaxError),
     IMPLEMENT_NATIVE_ERROR_SPEC(TypeError),
     IMPLEMENT_NATIVE_ERROR_SPEC(URIError),
@@ -226,9 +220,7 @@ const JSClass ErrorObject::classes[JSEXN_ERROR_LIMIT] = {
     IMPLEMENT_ERROR_CLASS(EvalError),
     IMPLEMENT_ERROR_CLASS(RangeError),
     IMPLEMENT_ERROR_CLASS(ReferenceError),
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
     IMPLEMENT_ERROR_CLASS(SuppressedError),
-#endif
     IMPLEMENT_ERROR_CLASS(SyntaxError),
     IMPLEMENT_ERROR_CLASS(TypeError),
     IMPLEMENT_ERROR_CLASS(URIError),
@@ -265,11 +257,7 @@ static ErrorObject* CreateErrorObject(JSContext* cx, const CallArgs& args,
   // non-standard fileName and lineNumber arguments when we have an options
   // object argument and the exception type is not SuppressedError.
   bool hasOptions =
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
       args.get(messageArg + 1).isObject() && exnType != JSEXN_SUPPRESSEDERR;
-#else
-      args.get(messageArg + 1).isObject();
-#endif
 
   Rooted<mozilla::Maybe<Value>> cause(cx, mozilla::Nothing());
   if (hasOptions) {
@@ -357,10 +345,8 @@ static bool Error(JSContext* cx, unsigned argc, Value* vp) {
   MOZ_ASSERT(exnType != JSEXN_AGGREGATEERR,
              "AggregateError has its own constructor function");
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
   MOZ_ASSERT(exnType != JSEXN_SUPPRESSEDERR,
              "SuppressedError has its own constuctor function");
-#endif
 
   JSProtoKey protoKey =
       JSCLASS_CACHED_PROTO_KEY(&ErrorObject::classes[exnType]);
@@ -427,7 +413,6 @@ static bool AggregateError(JSContext* cx, unsigned argc, Value* vp) {
   return true;
 }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 // Explicit Resource Management Proposal
 // SuppressedError ( error, suppressed, message )
 // https://arai-a.github.io/ecma262-compare/?pr=3000&id=sec-suppressederror
@@ -479,7 +464,6 @@ static bool SuppressedError(JSContext* cx, unsigned argc, Value* vp) {
   args.rval().setObject(*obj);
   return true;
 }
-#endif
 
 /* static */
 JSObject* ErrorObject::createProto(JSContext* cx, JSProtoKey key) {
@@ -520,14 +504,10 @@ JSObject* ErrorObject::createConstructor(JSContext* cx, JSProtoKey key) {
     if (type == JSEXN_AGGREGATEERR) {
       native = AggregateError;
       nargs = 2;
-    }
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-    else if (type == JSEXN_SUPPRESSEDERR) {
+    } else if (type == JSEXN_SUPPRESSEDERR) {
       native = SuppressedError;
       nargs = 3;
-    }
-#endif
-    else {
+    } else {
       native = Error;
       nargs = 1;
     }

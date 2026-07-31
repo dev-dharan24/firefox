@@ -635,6 +635,11 @@ pub extern "C" fn wr_renderer_update(renderer: &mut Renderer) {
 }
 
 #[no_mangle]
+pub extern "C" fn wr_renderer_trim_transient_resources(renderer: &mut Renderer, trim_upload_buffers: bool) {
+    renderer.trim_transient_resources(trim_upload_buffers);
+}
+
+#[no_mangle]
 pub extern "C" fn wr_renderer_set_target_frame_publish_id(renderer: &mut Renderer, publish_id: FramePublishId) {
     renderer.set_target_frame_publish_id(publish_id);
 }
@@ -3708,8 +3713,11 @@ pub extern "C" fn wr_dp_push_image(
     color: ColorF,
     prefer_compositor_surface: bool,
     supports_external_compositing: bool,
+    sub_rect: *const DeviceIntRect,
 ) {
     debug_assert!(unsafe { is_in_main_thread() || is_in_compositor_thread() });
+
+    let sub_rect = unsafe { sub_rect.as_ref().cloned() };
 
     let space_and_clip = parent.to_webrender(state.pipeline_id);
 
@@ -3739,7 +3747,15 @@ pub extern "C" fn wr_dp_push_image(
     state
         .frame_builder
         .dl_builder
-        .push_image(&prim_info, bounds, image_rendering, alpha_type, key, color);
+        .push_image(
+            &prim_info,
+            bounds,
+            image_rendering,
+            alpha_type,
+            key,
+            color,
+            sub_rect,
+        );
 }
 
 #[no_mangle]

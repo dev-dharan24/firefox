@@ -1530,7 +1530,9 @@ nsresult nsWindowWatcher::OpenWindowInternal(
     }
   }
   // If a website opens a popup exit DOM fullscreen
-  if (StaticPrefs::full_screen_api_exit_on_windowOpen() && aCalledFromJS &&
+  if (StaticPrefs::full_screen_api_exit_on_windowOpen() &&
+      (aCalledFromJS ||
+       chromeFlags & nsIWebBrowserChrome::CHROME_DOCUMENT_PIP) &&
       !hasChromeParent && !isCallerChrome && parentOuterWin) {
     Document::AsyncExitFullscreen(parentOuterWin->GetDoc());
   }
@@ -2073,6 +2075,9 @@ uint32_t nsWindowWatcher::CalculateChromeFlagsForSystem(
      instructions. (Note modality implies dependence.) */
   if (aFeatures.GetBoolWithDefault("suppressanimation", false)) {
     chromeFlags |= nsIWebBrowserChrome::CHROME_SUPPRESS_ANIMATION;
+  }
+  if (aFeatures.GetBoolWithDefault("suppressinitialfullscreen", false)) {
+    chromeFlags |= nsIWebBrowserChrome::CHROME_SUPPRESS_INITIAL_FULLSCREEN;
   }
   if (aFeatures.GetBoolWithDefault("alwaysontop", false)) {
     chromeFlags |= nsIWebBrowserChrome::CHROME_ALWAYS_ON_TOP;

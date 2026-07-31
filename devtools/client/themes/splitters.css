@@ -47,7 +47,6 @@
 }
 
 splitter.devtools-horizontal-splitter,
-splitter.devtools-toolbox-splitter,
 .devtools-side-splitter {
   appearance: none;
   background-image: none;
@@ -60,7 +59,7 @@ splitter.devtools-toolbox-splitter,
 
   box-sizing: border-box;
 
-  z-index: var(--browser-stack-z-index-devtools-splitter, 1);
+  z-index: 1;
 
   /* opt-out of forced colors because the transparent borders are turned into
      opaque ones in High Contrast Mode. --devtools-splitter-color has specific value
@@ -68,8 +67,7 @@ splitter.devtools-toolbox-splitter,
   forced-color-adjust: none;
 }
 
-splitter.devtools-horizontal-splitter,
-splitter.devtools-toolbox-splitter.for-bottom-host {
+splitter.devtools-horizontal-splitter {
   min-height: var(--devtools-horizontal-splitter-min-height);
 
   border-top-width: var(--devtools-splitter-top-width);
@@ -90,8 +88,7 @@ splitter.devtools-toolbox-splitter.for-bottom-host {
   }
 }
 
-.devtools-side-splitter,
-.devtools-toolbox-splitter.for-side-host {
+.devtools-side-splitter {
   min-width: var(--devtools-vertical-splitter-min-width);
 
   border-inline-start-width: var(--devtools-splitter-inline-start-width);
@@ -103,7 +100,51 @@ splitter.devtools-toolbox-splitter.for-bottom-host {
   cursor: ew-resize;
 }
 
-/* Specific style for content page|devtools toolbox splitters */
-splitter.devtools-toolbox-splitter:focus-visible {
-  outline: auto;
+/* Specific style for content page|devtools toolbox splitters (keep `splitter` tagName
+   to have a higher specificity than default rules */
+splitter.devtools-toolbox-splitter {
+  --splitter-size: 4px;
+  --min-splitter-size: 1px;
+  --negative-margin: calc(-1 * var(--splitter-size));
+
+  appearance: none;
+  transition: background-color 0.5s ease-in-out;
+  margin: 0;
+  z-index: var(--browser-container-z-index-devtools-splitter);
+
+  /* override default <splitter> style */
+  border-width: 0;
+  background-color: transparent;
+
+  &:hover {
+    background-color: var(--focus-outline-color);
+  }
+
+  &:focus-visible {
+    outline: auto;
+  }
+
+  :root[uidensity="compact"] & {
+    --splitter-size: 2px;
+  }
+
+  &.for-bottom-host {
+    height: var(--splitter-size);
+    min-height: var(--min-splitter-size);
+    margin-block-end: var(--negative-margin);
+  }
+
+  &.for-side-host {
+    width: var(--splitter-size);
+    min-width: var(--min-splitter-size);
+
+    /* we don't want to use logical properties here, as when in RTL, the toolbox is still
+       docked to the right/left , and we want to update the actual right/left margin */
+    &.docked-right {
+      margin-right: var(--negative-margin);
+    }
+    &.docked-left {
+      margin-left: var(--negative-margin);
+    }
+  }
 }

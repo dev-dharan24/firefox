@@ -105,9 +105,6 @@ skip-if = [
 ["browser_aboutdebugging_devtoolstoolbox_concurrent.js"]
 
 ["browser_aboutdebugging_devtoolstoolbox_contextmenu.js"]
-skip-if = [
-  "nova", # Bug 2058109
-]
 
 ["browser_aboutdebugging_devtoolstoolbox_contextmenu_markupview.js"]
 

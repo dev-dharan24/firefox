@@ -248,6 +248,7 @@ let JSWINDOWACTORS = {
         "AIChatContent:RequestAssets": { wantUntrusted: true },
         "AIChatContent:HistoryGridRender": { wantUntrusted: true },
         "AIChatContent:HistoryGridItemClick": { wantUntrusted: true },
+        "AIChatContent:ClientError": { wantUntrusted: true },
       },
     },
     allFrames: true,

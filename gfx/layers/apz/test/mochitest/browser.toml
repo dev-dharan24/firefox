@@ -25,11 +25,14 @@ skip-if = [
 
 ["browser_test_autoscrolling_in_extension_popup_window.js"]
 skip-if = [
-  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && nova", # Bug 2057878
+  "os == 'linux' && display == 'wayland'", # Bug 1857059
 ]
 
 ["browser_test_autoscrolling_in_oop_frame.js"]
 support-files = ["helper_test_autoscrolling_in_oop_frame.html"]
+skip-if = [
+  "os == 'linux' && display == 'wayland'", # Bug 1857059
+]
 
 ["browser_test_background_tab_load_scroll.js"]
 support-files = ["helper_background_tab_load_scroll.html"]

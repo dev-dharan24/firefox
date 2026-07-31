@@ -5,6 +5,7 @@
 #ifndef vm_GeneratorObject_h
 #define vm_GeneratorObject_h
 
+#include "builtin/ModuleObject.h"
 #include "builtin/SelfHostingDefines.h"
 #include "js/Class.h"
 #include "vm/ArgumentsObject.h"
@@ -35,7 +36,7 @@ class AbstractGeneratorObject : public NativeObject {
   static const int32_t RESUME_INDEX_INITIAL_YIELD = 0;
 
   enum {
-    CALLEE_SLOT = 0,
+    CALLEE_OR_MODULE_SLOT = 0,
     ENV_CHAIN_SLOT,
     ARGS_OBJ_SLOT,
     STACK_STORAGE_SLOT,
@@ -62,20 +63,40 @@ class AbstractGeneratorObject : public NativeObject {
                                          HandleObject environmentChain,
                                          Handle<ArgumentsObject*> argsObject);
 
-  static bool resume(JSContext* cx, InterpreterActivation& activation,
+  static void resume(JSContext* cx, InterpreterActivation& activation,
                      Handle<AbstractGeneratorObject*> genObj, HandleValue arg,
-                     HandleValue resumeKind);
+                     GeneratorResumeKind resumeKind);
 
   static bool suspend(JSContext* cx, HandleObject obj, AbstractFramePtr frame,
                       const jsbytecode* pc, unsigned nvalues);
 
   static void finalSuspend(JSContext* cx, HandleObject obj);
 
+  // True for an async module's top-level-await generator, whose
+  // CALLEE_OR_MODULE_SLOT holds a ModuleObject rather than a callee function.
+  bool isModuleGenerator() const {
+    const Value& v = getFixedSlot(CALLEE_OR_MODULE_SLOT);
+    return v.isObject() && v.toObject().is<ModuleObject>();
+  }
+
   JSFunction& callee() const {
-    return getFixedSlot(CALLEE_SLOT).toObject().as<JSFunction>();
+    MOZ_ASSERT(!isModuleGenerator());
+    return getFixedSlot(CALLEE_OR_MODULE_SLOT).toObject().as<JSFunction>();
   }
   void setCallee(JSFunction& callee) {
-    setFixedSlot(CALLEE_SLOT, ObjectValue(callee));
+    setFixedSlot(CALLEE_OR_MODULE_SLOT, ObjectValue(callee));
+  }
+
+  ModuleObject& module() const {
+    MOZ_ASSERT(isModuleGenerator());
+    return getFixedSlot(CALLEE_OR_MODULE_SLOT).toObject().as<ModuleObject>();
+  }
+  void setModule(ModuleObject& module) {
+    setFixedSlot(CALLEE_OR_MODULE_SLOT, ObjectValue(module));
+  }
+
+  JSScript* script() const {
+    return isModuleGenerator() ? module().script() : callee().nonLazyScript();
   }
 
   JSObject& environmentChain() const {
@@ -160,7 +181,7 @@ class AbstractGeneratorObject : public NativeObject {
     MOZ_ASSERT(isSuspended());
     return getFixedSlot(RESUME_INDEX_SLOT).toInt32();
   }
-  bool isClosed() const { return getFixedSlot(CALLEE_SLOT).isNull(); }
+  bool isClosed() const { return getFixedSlot(CALLEE_OR_MODULE_SLOT).isNull(); }
   void setClosed(JSContext* cx);
 
   bool isAfterYield();
@@ -172,7 +193,9 @@ class AbstractGeneratorObject : public NativeObject {
  public:
   void trace(JSTracer* trc);
 
-  static size_t offsetOfCalleeSlot() { return getFixedSlotOffset(CALLEE_SLOT); }
+  static size_t offsetOfCalleeOrModuleSlot() {
+    return getFixedSlotOffset(CALLEE_OR_MODULE_SLOT);
+  }
   static size_t offsetOfEnvironmentChainSlot() {
     return getFixedSlotOffset(ENV_CHAIN_SLOT);
   }
@@ -186,7 +209,7 @@ class AbstractGeneratorObject : public NativeObject {
     return getFixedSlotOffset(STACK_STORAGE_SLOT);
   }
 
-  static size_t calleeSlot() { return CALLEE_SLOT; }
+  static size_t calleeOrModuleSlot() { return CALLEE_OR_MODULE_SLOT; }
   static size_t envChainSlot() { return ENV_CHAIN_SLOT; }
   static size_t argsObjectSlot() { return ARGS_OBJ_SLOT; }
   static size_t stackStorageSlot() { return STACK_STORAGE_SLOT; }
@@ -210,6 +233,16 @@ class GeneratorObject : public AbstractGeneratorObject {
 bool GeneratorThrowOrReturn(JSContext* cx, AbstractFramePtr frame,
                             Handle<AbstractGeneratorObject*> obj,
                             HandleValue val, GeneratorResumeKind resumeKind);
+
+/**
+ * Resume a suspended generator, async function, async generator, or async
+ * module.
+ *
+ * |cx| must already be in the generator's realm.
+ */
+bool ResumeGenerator(JSContext* cx, Handle<AbstractGeneratorObject*> genObj,
+                     HandleValue value, GeneratorResumeKind kind,
+                     MutableHandleValue result);
 
 /**
  * Return the generator object associated with the given frame. The frame must

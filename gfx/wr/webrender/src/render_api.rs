@@ -1083,6 +1083,14 @@ pub enum ApiMsg {
     AddDocument(DocumentId, DeviceIntSize, RenderBackendId),
     /// A message targeted at a particular document.
     UpdateDocuments(Vec<Box<TransactionMsg>>),
+    /// Releases inactive render targets and, optionally, transient upload
+    /// buffers without clearing persistent caches.
+    TrimTransientResources {
+        /// Window whose transient resources should be released.
+        backend_id: RenderBackendId,
+        /// Also release transient renderer upload buffers.
+        trim_upload_buffers: bool,
+    },
     /// Flush from the caches anything that isn't necessary, to free some memory.
     MemoryPressure,
     /// Collects a memory report.
@@ -1105,6 +1113,7 @@ impl fmt::Debug for ApiMsg {
             ApiMsg::UnregisterWindow(..) => "ApiMsg::UnregisterWindow",
             ApiMsg::AddDocument(..) => "ApiMsg::AddDocument",
             ApiMsg::UpdateDocuments(..) => "ApiMsg::UpdateDocuments",
+            ApiMsg::TrimTransientResources { .. } => "ApiMsg::TrimTransientResources",
             ApiMsg::MemoryPressure => "ApiMsg::MemoryPressure",
             ApiMsg::ReportMemory(..) => "ApiMsg::ReportMemory",
             ApiMsg::DebugCommand(..) => "ApiMsg::DebugCommand",
@@ -1383,11 +1392,18 @@ impl RenderApi {
 
     /// Drain barrier for shutdown.
     ///
-    /// Synchronously round-trips a flush through the scene builder so that
-    /// every transaction submitted before this call has been built and its
-    /// result delivered to the render backend (and from there, written to
-    /// `result_tx`). After this returns it is safe for the caller to drop
-    /// the `Renderer` (and its `result_rx`).
+    /// Synchronously round-trips a stop request along the slowest path a
+    /// transaction can take -- low-priority scene builder, then scene builder,
+    /// then out on the api channel to the render backend -- so that by the time
+    /// the backend acks it, everything submitted before this call has been
+    /// processed and written to `result_tx`, and the window has been marked
+    /// stopped so nothing further will be. After this returns it is safe for the
+    /// caller to drop the `Renderer` (and its `result_rx`).
+    ///
+    /// Taking the slow path is what makes this a barrier: a request sent on the
+    /// low-priority channel cannot overtake work queued earlier on either scene
+    /// channel, and the ack cannot overtake api-channel messages queued earlier,
+    /// because the backend answers it in FIFO order with those.
     ///
     /// The window stays registered. The render backend thread keeps
     /// running so `RunOnRenderThread` (which delivers events via
@@ -1396,7 +1412,7 @@ impl RenderApi {
     pub fn stop_render_backend(&self) {
         let (tx, rx) = single_msg_channel();
         if self.low_priority_scene_sender
-            .send(SceneBuilderRequest::Flush(tx))
+            .send(SceneBuilderRequest::StopWindow(self.backend_id, tx))
             .is_ok()
         {
             let _ = rx.recv();

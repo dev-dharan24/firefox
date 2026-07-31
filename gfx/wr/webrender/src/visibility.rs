@@ -4,7 +4,29 @@
 
 //! # Visibility pass
 //!
-//! TODO: document what this pass does!
+//! The first of the two frame building traversals of the picture tree, the
+//! second being the [prepare pass](crate::prepare). It is driven by
+//! `FrameBuilder::build_layer_screen_rects_and_cull_layers`, which calls
+//! [`update_prim_visibility`] once per snapshot picture and once per tile cache
+//! slice. From there the pass walks down the picture tree, pushing and popping
+//! off-screen surfaces as it goes.
+//!
+//! For each primitive instance it visits, the pass works out whether the
+//! primitive is drawn this frame and under which clips, and records the answer
+//! in a [`PrimitiveDrawHeader`], pushed into `scratch.primitive.frame.draws`
+//! as each drawn primitive is found.
+//! Later passes read those headers instead of re-deriving the information.
+//! In addition to visibility calculation, this pass performs snapping and
+//! builds clip chain instances.
+//!
+//! ## Surface bookkeeping
+//!
+//! Alongside the per-primitive state, the traversal accumulates the exact
+//! (clipped) local rect of each off-screen surface from the coverage rects of
+//! the primitives drawn into it, and propagates culling rects from parent to
+//! child surfaces. The prepare pass sizes the surfaces' render tasks from those
+//! accumulated rects, so they must be complete before it runs, which is the
+//! main reason visibility is a separate pass.
 //!
 
 use api::DebugFlags;
@@ -12,7 +34,7 @@ use api::units::*;
 use std::usize;
 use crate::clip::ClipStore;
 use crate::composite::CompositeState;
-use crate::profiler::TransactionProfile;
+use crate::profiler::{self, TransactionProfile};
 use crate::renderer::GpuBufferBuilder;
 use crate::spatial_tree::{SpatialTree, SpatialNodeIndex};
 use crate::clip::{ClipChainInstance, ClipTree, ClipNodeId};
@@ -97,7 +119,9 @@ bitflags! {
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "capture", derive(Serialize))]
 pub enum DrawState {
-    /// Uninitialized - this should never be encountered after prim reset
+    /// No state resolved yet. Only observable between a header being created
+    /// and the visibility pass deciding the primitive's fate; a draw that
+    /// reaches prepare or batching in this state is a bug.
     Unset,
     /// Culled for being off-screen, or not possible to render (e.g. missing image resource)
     Culled,
@@ -142,17 +166,23 @@ impl KindScratchHandle {
     }
 }
 
+/// Index of a draw in the per-frame `scratch.frame.draws` storage.
+///
+/// Distinct from `PrimitiveInstanceIndex`, which identifies the scene-relative
+/// primitive instance a draw was produced from. Draws are pushed as the
+/// visibility pass finds them, so the two are unrelated numbers; cross between
+/// them with `PrimitiveFrameScratch::draw_index_for_instance` (instance to draw,
+/// fallible) or `PrimitiveDrawHeader::prim_instance_index` (draw to instance).
+pub type PrimitiveDrawIndex = storage::Index<PrimitiveDrawHeader>;
+
 /// Information stored for a visible primitive about the visible
 /// rect and associated clip information.
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "capture", derive(Serialize))]
 pub struct PrimitiveDrawHeader {
-    /// Back-reference to the prim instance this draw belongs to.
-    /// Currently redundant with the identity-indexed lookup from
-    /// `scratch.frame.draws[PrimitiveInstanceIndex.0]`, but reserved
-    /// for a follow-up that switches the storage to push-per-draw —
-    /// readers iterating draws directly will need this to reach the
-    /// instance.
+    /// Back-reference to the prim instance this draw belongs to. This is the
+    /// only way to get from a draw to its instance: consumers reached via the
+    /// command stream hold a `PrimitiveDrawIndex`, which is unrelated to it.
     pub prim_instance_index: PrimitiveInstanceIndex,
 
     /// The clip chain instance that was built for this primitive.
@@ -190,8 +220,8 @@ pub struct PrimitiveDrawHeader {
 }
 
 impl PrimitiveDrawHeader {
-    /// Allocate a fresh draw header. `snapped_local_rect` is left at zero
-    /// here; the per-frame snap pass overwrites it before any consumer runs.
+    /// A blank draw header, for the visibility pass to fill in and push once it
+    /// knows the primitive is drawn.
     pub fn new() -> Self {
         PrimitiveDrawHeader {
             prim_instance_index: PrimitiveInstanceIndex::INVALID,
@@ -204,7 +234,11 @@ impl PrimitiveDrawHeader {
         }
     }
 
-    pub fn reset(&mut self) {
+    /// Mark a pushed draw as not drawn after all, for the cases prepare only
+    /// discovers late. Clears the fields prepare may already have filled in as
+    /// well as the state, so that nothing stale is left reachable through the
+    /// header.
+    pub fn mark_culled(&mut self) {
         self.state = DrawState::Culled;
         self.clip_task_index = ClipTaskIndex::INVALID;
         self.kind_scratch = KindScratchHandle::None;
@@ -298,30 +332,20 @@ pub fn update_prim_visibility(
     let mut clip_snapper = snapper.clone();
 
     for cluster in &pic.prim_list.clusters {
-        profile_scope!("cluster");
+        tracy_rs::profile_scope!("cluster");
 
-        // Each prim instance must have reset called each frame, to clear
-        // indices into various scratch buffers. If this doesn't occur,
-        // the primitive may incorrectly be considered visible, which can
-        // cause unexpected conditions to occur later during the frame.
-        // Primitive instances are normally reset in the main loop below,
-        // but we must also reset them in the rare case that the cluster
-        // visibility has changed (due to an invalid transform and/or
-        // backface visibility changing for this cluster).
-        // TODO(gw): This is difficult to test for in CI - as a follow up,
-        //           we should add a debug flag that validates the prim
-        //           instance is always reset every frame to catch similar
-        //           issues in future.
-        for idx in cluster.prim_range() {
-            frame_state.scratch.primitive.frame.draws[idx].reset();
-            frame_state.scratch.primitive.frame.draws[idx].prim_instance_index =
-                PrimitiveInstanceIndex(idx as u32);
-        }
+        // No per-frame reset is needed: a draw exists only if it was pushed
+        // this frame, so stale state from a previous frame cannot be observed.
 
         // Get the cluster and see if is visible
         if !cluster.flags.contains(ClusterFlags::IS_VISIBLE) {
             continue;
         }
+
+        frame_state.profile.add(
+            profiler::VISIBILITY_VISITED_PRIMS,
+            cluster.prim_range().len(),
+        );
 
         map_local_to_picture.set_target_spatial_node(
             cluster.spatial_node_index,
@@ -350,8 +374,12 @@ pub fn update_prim_visibility(
             let policy = prim_instance.snap_policy(snaps, frame_state.data_stores);
             let snapped_local_rect =
                 snapper.snap_rect_rounded(&prim_instance.unsnapped_prim_rect, policy.rect);
-            frame_state.scratch.primitive.frame.draws[prim_instance_index].snapped_local_rect =
-                snapped_local_rect;
+
+            // The draw header is accumulated here and pushed only once the
+            // primitive is known to be drawn, so culled primitives cost nothing.
+            let mut draw = PrimitiveDrawHeader::new();
+            draw.prim_instance_index = PrimitiveInstanceIndex(prim_instance_index as u32);
+            draw.snapped_local_rect = snapped_local_rect;
 
             // Picture / tile-cache leaves carry `max_rect` (snapping it would
             // overflow the snap transform); pass those through. Otherwise the
@@ -408,7 +436,8 @@ pub fn update_prim_visibility(
 
                 if is_passthrough {
                     // Pass through pictures are always considered visible in all dirty tiles.
-                    frame_state.scratch.primitive.frame.draws[prim_instance_index].state = DrawState::PassThrough;
+                    draw.state = DrawState::PassThrough;
+                    frame_state.scratch.primitive.frame.push_draw(draw);
 
                     continue;
                 } else {
@@ -420,7 +449,7 @@ pub fn update_prim_visibility(
 
             let local_coverage_rect = frame_state.data_stores.get_local_prim_coverage_rect(
                 prim_instance,
-                frame_state.scratch.primitive.frame.draws[prim_instance_index].snapped_local_rect,
+                draw.snapped_local_rect,
                 &store.pictures,
                 frame_state.surfaces,
             );
@@ -452,12 +481,19 @@ pub fn update_prim_visibility(
                     true,
                 );
 
-            frame_state.scratch.primitive.frame.draws[prim_instance_index].clip_chain = match clip_chain {
+            let clip_chain = match clip_chain {
                 Some(clip_chain) => clip_chain,
                 None => {
                     continue;
                 }
             };
+            draw.clip_chain = clip_chain;
+
+            // Everything below needs a draw index (the tile-cache dependency
+            // update records one on any compositor surface it promotes), so the
+            // draw is pushed here. A primitive that `update_prim_dependencies`
+            // then culls keeps its draw, and prepare skips it on `DrawState`.
+            let draw_index = frame_state.scratch.primitive.frame.push_draw(draw);
 
             let is_mix_blend_picture = |prim_instance: &PrimitiveInstance| {
                 if let PrimitiveKind::Picture { pic_index, .. } = prim_instance.kind {
@@ -473,25 +509,24 @@ pub fn update_prim_visibility(
             };
 
             if is_root_tile_cache && is_mix_blend_picture(prim_instance) {
-                let prim_clip_chain = &frame_state.scratch.primitive.frame.draws[prim_instance_index].clip_chain;
                 if let Some(tile_cache) = tile_cache {
-                    tile_cache.mix_blend_pic_rects.push(prim_clip_chain.pic_coverage_rect);
+                    tile_cache.mix_blend_pic_rects.push(clip_chain.pic_coverage_rect);
                 }
             }
 
             {
                 let prim_surface_index = frame_state.surface_stack.last().unwrap().1;
-                let prim_clip_chain = &frame_state.scratch.primitive.frame.draws[prim_instance_index].clip_chain;
 
                 // Accumulate the exact (clipped) local rect into the parent surface.
                 let surface = &mut frame_state.surfaces[prim_surface_index.0];
-                surface.clipped_local_rect = surface.clipped_local_rect.union(&prim_clip_chain.pic_coverage_rect);
+                surface.clipped_local_rect =
+                    surface.clipped_local_rect.union(&clip_chain.pic_coverage_rect);
             }
 
             let new_state = match tile_cache {
                 Some(tile_cache) => {
                     tile_cache.update_prim_dependencies(
-                        PrimitiveInstanceIndex(prim_instance_index as u32),
+                        draw_index,
                         prim_instance,
                         cluster.spatial_node_index,
                         // It's OK to pass the local_coverage_rect here as it's only
@@ -519,7 +554,7 @@ pub fn update_prim_visibility(
                     }
                 }
             };
-            frame_state.scratch.primitive.frame.draws[prim_instance_index].state = new_state;
+            frame_state.scratch.primitive.frame.draw_mut(draw_index).state = new_state;
         }
     }
 

@@ -1207,6 +1207,10 @@ class WidgetQueryContentEvent final : public WidgetGUIEvent {
     // composition if there is, otherwise, the start of the first selection
     // range.
     bool mRelativeToInsertionPoint = false;
+    // If true, this is requesting the char rect at offset 0 for fallback
+    // purposes. In this case, we don't fire characterboundsupdate if the
+    // editor is an EditContext.
+    bool mIsFirstCharFallbackRect = false;
 
     Input() = default;
 

@@ -21,8 +21,8 @@
  */
 
 /**
- * pdfjsVersion = 6.2.80
- * pdfjsBuild = 2ea8820d9
+ * pdfjsVersion = 6.2.112
+ * pdfjsBuild = 61acf9317
  */
 
 ;// ./src/shared/util.js
@@ -957,7 +957,25 @@ class XfaText {
 ;// ./src/display/xfa_layer.js
 
 
+
+const disallowedRichTextStyleRegExp = /url\(|image-set\(/i;
+const disallowedEventHandlerAttrRegExp = /^on/i;
 class XfaLayer {
+  static get _allowedHtmlElements() {
+    return shadow(this, "_allowedHtmlElements", new Set(["a", "b", "br", "button", "div", "i", "img", "input", "label", "li", "ol", "option", "p", "select", "span", "sub", "sup", "textarea", "ul"]));
+  }
+  static get _allowedSvgElements() {
+    return shadow(this, "_allowedSvgElements", new Set(["ellipse", "line", "path", "rect", "svg"]));
+  }
+  static get _allowedRichTextElements() {
+    return shadow(this, "_allowedRichTextElements", new Set(["a", "b", "br", "div", "i", "li", "ol", "p", "span", "sub", "sup", "ul"]));
+  }
+  static get _allowedRichTextAttributes() {
+    return shadow(this, "_allowedRichTextAttributes", new Set(["class", "dir", "style"]));
+  }
+  static get _allowedRichTextStyles() {
+    return shadow(this, "_allowedRichTextStyles", new Set(["color", "font", "fontFamily", "fontSize", "fontStretch", "fontStyle", "fontWeight", "kerningMode", "letterSpacing", "lineHeight", "margin", "marginBottom", "marginLeft", "marginRight", "marginTop", "orphans", "paddingLeft", "paddingRight", "breakAfter", "breakBefore", "breakInside", "tabInterval", "tabStop", "textAlign", "textDecoration", "textIndent", "transform", "verticalAlign", "widows"]));
+  }
   static setupStorage(html, id, element, storage, intent) {
     const storedData = storage.getValue(id, {
       value: null
@@ -1044,6 +1062,12 @@ class XfaLayer {
       if (value === null || value === undefined) {
         continue;
       }
+      if (disallowedEventHandlerAttrRegExp.test(key)) {
+        continue;
+      }
+      if (intent === "richText" && !this._allowedRichTextAttributes.has(key)) {
+        continue;
+      }
       switch (key) {
         case "class":
           if (value.length) {
@@ -1056,7 +1080,16 @@ class XfaLayer {
           html.setAttribute("data-element-id", value);
           break;
         case "style":
-          Object.assign(html.style, value);
+          if (intent === "richText") {
+            const allowedStyles = this._allowedRichTextStyles;
+            for (const [styleName, styleValue] of Object.entries(value)) {
+              if (allowedStyles.has(styleName) && !disallowedRichTextStyleRegExp.test(styleValue)) {
+                html.style[styleName] = styleValue;
+              }
+            }
+          } else {
+            Object.assign(html.style, value);
+          }
           break;
         case "textContent":
           html.textContent = value;
@@ -1068,18 +1101,27 @@ class XfaLayer {
       }
     }
     if (isHTMLAnchorElement) {
-      linkService.addLinkAttributes(html, attributes.href, attributes.newWindow);
+      linkService?.addLinkAttributes(html, attributes.href, attributes.newWindow);
     }
     if (storage && attributes.dataId) {
       this.setupStorage(html, attributes.dataId, element, storage);
     }
+  }
+  static #createElement(name, xmlns, intent) {
+    if (intent === "richText") {
+      return !xmlns && this._allowedRichTextElements.has(name) ? document.createElement(name) : null;
+    }
+    if (xmlns) {
+      return xmlns === SVG_NS && this._allowedSvgElements.has(name) ? document.createElementNS(SVG_NS, name) : null;
+    }
+    return this._allowedHtmlElements.has(name) ? document.createElement(name) : null;
   }
   static render(parameters) {
     const storage = parameters.annotationStorage;
     const linkService = parameters.linkService;
     const root = parameters.xfaHtml;
     const intent = parameters.intent || "display";
-    const rootHtml = document.createElement(root.name);
+    const rootHtml = this.#createElement(root.name, root.attributes?.xmlns, intent) ?? document.createElement("div");
     if (root.attributes) {
       this.setAttributes({
         html: rootHtml,
@@ -1131,7 +1173,10 @@ class XfaLayer {
         html.append(node);
         continue;
       }
-      const childHtml = child?.attributes?.xmlns ? document.createElementNS(child.attributes.xmlns, name) : document.createElement(name);
+      const childHtml = this.#createElement(name, child.attributes?.xmlns, intent);
+      if (!childHtml) {
+        continue;
+      }
       html.append(childHtml);
       if (child.attributes) {
         this.setAttributes({
@@ -2004,7 +2049,7 @@ class FloatingToolbar {
 }
 
 ;// ./src/shared/internal_evt.js
-const INTERNAL_EVT = "0d288276-083d-4230-bddf-4113e91c0fb0";
+const INTERNAL_EVT = "d8d6a7ab-aa83-4502-b985-04847eff1b66";
 const internalOpt = Object.freeze({
   internal: INTERNAL_EVT
 });
@@ -5825,16 +5870,7 @@ class AnnotationEditor {
     const [tx, ty] = this.getInitialTranslation();
     this.translate(tx, ty);
     bindEvents(this, div, ["keydown", "pointerdown", "dblclick"]);
-    if (this.isResizable && this._uiManager._supportsPinchToZoom) {
-      this.#touchManager ||= new TouchManager({
-        container: div,
-        isPinchingDisabled: () => !this.isSelected,
-        onPinchStart: this.#touchPinchStartCallback.bind(this),
-        onPinching: this.#touchPinchCallback.bind(this),
-        onPinchEnd: this.#touchPinchEndCallback.bind(this),
-        signal: this._uiManager._signal
-      });
-    }
+    this.#addTouchManager();
     this.addStandaloneCommentButton();
     this._uiManager._editorUndoBar?.hide();
     return div;
@@ -6138,8 +6174,22 @@ class AnnotationEditor {
       signal
     });
   }
+  #addTouchManager() {
+    if (this.#touchManager || !this.div || !this.isResizable || !this._uiManager._supportsPinchToZoom) {
+      return;
+    }
+    this.#touchManager = new TouchManager({
+      container: this.div,
+      isPinchingDisabled: () => !this.isSelected,
+      onPinchStart: this.#touchPinchStartCallback.bind(this),
+      onPinching: this.#touchPinchCallback.bind(this),
+      onPinchEnd: this.#touchPinchEndCallback.bind(this),
+      signal: this._uiManager._signal
+    });
+  }
   rebuild() {
     this.#addFocusListeners();
+    this.#addTouchManager();
   }
   rotate(_angle) {}
   resize() {}
@@ -14221,7 +14271,7 @@ function getDocument(src = {}) {
   }
   const docParams = {
     docId,
-    apiVersion: "6.2.80",
+    apiVersion: "6.2.112",
     data,
     password,
     disableAutoFetch,
@@ -15882,8 +15932,8 @@ class InternalRenderTask {
     }
   }
 }
-const version = "6.2.80";
-const build = "2ea8820d9";
+const version = "6.2.112";
+const build = "61acf9317";
 
 ;// ./src/display/editor/color_picker.js
 
@@ -16932,31 +16982,29 @@ class AnnotationElement {
   _getElementsByName(name, skipId = null) {
     const fields = [];
     if (this._fieldObjects) {
-      const fieldObj = this._fieldObjects[name];
-      if (fieldObj) {
-        for (const {
-          page,
-          id,
-          exportValues
-        } of fieldObj) {
-          if (page === -1) {
-            continue;
-          }
-          if (id === skipId) {
-            continue;
-          }
-          const exportValue = typeof exportValues === "string" ? exportValues : null;
-          const domElement = document.querySelector(`[data-element-id="${id}"]`);
-          if (domElement && !GetElementsByNameSet.has(domElement)) {
-            warn(`_getElementsByName - element not allowed: ${id}`);
-            continue;
-          }
-          fields.push({
-            id,
-            exportValue,
-            domElement
-          });
+      const fieldObj = this._fieldObjects[name] || [];
+      for (const {
+        page,
+        id,
+        exportValues
+      } of fieldObj) {
+        if (page === -1) {
+          continue;
         }
+        if (id === skipId) {
+          continue;
+        }
+        const exportValue = typeof exportValues === "string" ? exportValues : null;
+        const domElement = document.querySelector(`[data-element-id="${id}"]`);
+        if (domElement && !GetElementsByNameSet.has(domElement)) {
+          warn(`_getElementsByName - element not allowed: ${id}`);
+          continue;
+        }
+        fields.push({
+          id,
+          exportValue,
+          domElement
+        });
       }
       return fields;
     }
@@ -26864,9 +26912,8 @@ globalThis.pdfjsLib = {
   updateUrlHash: updateUrlHash,
   Util: Util,
   VerbosityLevel: VerbosityLevel,
-  version: (/* inlined export .version */"6.2.80"),
+  version: version,
   XfaLayer: XfaLayer
 };
 
-const __webpack_exports__version = (/* inlined export .version */"6.2.80");
-export { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType, AnnotationEditorType, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode, AnnotationType, CSSConstants, ColorPicker, DOMSVGFactory, DrawLayer, FeatureTest, GlobalWorkerOptions, ImageKind, InvalidPDFException, MathClamp, OPS, OutputScale, PDFDataRangeTransport, PDFDateString, PDFWorker, PasswordException, PasswordResponses, PermissionFlag, PixelsPerInch, RenderingCancelledException, ResponseException, SignatureExtractor, SupportedImageMimeTypes, TextLayer, TextLayerImages, TouchManager, Util, VerbosityLevel, XfaLayer, applyOpacity, build, createValidAbsoluteUrl, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, isDataScheme, isPdfFile, isValidExplicitDest, makeArr, makeMap, makeObj, makeSet, noContextMenu, normalizeUnicode, renderRichText, setLayerDimensions, shadow, stopEvent, updateUrlHash, __webpack_exports__version as version };
+export { AbortException, AnnotationEditorLayer, AnnotationEditorParamsType, AnnotationEditorType, AnnotationEditorUIManager, AnnotationLayer, AnnotationMode, AnnotationType, CSSConstants, ColorPicker, DOMSVGFactory, DrawLayer, FeatureTest, GlobalWorkerOptions, ImageKind, InvalidPDFException, MathClamp, OPS, OutputScale, PDFDataRangeTransport, PDFDateString, PDFWorker, PasswordException, PasswordResponses, PermissionFlag, PixelsPerInch, RenderingCancelledException, ResponseException, SignatureExtractor, SupportedImageMimeTypes, TextLayer, TextLayerImages, TouchManager, Util, VerbosityLevel, XfaLayer, applyOpacity, build, createValidAbsoluteUrl, fetchData, findContrastColor, getDocument, getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, getRGBA, getUuid, isDataScheme, isPdfFile, isValidExplicitDest, makeArr, makeMap, makeObj, makeSet, noContextMenu, normalizeUnicode, renderRichText, setLayerDimensions, shadow, stopEvent, updateUrlHash, version };

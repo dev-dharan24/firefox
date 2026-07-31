@@ -521,6 +521,7 @@ add_task(async function test_tracker_count_hidden_when_pref_disabled() {
 
 add_task(async function test_no_first_visit_class_on_return_visit() {
   await PlacesUtils.history.clear();
+  Services.prefs.setBoolPref("browser.urlbar.trackerCountShown", true);
 
   // Add a visit to the tracking host from more than 20 seconds ago so that
   // #markFirstVisit treats this as a return visit.
@@ -536,21 +537,69 @@ add_task(async function test_no_first_visit_class_on_return_visit() {
     waitForLoad: true,
   });
 
-  await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
-    // See trackingAPI.js - this postMessage causes it to inject an iframe with
-    // one of the blocked tracking hosts:
-    content.postMessage("cryptomining", "*");
-  });
+  try {
+    await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+      // See trackingAPI.js - this postMessage causes it to inject an iframe with
+      // one of the blocked tracking hosts:
+      content.postMessage("cryptomining", "*");
+    });
 
-  await waitForTrustIconClass(
-    "has-blocked-trackers",
-    "Waiting for has-blocked-trackers class"
-  );
+    await waitForTrustIconClass(
+      "has-blocked-trackers",
+      "Waiting for has-blocked-trackers class"
+    );
 
-  Assert.ok(
-    !trustIconContainer().classList.contains("first-visit"),
-    "first-visit class is not present on a return visit"
-  );
-
-  await BrowserTestUtils.removeTab(tab);
+    Assert.ok(
+      !trustIconContainer().classList.contains("first-visit"),
+      "first-visit class is not present on a return visit"
+    );
+  } finally {
+    Services.prefs.clearUserPref("browser.urlbar.trackerCountShown");
+    await BrowserTestUtils.removeTab(tab);
+  }
 });
+
+add_task(
+  async function test_first_visit_class_on_return_visit_when_tracker_count_never_shown() {
+    Services.prefs.clearUserPref("browser.urlbar.trackerCountShown");
+    await PlacesUtils.history.clear();
+
+    // Add a visit older than 20 seconds so #markFirstVisit would treat this as a
+    // return visit based on history alone.
+    await PlacesTestUtils.addVisits({
+      // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+      uri: "http://tracking.example.org/",
+      visitDate: new Date(Date.now() - 60 * 1000),
+    });
+
+    Assert.ok(
+      !UrlbarPrefs.get("trackerCountShown"),
+      "trackerCountShown pref starts as false"
+    );
+
+    const tab = await BrowserTestUtils.openNewForegroundTab({
+      gBrowser,
+      opening: TRACKING_PAGE,
+      waitForLoad: true,
+    });
+
+    try {
+      await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+        content.postMessage("cryptomining", "*");
+      });
+
+      await waitForTrustIconClass(
+        "has-blocked-trackers",
+        "Waiting for has-blocked-trackers class"
+      );
+
+      Assert.ok(
+        trustIconContainer().classList.contains("first-visit"),
+        "first-visit class is present on a return visit when the tracker count has never been shown"
+      );
+    } finally {
+      Services.prefs.clearUserPref("browser.urlbar.trackerCountShown");
+      await BrowserTestUtils.removeTab(tab);
+    }
+  }
+);

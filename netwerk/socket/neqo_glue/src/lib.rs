@@ -10,6 +10,7 @@ use std::{
     borrow::Cow,
     cell::RefCell,
     cmp::min,
+    collections::HashMap,
     ffi::c_void,
     io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -38,9 +39,9 @@ use neqo_http3::{
     Http3ClientEvent, Http3Parameters, Http3State, Priority, WebTransportEvent,
 };
 use neqo_transport::{
-    stream_id::StreamType, CongestionControl, Connection, ConnectionParameters,
-    Error as TransportError, HyStartCssBaseline, Output, OutputBatch, RandomConnectionIdGenerator,
-    SlowStart, StreamId, Version,
+    stream_id::StreamType, streams::SendGroupId, CongestionControl, Connection,
+    ConnectionParameters, Error as TransportError, HyStartCssBaseline, Output, OutputBatch,
+    RandomConnectionIdGenerator, SlowStart, StreamId, Version,
 };
 use nserror::{
     nsresult, NS_BASE_STREAM_WOULD_BLOCK, NS_ERROR_CONNECTION_REFUSED,
@@ -138,6 +139,9 @@ pub struct NeqoHttp3Conn {
     datagram_segments_sent: LocalCustomDistribution<'static>,
     datagram_segments_received: LocalCustomDistribution<'static>,
     would_block_counter: WouldBlockCounter,
+    /// Maps the child-minted WebTransport send-group id (assigned synchronously in the
+    /// content process) to the neqo-minted [`SendGroupId`].
+    webtransport_send_groups: HashMap<u64, SendGroupId>,
 }
 
 impl Drop for NeqoHttp3Conn {
@@ -609,6 +613,7 @@ impl NeqoHttp3Conn {
                 .start_buffer(),
             buffered_outbound_datagram: None,
             would_block_counter: WouldBlockCounter::new(),
+            webtransport_send_groups: HashMap::new(),
         }));
         unsafe { RefPtr::from_raw(conn).ok_or(NS_ERROR_NOT_CONNECTED) }
     }
@@ -785,7 +790,7 @@ impl NeqoHttp3Conn {
         let cwnd_that_grew = stats.cc.cwnd.filter(|&c| c > MAX_INITIAL_CWND);
         let growth_label = match (
             cwnd_that_grew,
-            stats.cc.slow_start_exit.as_ref().map(|s| s.exit_cwnd),
+            stats.cc.slow_start_exit.as_ref().map(|e| e.exit_cwnd),
         ) {
             (Some(_), Some(exit_cwnd)) if exit_cwnd < MAX_INITIAL_CWND => {
                 "no_growth_then_exit_then_growth"
@@ -2601,7 +2606,7 @@ pub extern "C" fn neqo_http3conn_webtransport_close_session(
         message_tmp,
         Instant::now(),
     ) {
-        Ok(()) => NS_OK,
+        Ok(_) => NS_OK,
         Err(_) => NS_ERROR_INVALID_ARG,
     }
 }
@@ -2622,7 +2627,7 @@ pub extern "C" fn neqo_http3conn_connect_udp_close_session(
         message_tmp,
         Instant::now(),
     ) {
-        Ok(()) => NS_OK,
+        Ok(_) => NS_OK,
         Err(_) => NS_ERROR_INVALID_ARG,
     }
 }
@@ -2653,17 +2658,25 @@ pub extern "C" fn neqo_http3conn_webtransport_send_datagram(
     session_id: u64,
     data: &mut ThinVec<u8>,
     tracking_id: u64,
+    send_group_id: u64,
+    send_order: i64,
 ) -> nsresult {
     let id = if tracking_id == 0 {
         None
     } else {
         Some(tracking_id)
     };
-    match conn
-        .conn
-        .webtransport_send_datagram(StreamId::from(session_id), data, id, Instant::now())
-    {
-        Ok(()) => NS_OK,
+    // The local neqo2 vendor doesn't yet support per-datagram send group/order
+    // prioritization; accept the params from the C++ side but don't forward
+    // them until neqo grows the corresponding API.
+    let _ = (send_group_id, send_order);
+    match conn.conn.webtransport_send_datagram(
+        StreamId::from(session_id),
+        data,
+        id,
+        Instant::now(),
+    ) {
+        Ok(_) => NS_OK,
         Err(Http3Error::Transport(TransportError::TooMuchData)) => NS_ERROR_NOT_AVAILABLE,
         Err(_) => NS_ERROR_UNEXPECTED,
     }
@@ -2674,17 +2687,25 @@ pub extern "C" fn neqo_http3conn_connect_udp_send_datagram(
     session_id: u64,
     data: &mut ThinVec<u8>,
     tracking_id: u64,
+    send_group_id: u64,
+    send_order: i64,
 ) -> nsresult {
     let id = if tracking_id == 0 {
         None
     } else {
         Some(tracking_id)
     };
-    match conn
-        .conn
-        .connect_udp_send_datagram(StreamId::from(session_id), data, id, Instant::now())
-    {
-        Ok(()) => NS_OK,
+    // The local neqo2 vendor doesn't yet support per-datagram send group/order
+    // prioritization; accept the params from the C++ side but don't forward
+    // them until neqo grows the corresponding API.
+    let _ = (send_group_id, send_order);
+    match conn.conn.connect_udp_send_datagram(
+        StreamId::from(session_id),
+        data,
+        id,
+        Instant::now(),
+    ) {
+        Ok(_) => NS_OK,
         Err(Http3Error::Transport(TransportError::TooMuchData)) => NS_ERROR_NOT_AVAILABLE,
         Err(_) => NS_ERROR_UNEXPECTED,
     }
@@ -2718,6 +2739,84 @@ pub unsafe extern "C" fn neqo_http3conn_webtransport_set_sendorder(
         .webtransport_set_sendorder(StreamId::from(stream_id), sendorder.as_ref().copied())
     {
         Ok(()) => NS_OK,
+        Err(_) => NS_ERROR_UNEXPECTED,
+    }
+}
+
+/// # Safety
+///
+/// Use of raw (i.e. unsafe) pointers as arguments.
+#[no_mangle]
+pub unsafe extern "C" fn neqo_http3conn_webtransport_set_sendgroup(
+    conn: &mut NeqoHttp3Conn,
+    stream_id: u64,
+    sendgroup_id: u64,
+) -> nsresult {
+    // sendgroup_id 0 means "no group" (null sendGroup); clear the group assignment.
+    if sendgroup_id == 0 {
+        return match conn
+            .conn
+            .webtransport_clear_sendgroup(StreamId::from(stream_id))
+        {
+            Ok(()) => NS_OK,
+            Err(_) => NS_ERROR_UNEXPECTED,
+        };
+    }
+    let Some(&sg_id) = conn.webtransport_send_groups.get(&sendgroup_id) else {
+        return NS_ERROR_UNEXPECTED;
+    };
+    match conn
+        .conn
+        .webtransport_set_sendgroup(StreamId::from(stream_id), sg_id)
+    {
+        Ok(()) => NS_OK,
+        Err(_) => NS_ERROR_UNEXPECTED,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_register_send_group(
+    conn: &mut NeqoHttp3Conn,
+    session_id: u64,
+    group_id: u64,
+) -> nsresult {
+    // neqo allocates the send-group id; map the child's provisional id to it.
+    match conn
+        .conn
+        .webtransport_create_send_group(StreamId::from(session_id))
+    {
+        Ok(neqo_id) => {
+            conn.webtransport_send_groups.insert(group_id, neqo_id);
+            NS_OK
+        }
+        Err(_) => NS_ERROR_UNEXPECTED,
+    }
+}
+
+
+/// Get the negotiated protocol for a WebTransport session.
+#[no_mangle]
+pub extern "C" fn neqo_http3conn_webtransport_session_protocol(
+    conn: &mut NeqoHttp3Conn,
+    session_id: u64,
+    protocol: &mut nsACString,
+) -> nsresult {
+    match conn
+        .conn
+        .webtransport_session_protocol(StreamId::from(session_id))
+    {
+        Ok(Some(p)) => {
+            protocol.assign(&p);
+            NS_OK
+        }
+        Ok(None) => {
+            // SAFETY: shrinking the string to length 0 never exposes
+            // uninitialized memory.
+            unsafe {
+                protocol.set_length(0);
+            }
+            NS_OK
+        }
         Err(_) => NS_ERROR_UNEXPECTED,
     }
 }

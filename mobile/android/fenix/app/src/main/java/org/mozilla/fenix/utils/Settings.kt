@@ -280,6 +280,14 @@ class Settings(
         get() = FxNimbus.features.homescreen.value().sectionsEnabled[HomeScreenSection.COLLECTIONS] == true
 
     /**
+     * Whether the Collections UI should be hidden.
+     */
+    var hideCollectionsUi by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_hide_collections),
+        default = { FxNimbus.features.collectionsToTabGroupsMigration.value().hideCollectionsUi },
+    )
+
+    /**
      * Indicates whether or not the Firefox Japan Guide default site should be shown.
      */
     val showFirefoxJpGuideDefaultSite: Boolean
@@ -494,6 +502,11 @@ class Settings(
 
     var isUserRakutenAttributed by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_is_user_rakuten_attributed),
+        default = false,
+    )
+
+    var isUserSkyflagAttributed by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_is_user_skyflag_attributed),
         default = false,
     )
 
@@ -2271,11 +2284,19 @@ class Settings(
      *
      * @param hasUserBeenOnboarded Boolean to indicate whether the user has been onboarded.
      * @param featureEnabled Boolean to indicate whether the feature is enabled.
+     * @param forceOnboardingForBenchmark Boolean that opts a Baseline Profile generator back into
+     * onboarding. In benchmark builds onboarding is suppressed by default so generators don't spend
+     * emulator time dismissing it; ignored in every shipped build.
      */
     fun shouldShowOnboarding(
         hasUserBeenOnboarded: Boolean,
         featureEnabled: Boolean = onboardingFeatureEnabled,
+        forceOnboardingForBenchmark: Boolean = false,
     ): Boolean {
+        if (isBenchmarkBuild && !forceOnboardingForBenchmark) {
+            return false
+        }
+
         val shouldShowByDefaultConditions = featureEnabled && !hasUserBeenOnboarded
 
         val shouldShow = shouldShowByDefaultConditions || enablePersistentOnboarding
@@ -2768,6 +2789,16 @@ class Settings(
      */
     val isIPProtectionAvailable: Boolean
         get() = FxNimbus.features.ipProtection.value().enabled || isIPProtectionEnabled
+
+    /**
+     * Persists IPProtection locations state set through Secret Settings.
+     *
+     * `true` makes the IPProtection location UI elements interactable.
+     */
+    var isIPProtectionLocationsEnabled by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_enable_ip_protection_locations),
+        default = Config.channel.isDebug,
+    )
 
     /**
      * Tracks how many times the summarize menu item has been shown.

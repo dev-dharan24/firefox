@@ -7,7 +7,6 @@ const lazy = {};
 import {
   classMap,
   html,
-  ifDefined,
   when,
   nothing,
 } from "chrome://global/content/vendor/lit.all.mjs";
@@ -380,7 +379,6 @@ export class SidebarHistory extends SidebarPage {
   }
 
   #dateCardTemplate(l10nId, index, items, isDateSite = false) {
-    const tabIndex = index > 0 ? "-1" : undefined;
     return html` <moz-card
       type="accordion"
       class="date-card"
@@ -390,7 +388,7 @@ export class SidebarHistory extends SidebarPage {
         date: isDateSite ? items[0][1][0].time : items[0].time,
       })}
       @keydown=${this.keydownHandler}
-      tabindex=${ifDefined(tabIndex)}
+      @toggle=${this.#onCardToggle}
     >
       ${isDateSite
         ? items.map(([domain, visits], i) =>
@@ -413,7 +411,6 @@ export class SidebarHistory extends SidebarPage {
     isDateSite = false,
     isLastCard = false
   ) {
-    let tabIndex = index > 0 || isDateSite ? "-1" : undefined;
     return html` <moz-card
       class=${classMap({
         "last-card": isLastCard,
@@ -424,12 +421,16 @@ export class SidebarHistory extends SidebarPage {
       ?expanded=${!isDateSite}
       heading=${domain}
       @keydown=${this.keydownHandler}
-      tabindex=${ifDefined(tabIndex)}
+      @toggle=${this.#onCardToggle}
       data-l10n-id=${domain ? nothing : "sidebar-history-site-localhost"}
       data-l10n-attrs=${domain ? nothing : "heading"}
     >
       ${this.#tabListTemplate(this.getTabItems(items))}
     </moz-card>`;
+  }
+
+  #onCardToggle() {
+    this.dispatchEvent(new CustomEvent("folder-toggle"));
   }
 
   #emptyMessageTemplate() {
@@ -532,6 +533,7 @@ export class SidebarHistory extends SidebarPage {
   onSearchQuery(e) {
     this.controller.onSearchQuery(e);
     Glean.browserUiInteraction.sidebarHistory.search.add(1);
+    this.treeView.resetActiveNode();
   }
 
   getTabItems(items) {

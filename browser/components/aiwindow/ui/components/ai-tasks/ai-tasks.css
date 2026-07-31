@@ -51,12 +51,6 @@
   align-items: start;
   margin-bottom: var(--space-medium);
 
-  h2 {
-    font-size: var(--font-size-large);
-    margin-top: 0;
-    margin-bottom: var(--space-medium);
-  }
-
   p {
     margin-top: 0;
     margin-bottom: 0;
@@ -64,10 +58,16 @@
   }
 }
 
+.modal-title {
+  font-size: var(--font-size-large);
+  margin-top: 0;
+  margin-bottom: var(--space-medium);
+}
+
 .modal-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-medium);
+  gap: var(--space-large);
 }
 
 .dialog-actions {
@@ -85,10 +85,13 @@
   gap: var(--space-xxsmall);
 }
 
+moz-input-url::part(label),
+moz-textarea::part(label),
+moz-input-text::part(label),
 .form-label {
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-small);
+  color: var(--text-color-deemphasized);
 }
 
 .form-input {
@@ -174,7 +177,7 @@
 
 .page-input-row {
   display: flex;
-  align-items: center;
+  align-items: end;
   gap: var(--space-small);
 }
 
@@ -184,6 +187,7 @@
 
 .add-page-btn {
   flex-shrink: 0;
+  margin-bottom: var(--space-xsmall);
 }
 
 /* ===== Schedule Section ===== */

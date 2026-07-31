@@ -905,6 +905,11 @@ class MacroAssembler : public MacroAssemblerSpecific {
                                             Register dest,
                                             bool hasInlineICScript = false);
 
+  // Branch to |notEntryFrame| if the current frame is not the first frame of
+  // its activation.
+  inline void branchIfNotActivationEntryFrame(Register scratch,
+                                              Label* notEntryFrame);
+
   // Load the number of actual arguments from the frame's JitFrameLayout.
   inline void loadNumActualArgs(Register framePtr, Register dest);
 
@@ -1051,6 +1056,7 @@ class MacroAssembler : public MacroAssemblerSpecific {
   inline void andPtr(Register src, Register dest) PER_ARCH;
   inline void andPtr(Imm32 imm, Register dest) PER_ARCH;
   inline void andPtr(Imm32 imm, Register src, Register dest) PER_ARCH;
+  inline void andPtr(Imm32 imm, const Address& dest) PER_ARCH;
 
   inline void and64(Imm64 imm, Register64 dest) PER_ARCH;
   inline void or64(Imm64 imm, Register64 dest) PER_ARCH;
@@ -1266,6 +1272,19 @@ class MacroAssembler : public MacroAssemblerSpecific {
   void flexibleDivMod32(
       Register lhs, Register rhs, Register divOutput, Register remOutput,
       bool isUnsigned, const LiveRegisterSet& volatileLiveRegs) PER_SHARED_ARCH;
+
+  // Inline fast path for the JS remainder operator on doubles. If both
+  // operands are integer-valued and fit in a signed intptr_t, the remainder is
+  // computed with an integer division and stored in |output|. Otherwise this
+  // jumps to |fail| without touching |lhs|, |rhs| or |output|, and the caller
+  // is expected to fall back to js::NumberMod.
+  //
+  // |temp1| and |temp2| must be different registers and are both clobbered.
+  void modDoubleIntegerFastPath(FloatRegister lhs, FloatRegister rhs,
+                                FloatRegister output, Register temp1,
+                                Register temp2,
+                                const LiveRegisterSet& volatileLiveRegs,
+                                Label* fail);
 
   inline void divFloat32(FloatRegister src, FloatRegister dest) PER_SHARED_ARCH;
   inline void divDouble(FloatRegister src, FloatRegister dest) PER_SHARED_ARCH;
@@ -6210,9 +6229,15 @@ class MacroAssembler : public MacroAssemblerSpecific {
 
   // Align the stack pointer based on the number of arguments which are pushed
   // on the stack, such that the JitFrameLayout would be correctly aligned on
-  // the JitStackAlignment.
-  void alignJitStackBasedOnNArgs(Register nargs, bool countIncludesThis);
+  // the JitStackAlignment. |extraArgs| is the number of additional arguments,
+  // known at compile time, that are pushed on top of |nargs|.
+  void alignJitStackBasedOnNArgs(Register nargs, bool countIncludesThis,
+                                 uint32_t extraArgs = 0);
   void alignJitStackBasedOnNArgs(uint32_t argc, bool countIncludesThis);
+
+  // As above, but |numValues| is the total number of Values pushed above the
+  // JitFrameLayout.
+  void alignJitStackBasedOnNumValues(uint32_t numValues);
 
   inline void assertStackAlignment(uint32_t alignment, int32_t offset = 0);
 

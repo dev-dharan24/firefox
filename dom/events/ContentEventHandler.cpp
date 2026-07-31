@@ -349,6 +349,39 @@ Result<nsRange*, nsresult> ContentEventHandler::InitRootContent(
   // there are no ranges, we need to use ancestor limit instead.
   MOZ_ASSERT(aNormalSelection.Type() == SelectionType::eNormal);
 
+  EditContext* editContext = mDocument->GetActiveEditContext();
+
+  auto getRangeInRootElement = [&]() MOZ_NEVER_INLINE_DEBUG -> nsRange* {
+    nsFrameSelection* const fs = aNormalSelection.GetFrameSelection();
+    if (NS_WARN_IF(!fs)) {
+      return nullptr;
+    }
+    for (const uint32_t i : IntegerRange(aNormalSelection.RangeCount())) {
+      nsRange* const range = aNormalSelection.GetRangeAt(i);
+      MOZ_ASSERT(range);
+      if (fs->RangeInLimiters(*range)) {
+        return range;
+      }
+      // For EditContext, it's acceptable to have the selection outside the
+      // host element.
+      if (!editContext) {
+        NS_WARNING(fmt::format("{} (index: {}) is not in the limiters {}",
+                               RefPtr{range}, i, fs->LimitersRef())
+                       .c_str());
+      }
+    }
+    return nullptr;
+  };
+
+  // Always use the active EditContext if there is one, regardless of the
+  // selection.
+  if (editContext) {
+    MOZ_ASSERT(editContext->GetAssociatedElement(),
+               "Should always have an associated element if active.");
+    mRootElement = editContext->GetAssociatedElement();
+    return getRangeInRootElement();
+  }
+
   const auto SetRootElementWithNoRanges = [&]() -> Result<nsRange*, nsresult> {
     // If there is no selection range, we should compute the selection root
     // from ancestor limiter or root content of the document.
@@ -376,23 +409,7 @@ Result<nsRange*, nsresult> ContentEventHandler::InitRootContent(
 
   // See bug 2046677. The range may be outside the ancestor limiter if it was
   // removed from the DOM. Therefore, we should ignore "invalid" ranges.
-  nsRange* const rangeInRootElement = [&]() MOZ_NEVER_INLINE_DEBUG -> nsRange* {
-    nsFrameSelection* const fs = aNormalSelection.GetFrameSelection();
-    if (NS_WARN_IF(!fs)) {
-      return nullptr;
-    }
-    for (const uint32_t i : IntegerRange(aNormalSelection.RangeCount())) {
-      nsRange* const range = aNormalSelection.GetRangeAt(i);
-      MOZ_ASSERT(range);
-      if (fs->RangeInLimiters(*range)) {
-        return range;
-      }
-      NS_WARNING(fmt::format("{} (index: {}) is not in the limiters {}",
-                             RefPtr{range}, i, fs->LimitersRef())
-                     .c_str());
-    }
-    return nullptr;
-  }();
+  nsRange* const rangeInRootElement = getRangeInRootElement();
   if (!rangeInRootElement) {
     return SetRootElementWithNoRanges();
   }
@@ -2475,6 +2492,20 @@ nsresult ContentEventHandler::OnQueryTextRect(WidgetQueryContentEvent* aEvent) {
         end == editContext->SelectionMaxClamped()) {
       // Queried range is EditContext selection, so use selection bounds.
       aEvent->mReply->mRect = *selectionBounds;
+      MOZ_ASSERT(aEvent->Succeeded());
+      return NS_OK;
+    }
+    if (aEvent->mInput.mIsFirstCharFallbackRect) {
+      MOZ_ASSERT(start == 0 && end == 1);
+      // This is requesting the first character rectangle for fallback purposes.
+      // We don't want to fire a characterboundsupdate for this purpose, instead
+      // use the correct bound if it's available, otherwise use fallback bounds.
+      if (Maybe<LayoutDeviceIntRect> rect =
+              editContext->GetCharacterBound(start)) {
+        aEvent->mReply->mRect = *rect;
+      } else {
+        aEvent->mReply->mRect = editContext->FallbackBounds();
+      }
       MOZ_ASSERT(aEvent->Succeeded());
       return NS_OK;
     }

@@ -113,6 +113,7 @@
 #include "mozilla/Span.h"
 #include "mozilla/StaticAnalysisFunctions.h"
 #include "mozilla/StaticPrefs_browser.h"
+#include "mozilla/StaticPrefs_clipboard.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_network.h"
 #include "mozilla/dom/ReportDeliver.h"
@@ -9819,11 +9820,33 @@ nsresult nsContentUtils::IPCTransferableDataToTransferable(
   nsresult rv;
   const nsTArray<IPCTransferableDataItem>& items = aTransferableData.items();
   for (const auto& item : items) {
-    if (aFilterUnknownFlavors && !IPCTransferableDataItemHasKnownFlavor(item)) {
-      NS_WARNING(
-          "Ignoring unknown flavor in "
-          "nsContentUtils::IPCTransferableDataToTransferable");
-      continue;
+    if (aFilterUnknownFlavors) {
+      if (item.flavor().EqualsLiteral(kFilePromiseDirectoryMime)) {
+        NS_WARNING(
+            "Ignoring unknown flavor in "
+            "nsContentUtils::IPCTransferableDataToTransferable");
+        continue;
+      }
+
+      if ((item.flavor().EqualsLiteral(kFilePromiseMime) ||
+           item.flavor().EqualsLiteral(kFilePromiseURLMime) ||
+           item.flavor().EqualsLiteral(kFilePromiseDestFilename))
+#ifdef XP_WIN
+          && !StaticPrefs::clipboard_imageAsFile_enabled()
+#endif
+      ) {
+        NS_WARNING(
+            "Ignoring unknown flavor in "
+            "nsContentUtils::IPCTransferableDataToTransferable");
+        continue;
+      }
+
+      if (!IPCTransferableDataItemHasKnownFlavor(item)) {
+        NS_WARNING(
+            "Ignoring unknown flavor in "
+            "nsContentUtils::IPCTransferableDataToTransferable");
+        continue;
+      }
     }
 
     if (aAddDataFlavor) {
@@ -12310,8 +12333,7 @@ nsresult nsContentUtils::NewXULOrHTMLElement(
         }
         (*aResult)->SetDefined(false);
         // Set the fallback element's registry even on failure.
-        if (StaticPrefs::dom_scoped_custom_element_registries_enabled() &&
-            *aResult) {
+        if (StaticPrefs::dom_scoped_custom_element_registries_enabled()) {
           if (aCustomElementRegistry.isSome()) {
             if (CustomElementRegistry* registry =
                     aCustomElementRegistry.ref()) {

@@ -7,6 +7,7 @@
 const {
   SET_COLOR_SCHEME_SIMULATION,
   SET_PRINT_SIMULATION_ENABLED,
+  SET_REDUCED_MOTION_EMULATION,
 } = require("resource://devtools/client/inspector/emulation/actions/index.js");
 
 module.exports = {
@@ -21,6 +22,13 @@ module.exports = {
     return {
       type: SET_PRINT_SIMULATION_ENABLED,
       enabled,
+    };
+  },
+
+  setReducedMotionEmulation(reducedMotion) {
+    return {
+      type: SET_REDUCED_MOTION_EMULATION,
+      reducedMotion,
     };
   },
 };

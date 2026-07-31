@@ -12,7 +12,7 @@ const AGENT = {
   url: "soundnest.com/audio/sony-wh-1000xm5",
   condition: "the price drops below $270",
   conditionPresets: ["Any drop", "Below $270", "Below $250"],
-  status: { label: "Watching", kind: "watching" },
+  status: { label: "Active", kind: "watching" },
   cadence: "Auto · on-device",
 };
 
@@ -185,13 +185,11 @@ add_task(async function test_submit_and_delete_dispatch_detail() {
         e => (deleteDetail = e.detail)
       );
 
-      const buttonByText = text =>
-        Array.from(shadow.querySelectorAll("moz-button")).find(b =>
-          b.textContent.includes(text)
-        );
-
       // Save dispatches submit
-      buttonByText("Save").click();
+      const saveButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-save-button"]'
+      );
+      saveButton.click();
       await el.updateComplete;
       Assert.deepEqual(
         submitDetail,
@@ -235,11 +233,6 @@ add_task(async function test_pause_button_toggles_label_and_detail() {
         pauseDetails.push(e.detail)
       );
 
-      const findButton = label =>
-        Array.from(
-          shadow.querySelectorAll(".monitor-card-actions moz-button")
-        ).find(b => b.textContent.includes(label));
-
       const clickWhenLaidOut = async button => {
         await ContentTaskUtils.waitForCondition(() => {
           const rect = button.getBoundingClientRect();
@@ -248,8 +241,10 @@ add_task(async function test_pause_button_toggles_label_and_detail() {
         button.click();
       };
 
-      const pauseButton = findButton("Pause");
-      Assert.ok(pauseButton, "Watching monitor shows a Pause button");
+      const pauseButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-pause-button"]'
+      );
+      Assert.ok(pauseButton, "Active monitor shows a Pause button");
       await clickWhenLaidOut(pauseButton);
       await el.updateComplete;
       Assert.deepEqual(
@@ -261,7 +256,9 @@ add_task(async function test_pause_button_toggles_label_and_detail() {
       el.agent = pausedAgentArg;
       await el.updateComplete;
 
-      const resumeButton = findButton("Resume");
+      const resumeButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-resume-button"]'
+      );
       Assert.ok(resumeButton, "Paused monitor shows a Resume button");
       await clickWhenLaidOut(resumeButton);
       await el.updateComplete;
@@ -288,9 +285,9 @@ add_task(async function test_check_now_dispatches_detail() {
         e => (checkDetail = e.detail)
       );
 
-      const checkNowButton = Array.from(
-        shadow.querySelectorAll("moz-button")
-      ).find(b => b.textContent.includes("Check now"));
+      const checkNowButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-check-now-button"]'
+      );
 
       await ContentTaskUtils.waitForCondition(() => {
         const rect = checkNowButton.getBoundingClientRect();
@@ -368,14 +365,14 @@ add_task(async function test_expanded_display_shows_saved_schedule() {
       const el = content.document.getElementById("test-agent-monitor-item");
       const shadow = el.shadowRoot;
 
-      const checkRow = Array.from(shadow.querySelectorAll(".monitor-row")).find(
-        row => row.querySelector(".label")?.textContent.trim() === "Check"
-      );
+      const checkRow = shadow
+        .querySelector('[data-l10n-id^="ai-tasks-alert-schedule-"]')
+        ?.closest(".monitor-row");
       Assert.ok(checkRow, "Expanded display shows a Check row");
       Assert.equal(
-        checkRow.querySelector(".val").textContent.trim(),
-        "Weekly on Monday at 9:00 AM",
-        "Check row summarizes the saved schedule"
+        checkRow.querySelector("[data-l10n-id]").getAttribute("data-l10n-id"),
+        "ai-tasks-alert-schedule-weekly-monday",
+        "Check row uses the correct localization ID for weekly Monday schedule"
       );
     });
   });
@@ -408,7 +405,10 @@ add_task(async function test_create_mode_renders_form() {
         e => (submitDetail = e.detail)
       );
       // Start monitoring
-      shadow.querySelector(`moz-button[label="Start monitoring"]`).click();
+      const createButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-create-button"]'
+      );
+      createButton.click();
       await el.updateComplete;
 
       Assert.equal(
@@ -450,7 +450,7 @@ add_task(async function test_create_mode_empty_state_inputs() {
       );
 
       const startButton = shadow.querySelector(
-        `moz-button[label="Start monitoring"]`
+        'moz-button[data-l10n-id="ai-tasks-alert-create-button"]'
       );
 
       startButton.click();
@@ -562,7 +562,13 @@ add_task(async function test_invalid_url_shows_error() {
       urlInput.value = "not a url";
       urlInput.dispatchEvent(new content.Event("input", { bubbles: true }));
       shadow.querySelector("moz-button.add-page-btn").click();
+
+      // Wait for the async validation to complete and the error message to appear
       await el.updateComplete;
+      await ContentTaskUtils.waitForCondition(
+        () => shadow.querySelector(".error-message"),
+        "Waiting for error message to appear"
+      );
 
       Assert.ok(
         shadow.querySelector(".error-message"),

@@ -136,14 +136,18 @@ export class AgentUI {
    * Handles the monitor create card for the current page
    *
    * @param {AgentCommandContext} context
+   * @param {string} context.text - The command argument text, with the `/monitor` prefix stripped
+   * @param {string} [context.contextPageUrl] - Url of the page the command was issued from
+   * @param {Conversation} context.conversation - The conversation the command was submitted in
    */
   static async #handleMonitorCommand({ text, contextPageUrl, conversation }) {
     if (!conversation) {
       return;
     }
+    const { prompt: condition, raw } = text;
     const url = contextPageUrl || "";
-    if (text) {
-      const userMessage = conversation.addUserMessage(text);
+    if (raw) {
+      const userMessage = conversation.addUserMessage(raw);
       conversation.emit("chat-conversation:message-update", userMessage);
     }
 
@@ -166,6 +170,7 @@ export class AgentUI {
       uiType: AGENT_UI_TYPES.MONITOR_ITEM,
       properties: {
         agent: {
+          condition,
           url,
           watchUrls: url ? [url] : [],
         },
@@ -573,17 +578,22 @@ export class AgentUI {
    * interim stand in for the "/" command palette
    *
    * @param {string} value - Raw chat input
-   * @returns {?{command: string, raw: string}} The command keyword plus the
-   *   full trimmed prompt, or null when there is no leading command
+   * @returns {?{command: string, prompt: string, raw: string}} The lowercased
+   *  command keyword, the text following the command, and the raw chat input,
+   *  or null when there is no leading command
    * @private
    */
   static #parseCommand(value) {
     const raw = String(value ?? "").trim();
-    const match = /^\/(\w+)\b/.exec(raw);
+    const match = /^\/(\w+)\b\s*(.*)$/s.exec(raw);
     if (!match) {
       return null;
     }
-    return { command: match[1].toLowerCase(), raw };
+    return {
+      command: match[1].toLowerCase(),
+      prompt: match[2].trim(),
+      raw,
+    };
   }
 
   /**
@@ -608,9 +618,15 @@ export class AgentUI {
       return false;
     }
 
+    // An explicit command from the palette takes priority
+    const parsed = this.#parseCommand(value);
     const parsedCommand = command
-      ? { command, raw: value }
-      : this.#parseCommand(value);
+      ? {
+          command,
+          prompt: parsed?.prompt ?? "",
+          raw: String(value ?? "").trim(),
+        }
+      : parsed;
 
     if (!parsedCommand) {
       return false;
@@ -623,7 +639,7 @@ export class AgentUI {
     }
 
     handler({
-      text: parsedCommand.raw,
+      text: parsedCommand,
       contextPageUrl,
       conversation,
       window,

@@ -2608,8 +2608,7 @@ void QuotaManager::Shutdown() {
 
   // Body of the function
 
-  ScopedLogExtraInfo scope{ScopedLogExtraInfo::kTagContextTainted,
-                           "dom::quota::QuotaManager::Shutdown"_ns};
+  QM_SCOPED_CONTEXT("dom::quota::QuotaManager::Shutdown"_ns);
   GECKO_TRACE_SCOPE("dom::quota", "QuotaManager::Shutdown");
 
   // We always need to ensure that firefox does not shutdown with a private
@@ -3573,9 +3572,8 @@ QuotaManager::GetOrCreateTemporaryOriginDirectory(
   MOZ_ASSERT(IsTemporaryGroupInitializedInternal(aOriginMetadata));
   MOZ_ASSERT(IsTemporaryOriginInitializedInternal(aOriginMetadata));
 
-  ScopedLogExtraInfo scope{
-      ScopedLogExtraInfo::kTagContextTainted,
-      "dom::quota::QuotaManager::GetOrCreateTemporaryOriginDirectory"_ns};
+  QM_SCOPED_CONTEXT(
+      "dom::quota::QuotaManager::GetOrCreateTemporaryOriginDirectory"_ns);
 
   // XXX Temporary band-aid fix until the root cause of uninitialized origins
   // after obtaining a client directory lock via OpenClientDirectory is
@@ -4195,7 +4193,8 @@ Result<Ok, nsresult> QuotaManager::InitializeOriginDirectory(
                 QM_OR_ELSE_WARN_IF(
                     // Expression
                     LoadFullOriginMetadataWithRestore(aChildDirectory)
-                        .map([](auto&& metadata) -> Maybe<FullOriginMetadata> {
+                        .map([](FullOriginMetadata&& metadata)
+                                 -> Maybe<FullOriginMetadata> {
                           return Some(std::move(metadata));
                         }),
                     // Predicate.

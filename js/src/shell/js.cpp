@@ -8890,7 +8890,7 @@ static const char* ObserveMarkColor(const Value& value) {
   }
 
   gc::Cell* cell = value.toGCThing();
-  Zone* zone = cell->zone();
+  Zone* zone = cell->zoneFromAnyThread();
   if (zone->isGCPreparing()) {
     // The mark bits are not valid during unmarking.
     return "unmarked";
@@ -10552,12 +10552,6 @@ JS_FN_HELP("createUserArrayBuffer", CreateUserArrayBuffer, 1, 0,
 "            below it (false). If omitted, this is treated as 'true'."),
 
 #ifndef __wasi__
-    JS_FN_HELP("wasmCompileInSeparateProcess", WasmCompileInSeparateProcess, 1, 0,
-"wasmCompileInSeparateProcess(buffer)",
-"  Compile the given buffer in a separate process, serialize the resulting\n"
-"  wasm::Module into bytes, and deserialize those bytes in the current\n"
-"  process, returning the resulting WebAssembly.Module."),
-
     JS_FN_HELP("wasmTextToBinary", WasmTextToBinary, 1, 0,
 "wasmTextToBinary(str)",
 "  Translates the given text wasm module into its binary encoding."),
@@ -10622,6 +10616,17 @@ static const JSFunctionSpecWithHelp diff_testing_unsafe_functions[] = {
 
 // clang-format off
 static const JSFunctionSpecWithHelp fuzzing_unsafe_functions[] = {
+#ifndef __wasi__
+    // Not fuzzing-safe: this spawns a child process to do the compile and
+    // serialize, and a fuzzing harness can interpose on that child to feed a
+    // tampered serialized module back for deserialization (bug 2043047).
+    JS_FN_HELP("wasmCompileInSeparateProcess", WasmCompileInSeparateProcess, 1, 0,
+"wasmCompileInSeparateProcess(buffer)",
+"  Compile the given buffer in a separate process, serialize the resulting\n"
+"  wasm::Module into bytes, and deserialize those bytes in the current\n"
+"  process, returning the resulting WebAssembly.Module."),
+#endif // __wasi__
+
     JS_FN_HELP("getSelfHostedValue", GetSelfHostedValue, 1, 0,
 "getSelfHostedValue()",
 "  Get a self-hosted value by its name. Note that these values don't get \n"
@@ -13321,10 +13326,6 @@ bool InitOptionParser(OptionParser& op) {
       !op.addBoolOption('\0', "enable-joint-iteration",
                         "Enable Joint Iteration") ||
       !op.addBoolOption('\0', "enable-atomics-pause", "Enable Atomics pause") ||
-      !op.addBoolOption('\0', "enable-explicit-resource-management",
-                        "Enable Explicit Resource Management") ||
-      !op.addBoolOption('\0', "disable-explicit-resource-management",
-                        "Disable Explicit Resource Management") ||
       !op.addBoolOption('\0', "enable-temporal", "Enable Temporal") ||
       !op.addBoolOption('\0', "enable-import-bytes", "Enable import bytes") ||
       !op.addBoolOption('\0', "enable-import-text", "Enable import text") ||
@@ -13346,6 +13347,8 @@ bool InitOptionParser(OptionParser& op) {
           "Support <module source> specifier for test262 tests") ||
       !op.addBoolOption('\0', "enable-legacy-regexp",
                         "Enable Legacy RegExp features") ||
+      !op.addBoolOption('\0', "enable-regexp-buffer-boundaries",
+                        "Enable RegExp Buffer Boundaries") ||
       !op.addBoolOption('\0', "enable-wasm-esm-integration",
                         "Enable wasm/esm integration")) {
     return false;
@@ -13455,6 +13458,9 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
   if (op.getBoolOption("enable-wasm-esm-integration")) {
     JS::Prefs::set_experimental_wasm_esm_integration(true);
   }
+  if (op.getBoolOption("enable-regexp-buffer-boundaries")) {
+    JS::Prefs::setAtStartup_experimental_regexp_buffer_boundaries(true);
+  }
 #endif
   if (op.getBoolOption("enable-source-phase-imports")) {
     JS::Prefs::set_experimental_source_phase_imports(true);
@@ -13464,14 +13470,6 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
         setAtStartup_experimental_source_phase_imports_test262_module_source(
             true);
   }
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-  if (op.getBoolOption("enable-explicit-resource-management")) {
-    JS::Prefs::set_experimental_explicit_resource_management(true);
-  }
-  if (op.getBoolOption("disable-explicit-resource-management")) {
-    JS::Prefs::set_experimental_explicit_resource_management(false);
-  }
-#endif
 #ifdef JS_HAS_INTL_API
   if (op.getBoolOption("enable-temporal")) {
     JS::Prefs::setAtStartup_experimental_temporal(true);
@@ -14221,6 +14219,12 @@ bool SetContextJITOptions(JSContext* cx, const OptionParser& op) {
   if (op.getBoolOption("trace-regexp-peephole")) {
     jit::JitOptions.trace_regexp_peephole_optimization = true;
   }
+
+#ifdef NIGHTLY_BUILD
+  if (op.getBoolOption("enable-regexp-buffer-boundaries")) {
+    jit::JitOptions.js_regexp_buffer_boundaries = true;
+  }
+#endif
 
   if (op.getBoolOption("less-debug-code")) {
     jit::JitOptions.lessDebugCode = true;

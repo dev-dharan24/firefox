@@ -155,8 +155,14 @@ static nsresult ExtractIconPathInfoFromUrl(nsIURI* aUrl,
         do_GetService(NS_MIMESERVICE_CONTRACTID, &rv));
     NS_ENSURE_SUCCESS(rv, rv);
 
+    // fileExt is a placeholder file name such as ".html", so a lone "." means
+    // there is no extension at all. The mime service wants a bare extension.
+    const uint32_t dotlessIndex =
+        !fileExt.IsEmpty() && fileExt.First() == '.' ? 1 : 0;
+
     nsAutoCString defFileExt;
-    mimeService->GetPrimaryExtension(contentType, fileExt, defFileExt);
+    mimeService->GetPrimaryExtension(
+        contentType, Substring(fileExt, dotlessIndex), defFileExt);
     // If the mime service does not know about this mime type, we show
     // the generic icon.
     // In any case, we need to insert a '.' before the extension.

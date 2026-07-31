@@ -5,6 +5,7 @@
 #ifndef MOZILLA_GFX_GpuFence_H
 #define MOZILLA_GFX_GpuFence_H
 
+#include "mozilla/TimeStamp.h"
 #include "nsISupportsImpl.h"
 
 namespace mozilla {
@@ -15,6 +16,7 @@ class GpuFence {
   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(GpuFence);
 
   virtual bool HasCompleted() = 0;
+  virtual bool ClientWait(TimeDuration aTimeout) = 0;
 
  protected:
   GpuFence() = default;

@@ -86,11 +86,11 @@ add_task(async function test_chat_active_url_is_recognized_as_navigate() {
     await submitSmartbar(browser);
 
     const { called, url } = await getStubLoadURLResult(browser);
-    Assert.ok(called, "_loadURL should be called for URL-shaped input");
+    Assert.ok(called, "The load path should run for URL-shaped input");
     Assert.equal(
       url,
       "https://example.com/",
-      "_loadURL should receive the fixed-up URL"
+      "The load should receive the fixed-up URL"
     );
   } finally {
     await BrowserTestUtils.closeWindow(win);
@@ -101,7 +101,7 @@ add_task(async function test_chat_active_url_is_recognized_as_navigate() {
 
 /**
  * Drives the chat-active state then asserts that the given input is treated
- * as a chat prompt (action stays "chat", _loadURL is not called).
+ * as a chat prompt (action stays "chat", the load path does not run).
  *
  * @param {string} input - The value to type into the smartbar.
  */

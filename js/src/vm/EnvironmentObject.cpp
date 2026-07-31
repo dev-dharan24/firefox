@@ -417,15 +417,12 @@ ModuleEnvironmentObject* ModuleEnvironmentObject::create(
   MOZ_ASSERT(!env->inDictionaryMode());
 #endif
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
   env->initSlot(ModuleEnvironmentObject::DISPOSABLE_RESOURCE_STACK_SLOT,
                 UndefinedValue());
-#endif
 
   return env;
 }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 static ArrayObject* initialiseAndSetDisposeCapabilityHelper(
     JSContext* cx, JS::Handle<EnvironmentObject*> env, uint32_t slot) {
   JS::Value slotData = env->getReservedSlot(slot);
@@ -457,7 +454,6 @@ JS::Value DisposableEnvironmentObject::getDisposables() {
 void DisposableEnvironmentObject::clearDisposables() {
   setReservedSlot(DISPOSABLE_RESOURCE_STACK_SLOT, UndefinedValue());
 }
-#endif
 
 /* static */
 ModuleEnvironmentObject* ModuleEnvironmentObject::createSynthetic(
@@ -1041,10 +1037,8 @@ LexicalEnvironmentObject* LexicalEnvironmentObject::create(
     env->initEnclosingEnvironment(enclosing);
   }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
   env->initSlot(LexicalEnvironmentObject::DISPOSABLE_RESOURCE_STACK_SLOT,
                 UndefinedValue());
-#endif
 
   return env;
 }

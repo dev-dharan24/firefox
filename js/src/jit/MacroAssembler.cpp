@@ -4676,7 +4676,8 @@ void MacroAssembler::linkProfilerCallSites(JitCode* code) {
 }
 
 void MacroAssembler::alignJitStackBasedOnNArgs(Register nargs,
-                                               bool countIncludesThis) {
+                                               bool countIncludesThis,
+                                               uint32_t extraArgs) {
   // The stack should already be aligned to the size of a value.
   assertStackAlignment(sizeof(Value), 0);
 
@@ -4703,11 +4704,13 @@ void MacroAssembler::alignJitStackBasedOnNArgs(Register nargs,
   // This implies that |argN| must be aligned if N is even,
   // and offset by |sizeof(Value)| if N is odd.
 
-  // Depending on the context of the caller, it may be easier to pass in a
-  // register that has already been modified to include |this|. If that is the
-  // case, we want to flip the direction of the test.
+  // Only the parity of the total number of pushed Values matters. |staticArgs|
+  // is the number of Values pushed in addition to |nargs| and is known at
+  // compile time, so the total is odd iff |nargs| and |staticArgs| have a
+  // different parity. Branch to |alignmentIsOffset| in that case.
+  uint32_t staticArgs = extraArgs + !countIncludesThis;
   Assembler::Condition condition =
-      countIncludesThis ? Assembler::NonZero : Assembler::Zero;
+      (staticArgs % 2) == 0 ? Assembler::NonZero : Assembler::Zero;
 
   Label alignmentIsOffset, end;
   branchTestPtr(condition, nargs, Imm32(1), &alignmentIsOffset);
@@ -4730,6 +4733,10 @@ void MacroAssembler::alignJitStackBasedOnNArgs(Register nargs,
 
 void MacroAssembler::alignJitStackBasedOnNArgs(uint32_t argc,
                                                bool countIncludesThis) {
+  alignJitStackBasedOnNumValues(argc + !countIncludesThis);
+}
+
+void MacroAssembler::alignJitStackBasedOnNumValues(uint32_t numValues) {
   // The stack should already be aligned to the size of a value.
   assertStackAlignment(sizeof(Value), 0);
 
@@ -4740,8 +4747,7 @@ void MacroAssembler::alignJitStackBasedOnNArgs(uint32_t argc,
   }
 
   // See above for full explanation.
-  uint32_t nArgs = argc + !countIncludesThis;
-  if (nArgs % 2 == 0) {
+  if (numValues % 2 == 0) {
     // |argN| should be 16-byte aligned
     andToStackPtr(Imm32(~(JitStackAlignment - 1)));
   } else {
@@ -5428,6 +5434,39 @@ void MacroAssembler::powPtr(Register base, Register power, Register dest,
   branchRshift32(Assembler::NonZero, Imm32(1), temp2, &loop);
 
   bind(&done);
+}
+
+void MacroAssembler::modDoubleIntegerFastPath(
+    FloatRegister lhs, FloatRegister rhs, FloatRegister output, Register temp1,
+    Register temp2, const LiveRegisterSet& volatileLiveRegs, Label* fail) {
+  MOZ_ASSERT(temp1 != temp2);
+
+  // Bail out unless both operands are integer-valued and in range.
+  //
+  // convertDoubleToPtr does a convert-and-round-trip check, and will fail
+  // for any double that isn't exactly representable in a signed intptr_t:
+  //
+  // On 32-bit platforms that means anything outside the Int32 range falls
+  // through to the generic path.
+  convertDoubleToPtr(rhs, temp2, fail, /* negativeZeroCheck = */ false);
+
+  // Reject a zero divisor (gives NaN) and a -1 divisor.
+  branchTestPtr(Assembler::Zero, temp2, temp2, fail);
+  branchPtr(Assembler::Equal, temp2, Imm32(-1), fail);
+
+  convertDoubleToPtr(lhs, temp1, fail, /* negativeZeroCheck = */ false);
+
+  flexibleRemainderPtr(temp1, temp2, temp2, /* isUnsigned = */ false,
+                       volatileLiveRegs);
+
+  // The exact remainder of two integer-valued doubles is itself always
+  // representable as a double, so this conversion never rounds.
+  convertIntPtrToDouble(temp2, output);
+
+  // The remainder always takes the sign of the dividend, so copying the sign is
+  // a no-op for a non-zero remainder and produces -0 for a zero remainder with
+  // a negative dividend.
+  copySignDouble(output, lhs, output);
 }
 
 void MacroAssembler::signInt32(Register input, Register output) {

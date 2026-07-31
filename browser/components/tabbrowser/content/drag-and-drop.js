@@ -862,6 +862,14 @@
             gBrowser.TabMetrics.METRIC_SOURCE.DRAG_AND_DROP
           ),
         };
+        if (window.fullScreen) {
+          // Detaching from a fullscreen window makes macOS adopt the new
+          // window into its own fullscreen space on its initial show, which
+          // can hang on a synchronous Dock transition (bug 2051071) and isn't
+          // what the user wants for a tab they're dragging to a location. This
+          // flag suppresses that.
+          props.suppressinitialfullscreen = 1;
+        }
         gBrowser.replaceTabsWithWindow(draggedTab, props);
       }
       event.stopPropagation();

@@ -4,6 +4,7 @@
 
 import { html } from "chrome://global/content/vendor/lit.all.mjs";
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
+import { installClientErrorListeners } from "chrome://browser/content/aiwindow/modules/ClientErrorTelemetry.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/smartwindow-prompts.mjs";
 // eslint-disable-next-line import/no-unassigned-import
@@ -78,6 +79,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   UI_UPDATE_TYPES:
     "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
   UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
+  SmartWindowTelemetry:
+    "moz-src:///browser/components/aiwindow/ui/modules/SmartWindowTelemetry.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", function () {
@@ -244,6 +247,7 @@ export class AIWindow extends MozLitElement {
   #smartbarResizeObserver = null;
   #windowModeObserver = null;
   #topSitesObserver = null;
+  #removeClientErrorListeners = null;
   #swapDocShellsChromeWindow = null;
   #hasMemories = false;
   #selectedModelChoiceId = null;
@@ -611,6 +615,14 @@ export class AIWindow extends MozLitElement {
       "newtab-top-sites-changed"
     );
 
+    this.#removeClientErrorListeners = installClientErrorListeners(
+      this.documentGlobal,
+      (error, source) =>
+        lazy.SmartWindowTelemetry.recordClientError(error, {
+          source,
+          context: this.getClientErrorContext(),
+        })
+    );
     this.#loadPendingConversation();
     this.#setupWindowModeObserver();
 
@@ -904,6 +916,9 @@ export class AIWindow extends MozLitElement {
     this.#resolveSmartbarReady?.();
 
     this.ownerDocument.removeEventListener("OpenConversation", this);
+
+    this.#removeClientErrorListeners?.();
+    this.#removeClientErrorListeners = null;
 
     super.disconnectedCallback();
   }
@@ -2309,6 +2324,25 @@ export class AIWindow extends MozLitElement {
       model: this.modelName,
       is_retry: isRetry,
     });
+  }
+
+  /**
+   * Build the correlation extras attached to smart_window.client_error events.
+   * Exposed publicly so AIChatContentParent can populate them when relaying a
+   * failure from the chat content document.
+   *
+   * @returns {{location: string, chat_id: string, message_seq: number, model: string}}
+   */
+  getClientErrorContext() {
+    const { messageCount } = this.#getConversationLastMessageAndCount(
+      lazy.MESSAGE_ROLE.ASSISTANT
+    );
+    return {
+      location: this.mode === MODE.FULLPAGE ? "home" : MODE.SIDEBAR,
+      chat_id: this.conversationId ?? "",
+      message_seq: messageCount,
+      model: this.modelName ?? "",
+    };
   }
 
   #sendModelRequestTelemetryEvent() {

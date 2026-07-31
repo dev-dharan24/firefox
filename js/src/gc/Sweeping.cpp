@@ -1956,8 +1956,9 @@ IncrementalProgress GCRuntime::markDuringSweeping(JS::GCContext* gcx,
                                                   SliceBudget& budget) {
   MOZ_ASSERT(markTask.isIdle());
 
-  // If we can mark in parallel with sweeping on the main thread we do that.
-  if (markOnBackgroundThreadDuringSweeping) {
+  // If we can mark in parallel with sweeping on the main thread we do
+  // that. Skip this for internally triggered slices not running in idle time.
+  if (markOnBackgroundThreadDuringSweeping && !shouldYieldBeforeSweep(budget)) {
     if (!marker().isDrained() || hasDelayedMarking() ||
         hasAnyDeferredWeakMaps()) {
       AutoLockHelperThreadState lock;
@@ -1975,10 +1976,22 @@ IncrementalProgress GCRuntime::markDuringSweeping(JS::GCContext* gcx,
 
   auto [mainThreadBudget, helperThreadBudget] = budgetConcurrentMarking(budget);
 
-  markSynchronously(mainThreadBudget, useParallelMarking);
+  IncrementalProgress result =
+      markSynchronously(mainThreadBudget, useParallelMarking);
 
-  if (hasMarkingWork()) {
+  if (!marker().isMarkStackEmpty()) {
+    MOZ_ASSERT(result == NotFinished);
     maybeStartConcurrentMarking(helperThreadBudget);
+    return NotFinished;
+  }
+
+  if (result == NotFinished) {
+    return NotFinished;
+  }
+
+  // Yield eagerly after marking has finished for internally triggered slices
+  // not running in idle time.
+  if (shouldYieldBeforeSweep(budget)) {
     return NotFinished;
   }
 
@@ -2712,8 +2725,8 @@ IncrementalProgress GCRuntime::sweepPhase(SliceBudget& budget) {
   // be empty already.
   MOZ_ASSERT(initialState <= State::Sweep);
 
-  bool isFirstSweepSlice = initialState < State::Sweep;
 #ifdef DEBUG
+  bool isFirstSweepSlice = initialState < State::Sweep;
   if (isFirstSweepSlice) {
     assertNoMarkingWork();
   }
@@ -2724,8 +2737,8 @@ IncrementalProgress GCRuntime::sweepPhase(SliceBudget& budget) {
 
   markSliceCount++;
 
-  finishAnyConcurrentMarking(budget);
-  if (!isFirstSweepSlice && budget.isOverBudget()) {
+  bool finishedMainThreadOnlyMarking = finishAnyConcurrentMarking(budget);
+  if (!finishedMainThreadOnlyMarking) {
     auto [_, helperThreadBudget] = budgetConcurrentMarking(budget);
     maybeStartConcurrentMarking(helperThreadBudget);
     return NotFinished;

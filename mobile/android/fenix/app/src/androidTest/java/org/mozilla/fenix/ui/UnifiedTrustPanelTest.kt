@@ -52,6 +52,10 @@ class UnifiedTrustPanelTest {
     val memoryLeaksRule = DetectMemoryLeaksRule(composeTestRule = { composeTestRule })
 
     // TestRail: https://mozilla.testrail.io/index.php?/cases/view/3186718
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.UnifiedTrustPanelTest#verifySecurePageConnectionFromQuickSettingsWithNoTrackersTest"],
+        since = "2026-07",
+    )
     @SmokeTest
     @Test
     fun verifySecurePageConnectionFromQuickSettingsWithNoTrackersTest() {
@@ -86,6 +90,10 @@ class UnifiedTrustPanelTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3186721
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.UnifiedTrustPanelTest#verifyInsecurePageConnectionFromQuickSettingsWithTrackersTest"],
+        since = "2026-07",
+    )
     @SmokeTest
     @Test
     fun verifyInsecurePageConnectionFromQuickSettingsWithTrackersTest() {
@@ -326,6 +334,10 @@ class UnifiedTrustPanelTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3186711
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.UnifiedTrustPanelTest#verifyInsecurePageConnectionFromQuickSettingsWithNoTrackersInCustomTabsTest"],
+        since = "2026-07",
+    )
     @SmokeTest
     @Test
     fun verifyInsecurePageConnectionFromQuickSettingsWithNoTrackersInCustomTabsTest() {
@@ -366,6 +378,10 @@ class UnifiedTrustPanelTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3186714
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.UnifiedTrustPanelTest#verifyClearCookiesAndSiteDataFromQuickSettingsInCustomTabsTest"],
+        since = "2026-07",
+    )
     @SmokeTest
     @Test
     fun verifyClearCookiesAndSiteDataFromQuickSettingsInCustomTabsTest() {

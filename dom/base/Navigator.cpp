@@ -16,6 +16,7 @@
 #include "mozilla/dom/FetchBinding.h"
 #include "mozilla/dom/File.h"
 #include "mozilla/dom/Serial.h"
+#include "mozilla/glean/DomMediaMetrics.h"
 #include "nsCharSeparatedTokenizer.h"
 #include "nsContentPolicyUtils.h"
 #include "nsContentUtils.h"
@@ -2291,6 +2292,7 @@ dom::MediaSession* Navigator::MediaSession() {
 dom::AudioSession* Navigator::AudioSession() {
   if (!mAudioSession) {
     mAudioSession = new dom::AudioSession(GetWindow());
+    glean::media_audio_session::api_used.Add(1);
   }
   return mAudioSession;
 }

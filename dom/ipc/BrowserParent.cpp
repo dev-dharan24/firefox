@@ -3965,6 +3965,12 @@ mozilla::ipc::IPCResult BrowserParent::RecvInvokeDragSession(
     return IPC_OK();
   }
 
+  if (!Manager()->ValidatePrincipal(aPrincipal,
+                                    {ValidatePrincipalOptions::AllowNullPtr})) {
+    return ContentParent::PrincipalValidationIpcFail(aPrincipal, this,
+                                                     __func__);
+  }
+
   nsCOMPtr<nsICookieJarSettings> cookieJarSettings;
   net::CookieJarSettings::Deserialize(aCookieJarSettingsArgs,
                                       getter_AddRefs(cookieJarSettings));
@@ -4256,6 +4262,18 @@ mozilla::ipc::IPCResult BrowserParent::RecvScrollRectIntoView(
 
   (void)bridge->SendScrollRectIntoView(aRect, aVertical, aHorizontal,
                                        aScrollFlags, aAppUnitsPerDevPixel);
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult BrowserParent::RecvScrollForKeyboard(
+    const KeyboardScrollAction& aAction) {
+  // We do deliberately not support handing off keyboard scrolling to the
+  // browser chrome.
+  BrowserBridgeParent* bridge = GetBrowserBridgeParent();
+  if (!bridge || !bridge->CanSend()) {
+    return IPC_OK();
+  }
+  (void)bridge->SendScrollForKeyboard(aAction);
   return IPC_OK();
 }
 

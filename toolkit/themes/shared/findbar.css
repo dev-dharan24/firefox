@@ -17,6 +17,8 @@ xul|findbar {
   );
 
   min-width: 1px;
+  /* needed so the findbar doesn't shrink when bottom-docked DevTools is resized */
+  min-height: var(--findbar-height);
   transition-property: margin-bottom, visibility;
   transition-duration: 150ms, 0s;
   transition-timing-function: ease-in-out, linear;

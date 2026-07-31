@@ -31,11 +31,6 @@ import UrlbarPrefs from "chrome://browser/content/urlbar/UrlbarContentPrefs.mjs"
  *   Has a value and an accesskey attribute.
  */
 
-const lazy = {};
-ChromeUtils.defineESModuleGetters(lazy, {
-  PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
-});
-
 // The userContextId used in the moz_openpages_temp table for tabs in private
 // windows. Real container ids are non-negative, so -1 is a safe sentinel.
 const PRIVATE_USER_CONTEXT_ID = -1;
@@ -215,13 +210,13 @@ export const UrlbarShared = {
 
   // This defines icon locations that are commonly used in the UI.
   ICON: {
-    // DEFAULT is defined lazily so it doesn't eagerly initialize PlacesUtils.
     EXTENSION: "chrome://mozapps/skin/extensions/extension.svg",
     HISTORY: "chrome://browser/skin/history.svg",
     SEARCH_GLASS: "chrome://global/skin/icons/search-glass.svg",
     TRENDING: "chrome://global/skin/icons/trending.svg",
     TIP: "chrome://global/skin/icons/lightbulb.svg",
     GLOBE: "chrome://global/skin/icons/defaultFavicon.svg",
+    DEFAULT: "chrome://global/skin/icons/defaultFavicon.svg",
   },
 
   // The number of results by which Page Up/Down move the selection.
@@ -967,10 +962,6 @@ export const UrlbarShared = {
     return this.__firstDayOfWeek;
   },
 };
-
-ChromeUtils.defineLazyGetter(UrlbarShared.ICON, "DEFAULT", () => {
-  return lazy.PlacesUtils.favicons.defaultFavicon.spec;
-});
 
 /**
  * Create a logger that uses `console.createInstance`.

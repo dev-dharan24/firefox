@@ -470,6 +470,19 @@ test-manifest:
             - 'tools/lint/test/test_manifest_toml.py'
             - 'tools/lint/test-manifest-toml/**'
 
+review-context-toml:
+    description: Validate review-context.toml against the review context schema
+    treeherder:
+        symbol: misc(review-context)
+    run:
+        mach: lint -v -l review-context-toml -f treeherder -f json:/builds/worker/mozlint.json .
+    when:
+        files-changed:
+            - 'review-context.toml'
+            - 'tools/lint/review-context-toml.yml'
+            - 'tools/lint/python/review_context_schema.py'
+            - 'tools/lint/python/review_context_toml.py'
+
 wptlint-gecko:
     description: web-platform-tests linter
     treeherder:

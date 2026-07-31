@@ -432,7 +432,10 @@
     },
 
     "CNSA2KeyAgreementEnabled": {
-      "type": "boolean"
+      "type": "boolean",
+      "x-category": "Network security",
+      "description": "Enable the CNSA 2.0 ML-KEM-1024 key agreement for TLS.",
+      "examples": [true, false]
     },
 
     "Containers": {

@@ -518,7 +518,7 @@ impl<'a> SceneBuilder<'a> {
         stats: &SceneStats,
         debug_flags: DebugFlags,
     ) -> BuiltScene {
-        profile_scope!("build_scene");
+        tracy_rs::profile_scope!("build_scene");
 
         // We checked that the root pipeline is available on the render backend.
         let root_pipeline_id = root_pipeline.or(scene.root_pipeline_id).unwrap();
@@ -902,7 +902,7 @@ impl<'a> SceneBuilder<'a> {
 
                 match item.item() {
                     DisplayItem::PushStackingContext(ref info) => {
-                        profile_scope!("build_stacking_context");
+                        tracy_rs::profile_scope!("build_stacking_context");
                         let spatial_node_index = self.get_space(info.spatial_id);
                         let mut subtraversal = item.sub_iter();
                         // Avoid doing unnecessary work for empty stacking contexts.
@@ -949,7 +949,7 @@ impl<'a> SceneBuilder<'a> {
                         continue 'outer;
                     }
                     DisplayItem::PushReferenceFrame(..) => {
-                        profile_scope!("build_reference_frame");
+                        tracy_rs::profile_scope!("build_reference_frame");
                         let mut subtraversal = item.sub_iter();
 
                         let new_context = BuildContext {
@@ -966,7 +966,7 @@ impl<'a> SceneBuilder<'a> {
                     DisplayItem::PopReferenceFrame |
                     DisplayItem::PopStackingContext => break,
                     DisplayItem::Iframe(ref info) => {
-                        profile_scope!("iframe");
+                        tracy_rs::profile_scope!("iframe");
 
                         let space = self.get_space(info.space_and_clip.spatial_id);
                         let subtraversal = match self.push_iframe(info, space) {
@@ -1314,7 +1314,7 @@ impl<'a> SceneBuilder<'a> {
     ) {
         match *item.item() {
             DisplayItem::Image(ref info) => {
-                profile_scope!("image");
+                tracy_rs::profile_scope!("image");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1331,10 +1331,11 @@ impl<'a> SceneBuilder<'a> {
                     info.image_rendering,
                     info.alpha_type,
                     info.color,
+                    info.sub_rect,
                 );
             }
             DisplayItem::RepeatingImage(ref info) => {
-                profile_scope!("repeating_image");
+                tracy_rs::profile_scope!("repeating_image");
 
                 let (layout, unsnapped_rect, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1356,10 +1357,11 @@ impl<'a> SceneBuilder<'a> {
                     info.image_rendering,
                     info.alpha_type,
                     info.color,
+                    None,
                 );
             }
             DisplayItem::YuvImage(ref info) => {
-                profile_scope!("yuv_image");
+                tracy_rs::profile_scope!("yuv_image");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1378,7 +1380,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::Text(ref info) => {
-                profile_scope!("text");
+                tracy_rs::profile_scope!("text");
 
                 // TODO(aosmond): Snapping text primitives does not make much sense, given the
                 // primitive bounds and clip are supposed to be conservative, not definitive.
@@ -1403,7 +1405,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::Rectangle(ref info) => {
-                profile_scope!("rect");
+                tracy_rs::profile_scope!("rect");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1424,7 +1426,7 @@ impl<'a> SceneBuilder<'a> {
                 }
             }
             DisplayItem::HitTest(ref info) => {
-                profile_scope!("hit_test");
+                tracy_rs::profile_scope!("hit_test");
 
                 let spatial_node_index = self.get_space(info.spatial_id);
 
@@ -1462,7 +1464,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::Line(ref info) => {
-                profile_scope!("line");
+                tracy_rs::profile_scope!("line");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1480,7 +1482,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::Gradient(ref info) => {
-                profile_scope!("gradient");
+                tracy_rs::profile_scope!("gradient");
 
                 if !info.gradient.is_valid() {
                     return;
@@ -1535,7 +1537,7 @@ impl<'a> SceneBuilder<'a> {
                 }
             }
             DisplayItem::RadialGradient(ref info) => {
-                profile_scope!("radial");
+                tracy_rs::profile_scope!("radial");
 
                 if !info.gradient.is_valid() {
                     return;
@@ -1618,7 +1620,7 @@ impl<'a> SceneBuilder<'a> {
                 }
             }
             DisplayItem::ConicGradient(ref info) => {
-                profile_scope!("conic");
+                tracy_rs::profile_scope!("conic");
 
                 if !info.gradient.is_valid() {
                     return;
@@ -1666,7 +1668,7 @@ impl<'a> SceneBuilder<'a> {
                 }
             }
             DisplayItem::BoxShadow(ref info) => {
-                profile_scope!("box_shadow");
+                tracy_rs::profile_scope!("box_shadow");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1687,7 +1689,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::Border(ref info) => {
-                profile_scope!("border");
+                tracy_rs::profile_scope!("border");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties_with_bounds(
                     &info.common,
@@ -1703,7 +1705,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::ImageMaskClip(ref info) => {
-                profile_scope!("image_clip");
+                tracy_rs::profile_scope!("image_clip");
 
                 self.add_image_mask_clip_node(
                     info.id,
@@ -1714,7 +1716,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::RoundedRectClip(ref info) => {
-                profile_scope!("rounded_clip");
+                tracy_rs::profile_scope!("rounded_clip");
 
                 self.add_rounded_rect_clip_node(
                     info.id,
@@ -1724,7 +1726,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::RectClip(ref info) => {
-                profile_scope!("rect_clip");
+                tracy_rs::profile_scope!("rect_clip");
 
                 self.add_rect_clip_node(
                     info.id,
@@ -1733,7 +1735,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             }
             DisplayItem::ClipChain(ref info) => {
-                profile_scope!("clip_chain");
+                tracy_rs::profile_scope!("clip_chain");
 
                 self.clip_tree_builder.define_clip_chain(
                     info.id,
@@ -1742,7 +1744,7 @@ impl<'a> SceneBuilder<'a> {
                 );
             },
             DisplayItem::BackdropFilter(ref info) => {
-                profile_scope!("backdrop");
+                tracy_rs::profile_scope!("backdrop");
 
                 let (layout, _, spatial_node_index, clip_node_id) = self.process_common_properties(
                     &info.common,
@@ -1967,7 +1969,7 @@ impl<'a> SceneBuilder<'a> {
         requested_raster_space: RasterSpace,
         flags: StackingContextFlags,
     ) -> StackingContextInfo {
-        profile_scope!("push_stacking_context");
+        tracy_rs::profile_scope!("push_stacking_context");
 
         // Filters have to be baked into the snapshot. Most filters are applied
         // when rendering the picture into its parent, so if the stacking context
@@ -2236,7 +2238,7 @@ impl<'a> SceneBuilder<'a> {
         &mut self,
         info: StackingContextInfo,
     ) {
-        profile_scope!("pop_stacking_context");
+        tracy_rs::profile_scope!("pop_stacking_context");
 
         self.clip_tree_builder.pop_clip();
 
@@ -3128,6 +3130,7 @@ impl<'a> SceneBuilder<'a> {
         image_rendering: ImageRendering,
         alpha_type: AlphaType,
         color: ColorF,
+        sub_rect: Option<DeviceIntRect>,
     ) {
         let mut prim_rect = info.rect;
         // Resolve per-axis: axes that fill the prim use the unsnapped
@@ -3155,6 +3158,7 @@ impl<'a> SceneBuilder<'a> {
                 color: color.into(),
                 image_rendering,
                 alpha_type,
+                sub_rect,
             },
         );
     }

@@ -589,7 +589,7 @@ nsresult ResolveHTTPSRecord(const nsACString& aHost,
         !aliasName.Equals(host, nsCaseInsensitiveCStringComparator)) {
       LOG("ResolveHTTPSRecord following alias %s => %s", host.get(),
           aliasName.get());
-      host = aliasName;
+      host = std::move(aliasName);
       continue;
     }
 

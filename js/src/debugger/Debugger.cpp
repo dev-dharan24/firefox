@@ -966,6 +966,8 @@ bool DebugAPI::slowPathOnResumeFrame(JSContext* cx, AbstractFramePtr frame) {
   // frame is observable.
   FrameIter iter(cx);
   MOZ_ASSERT(iter.abstractFramePtr() == frame);
+  jsbytecode* pc = iter.pc();
+  MOZ_ASSERT(JSOp(*pc) == JSOp::AfterYield);
   {
     JS::AutoAssertNoGC nogc;
     for (Realm::DebuggerVectorEntry& entry :
@@ -988,7 +990,23 @@ bool DebugAPI::slowPathOnResumeFrame(JSContext* cx, AbstractFramePtr frame) {
 
   terminateDebuggerFramesGuard.release();
 
-  return slowPathOnEnterFrame(cx, frame);
+  if (!slowPathOnEnterFrame(cx, frame)) {
+    return false;
+  }
+
+  // Handle breakpoints/stepping for the JSOp::AfterYield op.
+  if (DebugAPI::stepModeEnabled(frame.script())) {
+    if (!DebugAPI::onSingleStep(cx)) {
+      return false;
+    }
+  }
+  if (DebugAPI::hasBreakpointsAt(frame.script(), pc)) {
+    if (!DebugAPI::onTrap(cx)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /* static */
@@ -2803,8 +2821,7 @@ bool DebugAPI::onSingleStep(JSContext* cx) {
         // it had better be suspended.
         MOZ_ASSERT(genObj.isSuspended());
 
-        if (genObj.callee().hasBaseScript() &&
-            genObj.callee().baseScript() == trappingScript &&
+        if (genObj.script() == trappingScript &&
             !frameObj.getReservedSlot(DebuggerFrame::ONSTEP_HANDLER_SLOT)
                  .isUndefined()) {
           suspendedStepperCount++;
@@ -3980,7 +3997,13 @@ void DebugAPI::traceWasmContFrame(JSTracer* tracer, JSObject* src,
   for (Realm::DebuggerVectorEntry& entry :
        instance->realm()->getDebuggers(nogc)) {
     Debugger* dbg = entry.dbg.unbarrieredGet();
-    auto p = dbg->frames.lookup(fp);
+    // readonlyThreadsafeLookup returns the same result as lookup(); it only
+    // omits lookup()'s single-threaded ReentrancyGuard. We need that here
+    // because parallel marking threads may run this concurrently, which is
+    // safe: nothing mutates `frames` during marking. Every mutator runs on the
+    // main thread, which is paused for parallel marking, and the sole GC-phase
+    // mutator (DebugAPI::sweepAll) runs only after marking.
+    auto p = dbg->frames.readonlyThreadsafeLookup(fp);
     if (!p) {
       continue;
     }

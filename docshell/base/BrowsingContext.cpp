@@ -77,6 +77,7 @@
 #include "nsIXULRuntime.h"
 
 #include "mozilla/dom/WorkerCommon.h"
+#include "nsExternalHelperAppService.h"
 #include "nsDocShell.h"
 #include "nsDocShellLoadState.h"
 #include "nsFocusManager.h"
@@ -2593,6 +2594,16 @@ void BrowsingContext::Navigate(
     WindowContext* context = source->GetWindowContext();
     loadState->SetHasValidUserGestureActivation(
         context && context->HasValidTransientUserGestureActivation());
+
+    // For protocols that would launch without a prompt (e.g. mailto), consume
+    // the transient user gesture activation so a single gesture can't chain
+    // multiple launches. The pre-consume value is already recorded on the load
+    // state above. See bug 299116.
+    nsAutoCString scheme;
+    if (NS_SUCCEEDED(aURI->GetScheme(scheme))) {
+      nsExternalHelperAppService::MaybeConsumeUserActivationForExternalScheme(
+          context, loadState->TriggeringPrincipal(), scheme);
+    }
   };
 
   // aSourceDocument is used for snapshot params and "allowed by sandboxing to

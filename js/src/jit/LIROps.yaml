@@ -1310,7 +1310,7 @@
   operands:
     lhs: WordSized
     rhs: WordSized
-  call_instruction: true
+  num_temps: 2
   mir_op: Mod
 
 - name: ModPowTwoD
@@ -3820,7 +3820,7 @@
     input: WordSized
   arguments:
     type: MIRType
-  num_temps: 2
+  num_temps: 1
   extra_name: true
 
 - name: DivOrModI64
@@ -3997,7 +3997,6 @@
     input: WordSized
   arguments:
     type: MIRType
-  num_temps: 1
   extra_name: true
 
 - name: DivOrModI64

@@ -38,7 +38,9 @@ targeting, use separate messages instead.
 ## Available trigger actions
 
 - [`openArticleURL`](#openarticleurl)
+- [`bookmarkAdded`](#bookmarkadded)
 - [`openBookmarkedURL`](#openbookmarkedurl)
+- [`visitBookmarkedURL`](#visitbookmarkedurl)
 - [`userBookmarkFolderActivity`](#userbookmarkfolderactivity)
 - [`frequentVisits`](#frequentvisits)
 - [`openURL`](#openurl)
@@ -115,11 +117,27 @@ let regexPatterns: string[];
 }
 ```
 
+### `bookmarkAdded`
+
+Fires when the user adds a bookmark through any UI path, including the URL bar
+star icon, the Bookmarks menu, the keyboard shortcut, the "Bookmark Link" and
+"Bookmark All Tabs" commands, and the Library window.
+
+Bulk and non-interactive sources (import, restore, sync) and tag operations are
+ignored, so mass operations such as an add-on importing or syncing bookmarks do
+not fire the trigger. It fires at most once per operation and does not fire in
+private windows.
+
 ### `openBookmarkedURL`
 
 Happens when the user bookmarks or navigates to a bookmarked URL.
 
 Does not filter by host or patterns.
+
+### `visitBookmarkedURL`
+
+Fires when the user navigates to a URL that is already bookmarked. This does not fire when the user creates a bookmark, only when they open one. Does not
+fire in private windows.
 
 ### `userBookmarkFolderActivity`
 
@@ -694,5 +712,27 @@ before the window actually closes, set`needsAwait: true` on that action.
       }
     ]
   }
+}
+```
+
+### `splitViewUsed`
+
+Fires after a configurable delay (default 15 seconds, `browser.tabs.splitview.trigger.delay_ms`)
+of continuous use of Split View. Leaving Split View before the delay elapses cancels the
+countdown; returning starts a fresh one.
+
+```js
+{
+  trigger: { id: "splitViewUsed" }
+}
+```
+```js
+// The trigger also tracks the number of distinct Split Views the user has
+// created (not re-entries into an existing one), via the splitViewCreateCount
+// context variable. Here, the message is excluded for a user's first-ever
+// Split View.
+{
+  trigger: { id: "splitViewUsed" },
+  targeting: "splitViewCreateCount > 1"
 }
 ```

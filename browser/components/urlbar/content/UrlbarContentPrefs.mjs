@@ -20,12 +20,13 @@ function getPrefs() {
     ).UrlbarPrefs;
   }
 
-  // In child processes the Urlbar actor exposes important UrlbarPrefs methods
-  // on the window. To expose more methods, change the Urlbar actor.
+  // In child processes the Urlbar actor exposes important UrlbarPrefs methods on
+  // the window, as part of the single port it publishes there. To expose more
+  // methods, change the Urlbar actor.
   return /** @type {Pick<typeof UrlbarPrefs, "get" | "addObserver" | "removeObserver">}*/ ({
-    get: p => window.UrlbarPrefs.get(p),
-    addObserver: o => window.UrlbarPrefs.addObserver(o),
-    removeObserver: o => window.UrlbarPrefs.removeObserver(o),
+    get: p => window.UrlbarActorPort.getPref(p),
+    addObserver: o => window.UrlbarActorPort.addPrefObserver(o),
+    removeObserver: o => window.UrlbarActorPort.removePrefObserver(o),
   });
 }
 

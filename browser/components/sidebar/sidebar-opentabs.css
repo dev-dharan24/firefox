@@ -47,3 +47,11 @@
 .sidebar-panel .sidebar-panel-scrollable-content {
   padding-inline: 0;
 }
+
+moz-input-search {
+  flex: 1;
+}
+
+.menu-button::part(button) {
+  margin-inline-start: var(--space-small);
+}

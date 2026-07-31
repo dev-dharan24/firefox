@@ -557,9 +557,11 @@ webrender:
     selector: fuzzy
     description: >-
         Runs the conformance tests relevant to WebRender.
+    disable_target_task_filter: true
     query:
-        - "!talos !raptor !shippable !asan !tsan !nofis !python-reftest '-reftest"
-        - "!talos !raptor !shippable !asan !tsan !nofis !python-reftest webrender-"
+        - "!talos !raptor !shippable !asan !tsan !nofis !python-reftest !ccov !mingwclang !android-hw !backlog '-reftest"
+        - "!talos !raptor !shippable !asan !tsan !nofis !python-reftest !ccov !mingwclang !android-hw !backlog 'webrender-"
+        - "'webrender-android-hw-p6-opt"
 
 webrender-linux:
     selector: fuzzy
@@ -580,3 +582,16 @@ webrender-perf:
         - "'tp5"
         - "'talos-webgl"
         - "'motionmark-animometer"
+
+webrender-wrench:
+    selector: fuzzy
+    description: >-
+        Runs WebRender wrench tests on Linux, macOS, Windows, Android emulator
+        and Pixel 6.
+    disable_target_task_filter: true
+    query:
+        - "'webrender-linux64-debug"
+        - "'webrender-macos-release"
+        - "'webrender-windows"
+        - "'webrender-android-emulator-release"
+        - "'webrender-android-hw-p6-opt"

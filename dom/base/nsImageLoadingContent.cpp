@@ -309,6 +309,10 @@ void nsImageLoadingContent::Notify(imgIRequest* aRequest, int32_t aType,
   }
 }
 
+bool nsImageLoadingContent::HasPendingAlwaysLoadImageTask() const {
+  return mPendingImageLoadTask && mPendingImageLoadTask->AlwaysLoad();
+}
+
 void nsImageLoadingContent::OnLoadComplete(imgIRequest* aRequest,
                                            uint32_t aImageStatus) {
   // XXXjdm This occurs when we have a pending request created, then another

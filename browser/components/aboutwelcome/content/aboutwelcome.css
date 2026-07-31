@@ -4135,7 +4135,7 @@ html {
 }
 .onboardingContainer .secondary-buttons-top-container {
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: row;
   position: fixed;
   top: 10px;
   inset-inline-end: 10px;

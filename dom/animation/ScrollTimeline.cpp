@@ -371,7 +371,13 @@ ScrollTimeline::StateSnapshot::GetScrollContainerFrame() const {
     }
     return nullptr;
   }
-  return nsLayoutUtils::FindScrollContainerFrameFor(e);
+
+  auto* pseudo = e->GetPseudoElement(mSource.mPseudoRequest);
+  if (!pseudo) {
+    return nullptr;
+  }
+
+  return nsLayoutUtils::FindScrollContainerFrameFor(pseudo);
 }
 
 void ScrollTimeline::ReplacePropertiesWith(

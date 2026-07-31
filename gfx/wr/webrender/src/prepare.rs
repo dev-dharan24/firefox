@@ -4,7 +4,36 @@
 
 //! # Prepare pass
 //!
-//! TODO: document this!
+//! The second frame building traversal of the picture tree. It runs after the
+//! [visibility pass](crate::visibility).
+//! Where visibility decides what is drawn, prepare decides how: it turns each
+//! visible primitive into the render tasks, GPU data and draw commands needed
+//! to render it.
+//!
+//! Its outputs are:
+//!
+//! - Render tasks and their dependencies in the render task graph.
+//! - GPU buffer data.
+//! - [`PrimitiveCommand`]s pushed into the command buffers of the surfaces and
+//!   tiles the primitive is drawn into. `batch.rs` replays these at the
+//!   end of frame building to produce the actual draw calls.
+//!
+//! ## Traversal
+//!
+//! [`prepare_picture`] is the entry point. It does a recursive traversal of
+//! the picture and it's visible items.
+//!
+//! ## Per-primitive work
+//!
+//! The bulk of the module is a large match over [`PrimitiveKind`] in
+//! `prepare_prim_for_render`, where each kind:
+//!
+//! - Requests the resources it needs, such as texture cache entries (images,
+//!   glyphs) or render tasks (rasterized borders, blurred box shadow,cached
+//!   gradients, etc.).
+//! - Writes the GPU data for the primitive.
+//! - Push potentially multiple commands to command buffers.
+//!
 
 use api::{ColorF, DebugFlags, ExtendMode, ExternalImageData, ExternalImageType, GradientStop, ImageBufferKind};
 use crate::border_image::prepare_border_image_nine_patch;
@@ -48,7 +77,7 @@ use crate::render_backend::DataStores;
 
 use crate::render_task::{EmptyTask, RenderTask, RenderTaskKind};
 
-use crate::visibility::{DrawState, KindScratchHandle};
+use crate::visibility::{DrawState, KindScratchHandle, PrimitiveDrawIndex};
 
 
 const MAX_MASK_SIZE: i32 = 4096;
@@ -90,6 +119,7 @@ pub fn prepare_picture(
     };
 
     frame_state.picture_scratch_handles[pic_index.0] = Some(scratch_handle);
+    frame_state.num_pictures += 1;
 
     prepare_primitives(
         store,
@@ -129,7 +159,7 @@ fn prepare_primitives(
     tile_caches: &mut FastHashMap<SliceId, Box<TileCacheInstance>>,
     prim_instances: &mut Vec<PrimitiveInstance>,
 ) {
-    profile_scope!("prepare_primitives");
+    tracy_rs::profile_scope!("prepare_primitives");
     let mut cmd_buffer_targets = Vec::new();
 
     let mut quad_transform = QuadTransformState::new();
@@ -138,7 +168,9 @@ fn prepare_primitives(
         if !cluster.flags.contains(ClusterFlags::IS_VISIBLE) {
             continue;
         }
-        profile_scope!("cluster");
+        tracy_rs::profile_scope!("cluster");
+        frame_state.num_visited_primitives += cluster.prim_range().len() as u32;
+
         pic_state.map_local_to_pic.set_target_spatial_node(
             cluster.spatial_node_index,
             frame_context.spatial_tree,
@@ -153,18 +185,27 @@ fn prepare_primitives(
         );
 
         for prim_instance_index in cluster.prim_range() {
+            // Primitives the visibility pass culled have no draw at all.
+            let Some(draw_index) = scratch
+                .frame
+                .draw_index_for_instance(PrimitiveInstanceIndex(prim_instance_index as u32))
+            else {
+                continue;
+            };
+
             if frame_state.surface_builder.get_cmd_buffer_targets_for_prim(
-                &scratch.frame.draws[prim_instance_index],
+                scratch.frame.draw(draw_index),
                 &mut cmd_buffer_targets,
             ) {
                 let plane_split_anchor = PlaneSplitAnchor::new(
                     cluster.spatial_node_index,
-                    PrimitiveInstanceIndex(prim_instance_index as u32),
+                    draw_index,
                 );
 
                 prepare_prim_for_render(
                     store,
                     prim_instance_index,
+                    draw_index,
                     cluster,
                     &mut quad_transform,
                     pic_context,
@@ -180,13 +221,12 @@ fn prepare_primitives(
                 );
 
                 frame_state.num_visible_primitives += 1;
+                frame_state.num_cmd_targets += cmd_buffer_targets.len() as u32;
                 continue;
             }
 
-            // TODO(gw): Technically no need to clear visibility here, since from this point it
-            //           only matters if it got added to a command buffer. Kept here for now to
-            //           make debugging simpler, but perhaps we can remove / tidy this up.
-            scratch.frame.draws[prim_instance_index].reset();
+            // A draw that reached no command buffer is simply never referenced
+            // by one, so there is nothing to clear here.
         }
     }
 }
@@ -212,6 +252,7 @@ fn yuv_planes_sampler_kind(
 fn prepare_prim_for_render(
     store: &mut PrimitiveStore,
     prim_instance_index: usize,
+    draw_index: PrimitiveDrawIndex,
     cluster: &mut PrimitiveCluster,
     mut quad_transform: &mut QuadTransformState,
     pic_context: &PictureContext,
@@ -225,7 +266,7 @@ fn prepare_prim_for_render(
     prim_instances: &mut Vec<PrimitiveInstance>,
     targets: &[CommandBufferIndex],
 ) {
-    profile_scope!("prepare_prim_for_render");
+    tracy_rs::profile_scope!("prepare_prim_for_render");
 
     // If we have dependencies, we need to prepare them first, in order
     // to know the actual rect of this primitive.
@@ -249,7 +290,7 @@ fn prepare_prim_for_render(
             return;
         };
 
-        scratch.frame.draws[prim_instance_index].kind_scratch =
+        scratch.frame.draw_mut(draw_index).kind_scratch =
             KindScratchHandle::Picture(scratch_handle);
 
         is_passthrough = store
@@ -287,7 +328,7 @@ fn prepare_prim_for_render(
         };
 
         if should_update_clip_task {
-            let snapped_local_rect = scratch.frame.draws[prim_instance_index].snapped_local_rect;
+            let snapped_local_rect = scratch.frame.draw(draw_index).snapped_local_rect;
             let prim_rect = data_stores.get_local_prim_rect(
                 prim_instance,
                 snapped_local_rect,
@@ -296,7 +337,7 @@ fn prepare_prim_for_render(
             );
 
             if !update_clip_task(
-                PrimitiveInstanceIndex(prim_instance_index as u32),
+                draw_index,
                 prim_rect,
                 cluster.spatial_node_index,
                 pic_context.raster_spatial_node_index,
@@ -311,19 +352,17 @@ fn prepare_prim_for_render(
         }
     }
 
-    let prim_instance_index = PrimitiveInstanceIndex(prim_instance_index as u32);
-
     let prim_spatial_node_index = cluster.spatial_node_index;
     let device_pixel_scale = frame_state.surfaces[pic_context.surface_index.0].device_pixel_scale;
     // Snapshot of the per-frame draw header for this prim. Copy is fine here
     // because the only field this function writes (clip_task_index, in the
     // segmented-clip path) isn't read again in this function — and the other
     // fields (state, clip_chain) aren't written by it.
-    let prim_info = scratch.frame.draws[prim_instance_index.0 as usize];
+    let prim_info = *scratch.frame.draw(draw_index);
 
     match &mut prim_instance.kind {
         PrimitiveKind::BoxShadow { data_handle, .. } => {
-            profile_scope!("BoxShadow");
+            tracy_rs::profile_scope!("BoxShadow");
 
             let prim_data = &data_stores.box_shadow[*data_handle];
 
@@ -339,7 +378,7 @@ fn prepare_prim_for_render(
                 scratch,
                 prim_spatial_node_index,
                 device_pixel_scale,
-                prim_instance_index,
+                draw_index,
                 targets,
                 data_stores,
             );
@@ -347,7 +386,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::LineDecoration { data_handle } => {
-            profile_scope!("LineDecoration");
+            tracy_rs::profile_scope!("LineDecoration");
             let prim_data = &data_stores.line_decoration[*data_handle];
             let line_dec_data = &prim_data.kind;
 
@@ -377,7 +416,7 @@ fn prepare_prim_for_render(
                     },
                     stretch_size,
                     LayoutSize::zero(),
-                    prim_instance_index,
+                    draw_index,
                     &None,
                     &prim_info.clip_chain,
                     quad_transform,
@@ -397,7 +436,7 @@ fn prepare_prim_for_render(
                         aligned_aa_edges: prim_data.common.aligned_aa_edges,
                         transformed_aa_edges: prim_data.common.transformed_aa_edges,
                     },
-                    prim_instance_index,
+                    draw_index,
                     &None,
                     &prim_info.clip_chain,
                     quad_transform,
@@ -413,7 +452,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::TextRun { data_handle } => {
-            profile_scope!("TextRun");
+            tracy_rs::profile_scope!("TextRun");
 
             let prim_data = &data_stores.text_run[*data_handle];
 
@@ -477,11 +516,11 @@ fn prepare_prim_for_render(
                 frame_context.spatial_tree,
                 scratch,
             );
-            scratch.frame.draws[prim_instance_index.0 as usize].kind_scratch =
+            scratch.frame.draw_mut(draw_index).kind_scratch =
                 KindScratchHandle::TextRun(text_run_handle);
         }
         PrimitiveKind::NormalBorder { data_handle } => {
-            profile_scope!("NormalBorder");
+            tracy_rs::profile_scope!("NormalBorder");
             let prim_data = &data_stores.normal_border[*data_handle];
             let aligned_aa_edges = prim_data.common.aligned_aa_edges;
             let transformed_aa_edges = prim_data.common.transformed_aa_edges;
@@ -497,7 +536,7 @@ fn prepare_prim_for_render(
                 &prim_info.clip_chain,
                 prim_spatial_node_index,
                 device_pixel_scale,
-                prim_instance_index,
+                draw_index,
                 quad_transform,
                 frame_context,
                 pic_context,
@@ -510,7 +549,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::ImageBorder { data_handle, .. } => {
-            profile_scope!("ImageBorder");
+            tracy_rs::profile_scope!("ImageBorder");
             let prim_data = &data_stores.image_border[*data_handle];
             let aligned_aa_edges = prim_data.common.aligned_aa_edges;
             let transformed_aa_edges = prim_data.common.transformed_aa_edges;
@@ -538,7 +577,7 @@ fn prepare_prim_for_render(
                     aligned_aa_edges,
                     transformed_aa_edges,
                 },
-                prim_instance_index,
+                draw_index,
                 &prim_info.clip_chain,
                 quad_transform,
                 frame_context,
@@ -552,7 +591,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::Rectangle { data_handle, .. } => {
-            profile_scope!("Rectangle");
+            tracy_rs::profile_scope!("Rectangle");
 
             let prim_data = &data_stores.prim[*data_handle];
             let prim_rect = prim_info.snapped_local_rect;
@@ -566,7 +605,7 @@ fn prepare_prim_for_render(
                     aligned_aa_edges: prim_data.common.aligned_aa_edges,
                     transformed_aa_edges: prim_data.common.transformed_aa_edges,
                 },
-                prim_instance_index,
+                draw_index,
                 &None,
                 &prim_info.clip_chain,
                 quad_transform,
@@ -581,7 +620,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::YuvImage { data_handle, .. } => {
-            profile_scope!("YuvImage");
+            tracy_rs::profile_scope!("YuvImage");
             let prim_data = &data_stores.yuv_image[*data_handle];
             let common_data = &prim_data.common;
             let yuv_image_data = &prim_data.kind;
@@ -595,7 +634,7 @@ fn prepare_prim_for_render(
                         aligned_aa_edges: common_data.aligned_aa_edges,
                         transformed_aa_edges: common_data.transformed_aa_edges,
                     },
-                    prim_instance_index,
+                    draw_index,
                     &None,
                     &prim_info.clip_chain,
                     quad_transform,
@@ -632,7 +671,7 @@ fn prepare_prim_for_render(
                     aligned_aa_edges: common_data.aligned_aa_edges,
                     transformed_aa_edges: common_data.transformed_aa_edges,
                 },
-                prim_instance_index,
+                draw_index,
                 &None,
                 &prim_info.clip_chain,
                 quad_transform,
@@ -647,7 +686,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::Image { data_handle, .. } => {
-            profile_scope!("Image");
+            tracy_rs::profile_scope!("Image");
 
             let prim_data = &data_stores.image[*data_handle];
             let common_data = &prim_data.common;
@@ -664,7 +703,7 @@ fn prepare_prim_for_render(
                         aligned_aa_edges: common_data.aligned_aa_edges,
                         transformed_aa_edges: common_data.transformed_aa_edges,
                     },
-                    prim_instance_index,
+                    draw_index,
                     &None,
                     &prim_info.clip_chain,
                     quad_transform,
@@ -684,7 +723,7 @@ fn prepare_prim_for_render(
                 common_data,
                 image_data,
                 &prim_info.clip_chain,
-                prim_instance_index,
+                draw_index,
                 quad_transform,
                 frame_context,
                 pic_context,
@@ -697,7 +736,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::LinearGradient { data_handle, .. } => {
-            profile_scope!("LinearGradient");
+            tracy_rs::profile_scope!("LinearGradient");
             let prim_data = &data_stores.linear_grad[*data_handle];
             let prim_rect = prim_info.snapped_local_rect;
             let stretch_size = LayoutSize::new(
@@ -716,7 +755,7 @@ fn prepare_prim_for_render(
                         transformed_aa_edges: prim_data.common.transformed_aa_edges,
                     },
                     stretch_size,
-                    prim_instance_index,
+                    draw_index,
                     &prim_info.clip_chain,
                     quad_transform,
                     frame_context,
@@ -782,7 +821,7 @@ fn prepare_prim_for_render(
                                 aligned_aa_edges: EdgeMask::empty(),
                                 transformed_aa_edges: edge_aa_mask,
                             },
-                            prim_instance_index,
+                            draw_index,
                             &None,
                             &prim_info.clip_chain,
                             quad_transform,
@@ -837,7 +876,7 @@ fn prepare_prim_for_render(
                 },
                 stretch_size,
                 prim_data.tile_spacing,
-                prim_instance_index,
+                draw_index,
                 &cache_key,
                 &prim_info.clip_chain,
                 quad_transform,
@@ -852,7 +891,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::RadialGradient { data_handle, .. } => {
-            profile_scope!("RadialGradient");
+            tracy_rs::profile_scope!("RadialGradient");
             let prim_data = &data_stores.radial_grad[*data_handle];
             let local_rect = prim_info.snapped_local_rect;
             let stretch_size = LayoutSize::new(
@@ -871,7 +910,7 @@ fn prepare_prim_for_render(
                         transformed_aa_edges: prim_data.common.transformed_aa_edges,
                     },
                     stretch_size,
-                    prim_instance_index,
+                    draw_index,
                     &prim_info.clip_chain,
                     quad_transform,
                     frame_context,
@@ -894,7 +933,7 @@ fn prepare_prim_for_render(
                 },
                 stretch_size,
                 prim_data.tile_spacing,
-                prim_instance_index,
+                draw_index,
                 &None,
                 &prim_info.clip_chain,
                 quad_transform,
@@ -908,7 +947,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::ConicGradient { data_handle, .. } => {
-            profile_scope!("ConicGradient");
+            tracy_rs::profile_scope!("ConicGradient");
             let prim_data = &data_stores.conic_grad[*data_handle];
             let prim_rect = prim_info.snapped_local_rect;
             let stretch_size = LayoutSize::new(
@@ -927,7 +966,7 @@ fn prepare_prim_for_render(
                         transformed_aa_edges: prim_data.common.transformed_aa_edges,
                     },
                     stretch_size,
-                    prim_instance_index,
+                    draw_index,
                     &prim_info.clip_chain,
                     quad_transform,
                     frame_context,
@@ -984,7 +1023,7 @@ fn prepare_prim_for_render(
                 },
                 stretch_size,
                 prim_data.tile_spacing,
-                prim_instance_index,
+                draw_index,
                 &cache_key,
                 &prim_info.clip_chain,
                 quad_transform,
@@ -998,7 +1037,7 @@ fn prepare_prim_for_render(
             return;
         }
         PrimitiveKind::Picture { pic_index, .. } => {
-            profile_scope!("Picture");
+            tracy_rs::profile_scope!("Picture");
             let pic_scratch_handle = prim_info.kind_scratch.unwrap_picture();
             let pic = &mut store.pictures[pic_index.0];
 
@@ -1006,10 +1045,10 @@ fn prepare_prim_for_render(
                 return;
             };
 
-            prepare_picture_primitive(
+            let clip_task_index = prepare_picture_primitive(
                 pic,
                 raster_config,
-                prim_instance_index,
+                draw_index,
                 prim_spatial_node_index,
                 &prim_info.clip_chain,
                 frame_context,
@@ -1023,6 +1062,10 @@ fn prepare_prim_for_render(
                 &mut quad_transform,
                 targets,
             );
+
+            if let Some(clip_task_index) = clip_task_index {
+                scratch.frame.draw_mut(draw_index).clip_task_index = clip_task_index;
+            }
 
             return;
         }
@@ -1111,7 +1154,7 @@ fn prepare_prim_for_render(
                     ];
 
                     if points.iter().any(|p| p.is_none()) {
-                        scratch.frame.draws[prim_instance_index.0 as usize].reset();
+                        scratch.frame.draw_mut(draw_index).mark_culled();
                         return;
                     }
 
@@ -1139,7 +1182,7 @@ fn prepare_prim_for_render(
                             aligned_aa_edges,
                             transformed_aa_edges,
                         },
-                        prim_instance_index,
+                        draw_index,
                         &None,
                         &prim_info.clip_chain,
                         quad_transform,
@@ -1156,7 +1199,7 @@ fn prepare_prim_for_render(
                 None => {
                     // Backdrop capture was found not visible, didn't produce a sub-graph
                     // so we can just skip drawing
-                    scratch.frame.draws[prim_instance_index.0 as usize].reset();
+                    scratch.frame.draw_mut(draw_index).mark_culled();
                 }
             }
         }
@@ -1168,7 +1211,7 @@ fn prepare_prim_for_render(
         }
         DrawState::Visible { .. } => {
             frame_state.push_prim(
-                &PrimitiveCommand::simple(storage::Index::from_u32(prim_instance_index.0)),
+                &PrimitiveCommand::simple(draw_index),
                 prim_spatial_node_index,
                 targets,
             );
@@ -1223,7 +1266,7 @@ fn add_clip_mask_render_task(
 }
 
 pub fn update_clip_task(
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     prim_local_rect: LayoutRect,
     prim_spatial_node_index: SpatialNodeIndex,
     root_spatial_node_index: SpatialNodeIndex,
@@ -1235,12 +1278,12 @@ pub fn update_clip_task(
 ) -> bool {
     let device_pixel_scale = frame_state.surfaces[pic_context.surface_index.0].device_pixel_scale;
 
-    let new_clip_task_index = if scratch.frame.draws[prim_instance_index.0 as usize].clip_chain.needs_mask {
+    let new_clip_task_index = if scratch.frame.draw(draw_index).clip_chain.needs_mask {
         // Get a minimal device space rect, clipped to the screen that we
         // need to allocate for the clip mask, as well as interpolated
         // snap offsets.
         let unadjusted_device_rect = match frame_state.surfaces[pic_context.surface_index.0].get_surface_rect(
-            &scratch.frame.draws[prim_instance_index.0 as usize].clip_chain.pic_coverage_rect,
+            &scratch.frame.draw(draw_index).clip_chain.pic_coverage_rect,
             frame_context.spatial_tree,
         ) {
             Some(rect) => rect,
@@ -1259,7 +1302,7 @@ pub fn update_clip_task(
 
         let clip_task_id = add_clip_mask_render_task(
             device_rect,
-            scratch.frame.draws[prim_instance_index.0 as usize].clip_chain.clips_range,
+            scratch.frame.draw(draw_index).clip_chain.clips_range,
             prim_local_rect,
             prim_spatial_node_index,
             root_spatial_node_index,
@@ -1279,7 +1322,7 @@ pub fn update_clip_task(
     } else {
         ClipTaskIndex::INVALID
     };
-    scratch.frame.draws[prim_instance_index.0 as usize].clip_task_index = new_clip_task_index;
+    scratch.frame.draw_mut(draw_index).clip_task_index = new_clip_task_index;
 
     true
 }
@@ -1326,7 +1369,6 @@ impl PatternBuilder for LinearGradientSegmentPattern {
             self.end + prim_offset,
             ExtendMode::Clamp,
             &self.stops,
-            ctx.fb_config.is_software,
             state.frame_gpu_data,
         )
     }

@@ -617,6 +617,17 @@ export const AIWindow = {
   },
 
   /**
+   * Is the given URI the Smart Window new tab page. Unlike
+   * isAIWindowContentPage, this excludes the firstrun page.
+   *
+   * @param {nsIURI} uri current URI
+   * @returns {boolean} whether the URI is the Smart Window new tab page
+   */
+  isAIWindowNewTabPage(uri) {
+    return AIWINDOW_URI.equalsExceptRef(uri);
+  },
+
+  /**
    * Adds the AI Window app menu options
    *
    * @param {Event} event - History menu click event
@@ -1103,6 +1114,7 @@ export const AIWindow = {
       removable: true,
       showInPrivateBrowsing: false,
       onCreated: node => {
+        node.classList.add("subviewbutton-nav");
         node.setAttribute("aria-haspopup", "true");
         this._updateButtonVisibility(node);
       },

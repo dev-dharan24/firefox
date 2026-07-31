@@ -26,12 +26,16 @@
 
 .browserContainer.responsive-mode > .rdm-toolbar {
   border: none;
-  position: absolute;
-  z-index: var(--browser-stack-z-index-rdm-toolbar);
   height: var(--rdm-toolbar-height);
-  top: 0;
-  left: 0;
   width: 100%;
+
+  /* In Nova, when we have a notification box before the RDM toolbar (in Split View),
+     we do want to have a separation between the notifications and the toolbar  */
+  .notificationbox-stack:not(:empty) + & {
+    @media -moz-pref("browser.nova.enabled") {
+      border-block-start: 1px solid var(--toolbarseparator-color);
+    }
+  }
 
   /**
    * The .rdm-toolbar will be above the .dialogBox in RDM so we shift the
@@ -44,16 +48,6 @@
 
 .browserContainer.responsive-mode > .rdm-toolbar.accomodate-ua {
   height: var(--rdm-toolbar-accomodate-ua-height);
-
-  /**
-   * When the browser window is less than 520 pixels wide, the RDM toolbar
-   * needs extra space to accomdate for the UA input so the .rdm-toolbar is
-   * set to a larger height of --rdm-toolbar-accomodate-ua-height. We also need
-   * to shift the .dialogBox down by the same height so both are visible.
-   */
-  + .browserStack > .dialogStack > .dialogTemplate > .dialogBox {
-    margin-top: var(--rdm-toolbar-accomodate-ua-height);
-  }
 }
 
 .browserContainer.responsive-mode > .rdm-toolbar.device-modal-opened {
@@ -61,8 +55,6 @@
 }
 
 .browserContainer.responsive-mode > .browserStack {
-  min-height: 0;
-  min-width: 0;
   overflow: auto;
   contain: size;
 
@@ -76,7 +68,7 @@
    * placed correctly as a result of .rdm-screen-box's transform.
    */
   grid-template-columns: 15px 1fr [center-align] var(--rdm-width) 1fr;
-  grid-template-rows: 65px [margin-top-offset] var(--rdm-height) [below-browser] 1fr;
+  grid-template-rows: 10px [margin-top-offset] var(--rdm-height) [below-browser] 1fr;
 }
 
 .browserContainer.responsive-mode > .browserStack > :is(browser, .rdm-screen-box) {

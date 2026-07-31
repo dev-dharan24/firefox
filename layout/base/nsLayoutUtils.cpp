@@ -1361,27 +1361,31 @@ ScrollableLayerGuid::ViewID nsLayoutUtils::ScrollIdForRootScrollFrame(
 // static
 ScrollContainerFrame* nsLayoutUtils::GetNearestScrollableFrameForDirection(
     nsIFrame* aFrame, ScrollDirections aDirections) {
-  NS_ASSERTION(
-      aFrame, "GetNearestScrollableFrameForDirection expects a non-null frame");
+  SideBits sides = SideBits::eNone;
+  if (aDirections.contains(ScrollDirection::eVertical)) {
+    sides |= SideBits::eTop | SideBits::eBottom;
+  }
+  if (aDirections.contains(ScrollDirection::eHorizontal)) {
+    sides |= SideBits::eLeft | SideBits::eRight;
+  }
+  return GetNearestScrollContainerFrameToScrollTowards(aFrame, sides);
+}
+
+ScrollContainerFrame*
+nsLayoutUtils::GetNearestScrollContainerFrameToScrollTowards(
+    nsIFrame* aFrame, SideBits aSideBits) {
+  NS_ASSERTION(aFrame,
+               "GetNearestScrollContainerFrameToScrollTowards expects a "
+               "non-null frame");
   // FIXME Bug 1714720 : This nearest scroll target is not going to work over
   // process boundaries, in such cases we need to hand over in APZ side.
   for (nsIFrame* f = aFrame; f;
        f = nsLayoutUtils::GetCrossDocParentFrameInProcess(f)) {
     ScrollContainerFrame* scrollContainerFrame = do_QueryFrame(f);
-    if (scrollContainerFrame) {
-      ScrollDirections directions =
-          scrollContainerFrame
-              ->GetAvailableScrollingDirectionsForUserInputEvents();
-      if (aDirections.contains(ScrollDirection::eVertical)) {
-        if (directions.contains(ScrollDirection::eVertical)) {
-          return scrollContainerFrame;
-        }
-      }
-      if (aDirections.contains(ScrollDirection::eHorizontal)) {
-        if (directions.contains(ScrollDirection::eHorizontal)) {
-          return scrollContainerFrame;
-        }
-      }
+    if (scrollContainerFrame &&
+        scrollContainerFrame->SidesToScrollForUserInputEvents().Intersects(
+            aSideBits)) {
+      return scrollContainerFrame;
     }
   }
   return nullptr;

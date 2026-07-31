@@ -126,6 +126,14 @@ void MacroAssembler::andPtr(Imm32 imm, Register src, Register dest) {
   ma_and(dest, src, imm);
 }
 
+void MacroAssembler::andPtr(Imm32 imm, const Address& dest) {
+  UseScratchRegisterScope temps(asMasm());
+  Register scratch = temps.Acquire();
+  loadPtr(dest, scratch);
+  andPtr(imm, scratch);
+  storePtr(scratch, dest);
+}
+
 void MacroAssembler::and64(Imm64 imm, Register64 dest) {
   UseScratchRegisterScope temps(asMasm());
   Register scratch = temps.Acquire();

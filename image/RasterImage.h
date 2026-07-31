@@ -27,7 +27,6 @@
 #include "PlaybackType.h"
 #include "imgIContainer.h"
 #include "mozilla/AtomicBitfields.h"
-#include "mozilla/Atomics.h"
 #include "mozilla/Maybe.h"
 #include "mozilla/NotNull.h"
 #include "mozilla/StaticPrefs_image.h"
@@ -379,8 +378,6 @@ class RasterImage final : public ImageResource,
   // How many times we've decoded this image.
   // This is currently only used for statistics
   int32_t mDecodeCount;
-
-  Atomic<bool> mIsBeingDestroyed{false};
 
 #ifdef DEBUG
   uint32_t mFramesNotified;

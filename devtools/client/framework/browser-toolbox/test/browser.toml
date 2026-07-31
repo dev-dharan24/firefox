@@ -33,7 +33,6 @@ skip-if = [
 ["browser_browser_toolbox_fission_inspector.js"]
 fail-if = [
   "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
-  "nova", # Bug 2058127
 ]
 
 ["browser_browser_toolbox_fission_inspector_webextension.js"]

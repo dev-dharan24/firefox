@@ -1782,7 +1782,7 @@ class HandlerListItem {
         actionIconClass ? null : this.handlerInfoWrapper.actionIconSrcset,
       ],
     ]);
-    const selectedItem = this.node.querySelector("[selected=true]");
+    const selectedItem = this.node.querySelector("[selected]");
     if (!selectedItem) {
       console.error("No selected item for " + this.handlerInfoWrapper.type);
       return;

@@ -2067,8 +2067,9 @@ int SliceBudget::describe(char* buffer, size_t maxlen) const {
   if (idle) {
     extra = extended ? " (started idle but extended)" : " (idle)";
   }
-  return snprintf(buffer, maxlen, "%s%s%" PRId64 "ms%s", nonstop, interruptStr,
-                  timeBudget(), extra);
+  double millis = timeBudget().ToMilliseconds();
+  return snprintf(buffer, maxlen, "%s%s%3.1fms%s", nonstop, interruptStr,
+                  millis, extra);
 }
 
 bool SliceBudget::checkOverBudget() {
@@ -3562,7 +3563,7 @@ bool GCRuntime::initMultiThreadedMarkers() {
   return true;
 }
 
-inline IncrementalProgress ToIncrementalProgress(bool finished) {
+static inline IncrementalProgress ToIncrementalProgress(bool finished) {
   return finished ? Finished : NotFinished;
 }
 
@@ -3571,14 +3572,30 @@ IncrementalProgress GCRuntime::markPhase(SliceBudget& budget) {
 
   markSliceCount++;
 
-  finishAnyConcurrentMarking(budget);
+  bool finishedMainThreadOnlyMarking = finishAnyConcurrentMarking(budget);
 
   auto [mainThreadBudget, helperThreadBudget] = budgetConcurrentMarking(budget);
 
-  markSynchronously(mainThreadBudget, useParallelMarking);
+  IncrementalProgress result =
+      markSynchronously(mainThreadBudget, useParallelMarking);
 
-  if (hasMarkingWork()) {
+  if (!marker().isMarkStackEmpty()) {
+    MOZ_ASSERT(result == NotFinished);
     maybeStartConcurrentMarking(helperThreadBudget);
+    return NotFinished;
+  }
+
+  if (!finishedMainThreadOnlyMarking) {
+    return NotFinished;
+  }
+
+  if (result == NotFinished) {
+    return NotFinished;
+  }
+
+  // Yield eagerly after marking has finished for internally triggered slices
+  // not running in idle time.
+  if (shouldYieldBeforeSweep(budget)) {
     return NotFinished;
   }
 
@@ -3618,11 +3635,7 @@ IncrementalProgress GCRuntime::markSynchronously(
     MOZ_ASSERT(reportTime);
     MOZ_ASSERT(!isBackgroundMarking());
 
-    if (!ParallelMarker::mark(this, sliceBudget)) {
-      return NotFinished;
-    }
-
-    return Finished;
+    return ToIncrementalProgress(ParallelMarker::mark(this, sliceBudget));
   }
 
   return ToIncrementalProgress(
@@ -3636,11 +3649,7 @@ bool GCRuntime::hasMarkingWork() const {
     }
   }
 
-  if (hasDelayedMarking()) {
-    return true;
-  }
-
-  return false;
+  return hasDelayedMarking();
 }
 
 void GCRuntime::drainMarkStack() {
@@ -4288,29 +4297,36 @@ void GCRuntime::maybeStartConcurrentMarking(SliceBudget& budget) {
 #endif
 }
 
-void GCRuntime::finishAnyConcurrentMarking(JS::SliceBudget& budget) {
+bool GCRuntime::finishAnyConcurrentMarking(JS::SliceBudget& budget) {
 #ifdef JS_GC_CONCURRENT_MARKING
   if (!useConcurrentMarking) {
     MOZ_ASSERT(!isBackgroundMarking());
-    return;
+    return true;
   }
 
   pauseBackgroundMarking();
 
   if (concurrentMarker().isMarkStackEmpty()) {
     concurrentMarkingFinishedCount++;
-  } else {
-    concurrentMarkingFinishedCount = 0;
   }
 
   // Perform as much main-thread-only marking as we can within the budget.
-  concurrentMarker().processMainThreadBuffers(budget);
+  MOZ_ASSERT(concurrentMarker().isRegularMarking());
+  bool result = concurrentMarker().processMainThreadBuffers(budget);
 
   GCMarker::moveAllWork(&marker(), &concurrentMarker());
+  MOZ_ASSERT(concurrentMarker().isMarkStackEmpty());
 
   if (!canMarkConcurrently()) {
+    // Abort concurrent marking. Ensure main thread buffers are traced first.
+    SliceBudget unlimitedBudget = SliceBudget::unlimited();
+    concurrentMarker().processMainThreadBuffers(unlimitedBudget);
     useConcurrentMarking = NoConcurrentMarking;
   }
+
+  return result;
+#else
+  return true;
 #endif
 }
 
@@ -4323,8 +4339,9 @@ std::tuple<JS::SliceBudget, JS::SliceBudget> GCRuntime::budgetConcurrentMarking(
   auto* mainThreadInterrupt = requestedBudget.interruptRequestFlag();
   auto* helperThreadInterrupt = &markTask.interruptRequest;
 
-  // No concurrent marking.
-  if (!useConcurrentMarking) {
+  // Not concurrent marking, or no suitable work.
+  bool hasHelperThreadWork = !marker().isMarkStackEmpty();
+  if (!useConcurrentMarking || !hasHelperThreadWork) {
     return {requestedBudget, SliceBudget(WorkBudget(0))};
   }
 
@@ -4351,10 +4368,9 @@ std::tuple<JS::SliceBudget, JS::SliceBudget> GCRuntime::budgetConcurrentMarking(
   // thread has run out of work more than a couple of times, start performing an
   // increasing amount of marking on the main thread.
 
-  const size_t MarkOnMainThreadAfterFinishedSlices = 2;
+  const size_t MarkOnMainThreadAfterFinishedSlices = 1;
   const double MainThreadMarkTimePerSlice = 0.5;
-  if (sliceReason == JS::GCReason::BG_TASK_FINISHED &&
-      requestedBudget.isTimeBudget() &&
+  if (requestedBudget.isTimeBudget() &&
       concurrentMarkingFinishedCount >= MarkOnMainThreadAfterFinishedSlices) {
     double millis =
         MainThreadMarkTimePerSlice *
@@ -4362,7 +4378,8 @@ std::tuple<JS::SliceBudget, JS::SliceBudget> GCRuntime::budgetConcurrentMarking(
     TimeDuration remaining = requestedBudget.deadline() - TimeStamp::Now();
     millis = std::min(millis, remaining.ToMilliseconds());
     if (millis > 0.0) {
-      return {SliceBudget(TimeBudget(millis), mainThreadInterrupt),
+      return {SliceBudget(TimeDuration::FromMilliseconds(millis),
+                          mainThreadInterrupt),
               SliceBudget(JS::UnlimitedBudget(), helperThreadInterrupt)};
     }
   }
@@ -4616,6 +4633,12 @@ bool GCRuntime::shouldYieldAtEndOfMarkPhase() const {
     return useZeal && hasZealMode(ZealMode::YieldBeforeSweeping);
   }
 
+  // Don't yield if we're using concurrent marking as mark slices are short with
+  // most of the work happening off-thread.
+  if (useConcurrentMarking) {
+    return false;
+  }
+
   // If we have already had more than one marking slice we yield with the aim of
   // starting the sweep in the next slice, since the first slice of sweeping can
   // be expensive.
@@ -4819,12 +4842,13 @@ bool GCRuntime::maybeIncreaseSliceBudget(SliceBudget& budget,
 // Return true if the budget is actually extended after rounding.
 static bool ExtendBudget(SliceBudget& budget, double newDuration) {
   long millis = lround(newDuration);
-  if (millis <= budget.timeBudget()) {
+  if (millis <= budget.timeBudget().ToMilliseconds()) {
     return false;
   }
 
   bool idleTriggered = budget.idle;
-  budget = SliceBudget(TimeBudget(millis), nullptr);  // Uninterruptible.
+  // The new budget is uninterruptible.
+  budget = SliceBudget(TimeDuration::FromMilliseconds(millis), nullptr);
   budget.idle = idleTriggered;
   budget.extended = true;
   return true;
@@ -5081,6 +5105,13 @@ MOZ_NEVER_INLINE GCRuntime::IncrementalResult GCRuntime::gcCycle(
   return result;
 }
 
+bool GCRuntime::shouldYieldBeforeSweep(const SliceBudget& budget) const {
+  // Yield eagerly after finishing marking for for internally triggered slices
+  // not running in idle time.
+  return isIncremental && sliceReason == JS::GCReason::BG_TASK_FINISHED &&
+         !budget.idle;
+}
+
 #ifdef JS_GC_ZEAL
 static bool IsDeterministicGCReason(JS::GCReason reason) {
   switch (reason) {
@@ -5329,7 +5360,7 @@ SliceBudget GCRuntime::defaultBudget(JS::GCReason reason, int64_t millis) {
     return SliceBudget::unlimited();
   }
 
-  return SliceBudget(TimeBudget(millis));
+  return SliceBudget(TimeDuration::FromMilliseconds(millis));
 }
 
 void GCRuntime::gc(JS::GCOptions options, JS::GCReason reason) {

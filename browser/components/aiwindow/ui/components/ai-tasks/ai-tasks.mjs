@@ -46,13 +46,13 @@ const MONITOR_ACTIONS = {
 // const SCHEDULE_ICON = "chrome://browser/skin/calendar-24.svg";
 
 const WEEKDAYS = [
-  { value: 0, label: "Sunday" },
-  { value: 1, label: "Monday" },
-  { value: 2, label: "Tuesday" },
-  { value: 3, label: "Wednesday" },
-  { value: 4, label: "Thursday" },
-  { value: 5, label: "Friday" },
-  { value: 6, label: "Saturday" },
+  { value: 0, ftlId: "ai-tasks-alert-weekday-sunday" },
+  { value: 1, ftlId: "ai-tasks-alert-weekday-monday" },
+  { value: 2, ftlId: "ai-tasks-alert-weekday-tuesday" },
+  { value: 3, ftlId: "ai-tasks-alert-weekday-wednesday" },
+  { value: 4, ftlId: "ai-tasks-alert-weekday-thursday" },
+  { value: 5, ftlId: "ai-tasks-alert-weekday-friday" },
+  { value: 6, ftlId: "ai-tasks-alert-weekday-saturday" },
 ];
 
 /**
@@ -323,8 +323,10 @@ export class AITasks extends MozLitElement {
       );
       if (result?.success) {
         await this.loadMonitors(); // Refresh the list
-        /* TODO: Localize */
-        this.showSuccess("Monitor deleted successfully");
+        const message = await document.l10n.formatValue(
+          "ai-tasks-alert-success-deleted"
+        );
+        this.showSuccess(message);
       } else {
         console.error("Failed to delete monitor:", result?.error);
       }
@@ -347,8 +349,11 @@ export class AITasks extends MozLitElement {
       );
       if (result?.success) {
         await this.loadMonitors(); // Refresh the list
-        /* TODO: Localize */
-        this.showSuccess(paused ? "Monitor paused" : "Monitor resumed");
+        const messageId = paused
+          ? "ai-tasks-alert-success-paused"
+          : "ai-tasks-alert-success-resumed";
+        const message = await document.l10n.formatValue(messageId);
+        this.showSuccess(message);
       } else {
         console.error("Failed to pause monitor:", result?.error);
       }
@@ -366,8 +371,10 @@ export class AITasks extends MozLitElement {
     const { id } = event.detail;
 
     // Show in-progress message immediately
-    /* TODO: Localize */
-    this.showSuccess("Checking monitor...");
+    const checkingMessage = await document.l10n.formatValue(
+      "ai-tasks-alert-success-checking"
+    );
+    this.showSuccess(checkingMessage);
 
     try {
       const result = await this.#dispatchMonitorAction(
@@ -377,8 +384,10 @@ export class AITasks extends MozLitElement {
       if (result?.success) {
         await this.loadMonitors(); // Refresh the list
         // Show completion message
-        /* TODO: Localize */
-        this.showSuccess("Monitor check completed");
+        const completedMessage = await document.l10n.formatValue(
+          "ai-tasks-alert-success-checked"
+        );
+        this.showSuccess(completedMessage);
       } else {
         console.error("Failed to run monitor check:", result?.error);
       }
@@ -421,8 +430,10 @@ export class AITasks extends MozLitElement {
       );
       if (result?.success) {
         await this.loadMonitors(); // Refresh the list
-        /* TODO: Localize */
-        this.showSuccess("Monitor updated successfully");
+        const message = await document.l10n.formatValue(
+          "ai-tasks-alert-success-updated"
+        );
+        this.showSuccess(message);
       } else {
         console.error("Failed to update monitor:", result?.error);
       }
@@ -483,6 +494,12 @@ export class AITasks extends MozLitElement {
 
     this.closeDialog();
     await this.loadMonitors();
+
+    // Show success message
+    const message = await document.l10n.formatValue(
+      "ai-tasks-alert-success-created"
+    );
+    this.showSuccess(message);
   }
 
   /**
@@ -520,10 +537,10 @@ export class AITasks extends MozLitElement {
    * since the UI handles empty input separately.
    *
    * @param {string} url - The URL to validate
-   * @returns {{valid: boolean, error: string}} Validation result
+   * @returns {Promise<{valid: boolean, error: string}>} Validation result
    * TODO: Move this validation logic to a shared utility, will need in another component as well.
    */
-  validateUrl(url) {
+  async validateUrl(url) {
     const value = url.trim();
 
     if (!value) {
@@ -536,17 +553,23 @@ export class AITasks extends MozLitElement {
       const { protocol } = new URL(value);
 
       if (protocol !== "http:" && protocol !== "https:") {
+        const error = await document.l10n.formatValue(
+          "ai-tasks-alert-error-http-only"
+        );
         return {
           valid: false,
-          error: "Only HTTP and HTTPS URLs are allowed",
+          error,
         };
       }
 
       return { valid: true, error: "" };
     } catch {
+      const error = await document.l10n.formatValue(
+        "ai-tasks-alert-error-invalid-url"
+      );
       return {
         valid: false,
-        error: "Please enter a valid URL",
+        error,
       };
     }
   }
@@ -554,10 +577,10 @@ export class AITasks extends MozLitElement {
   /**
    * Validates the pending URL input and sets error message if invalid.
    */
-  validatePendingUrl() {
+  async validatePendingUrl() {
     const url = this.pendingUrl.trim();
     if (url) {
-      const validation = this.validateUrl(url);
+      const validation = await this.validateUrl(url);
       this.pendingUrlError = validation.error;
     } else {
       this.pendingUrlError = "";
@@ -568,25 +591,30 @@ export class AITasks extends MozLitElement {
    * Adds a URL to the pageUrls array after validation.
    * Handles various validation scenarios including duplicates and max limit.
    */
-  addUrl() {
+  async addUrl() {
     const url = this.pendingUrl.trim();
     if (!url) {
       return;
     }
 
-    const validation = this.validateUrl(url);
+    const validation = await this.validateUrl(url);
     if (!validation.valid) {
       this.pendingUrlError = validation.error;
       return;
     }
 
     if (this.pageUrls.includes(url)) {
-      this.pendingUrlError = "This URL has already been added";
+      this.pendingUrlError = await document.l10n.formatValue(
+        "ai-tasks-alert-error-duplicate-url"
+      );
       return;
     }
 
     if (this.pageUrls.length >= this._constants.TOTAL_NUM_URLS_IN_MONITOR) {
-      this.pendingUrlError = `Maximum of ${this._constants.TOTAL_NUM_URLS_IN_MONITOR} URLs allowed`;
+      this.pendingUrlError = await document.l10n.formatValue(
+        "ai-tasks-alert-error-max-urls",
+        { maxUrls: this._constants.TOTAL_NUM_URLS_IN_MONITOR }
+      );
       return;
     }
 
@@ -668,10 +696,10 @@ export class AITasks extends MozLitElement {
       <dialog class="modal-wrapper">
         <div class="modal-container">
           <div class="modal-header">
-            <div>
-              <h2 class="modal-title">Create Monitor</h2>
-              <p>Monitors a page for changes</p>
-            </div>
+            <h2
+              class="modal-title"
+              data-l10n-id="ai-tasks-alert-modal-title"
+            ></h2>
 
             <moz-button
               size="small"
@@ -683,10 +711,10 @@ export class AITasks extends MozLitElement {
 
           <div class="modal-content">
             <div class="form-row">
-              <label class="form-label">Name this monitor</label>
               <moz-input-text
                 class="form-input"
-                placeholder="Enter a name for this monitor"
+                data-l10n-id="ai-tasks-alert-name"
+                data-l10n-attrs="placeholder,label"
                 @input=${e => this.handleMonitorNameInput(e)}
                 .value=${this.monitorName}
                 maxlength="100"
@@ -694,18 +722,48 @@ export class AITasks extends MozLitElement {
             </div>
 
             <div class="form-row">
-              <label class="form-label">Alert me when</label>
               <moz-textarea
                 class="form-textarea"
-                placeholder="Describe what to watch"
+                data-l10n-id="ai-tasks-alert-alert"
+                data-l10n-attrs="placeholder,label"
                 @input=${e => this.handleAlertInput(e)}
                 .value=${this.alertDescription}
               ></moz-textarea>
             </div>
 
             <div class="form-row">
-              <label class="form-label">Pages</label>
               <div class="pages-container">
+                <div class="page-input-row">
+                  <moz-input-url
+                    class="form-input ${this.pendingUrlError ? "error" : ""}"
+                    data-l10n-id="ai-tasks-alert-pages"
+                    data-l10n-attrs="placeholder,label,description"
+                    data-l10n-args=${JSON.stringify({
+                      maxPages: this._constants.TOTAL_NUM_URLS_IN_MONITOR,
+                    })}
+                    @input=${e => this.handlePendingUrlInput(e)}
+                    @keydown=${e => this.handlePendingUrlKeydown(e)}
+                    @blur=${() => this.validatePendingUrl()}
+                    .value=${this.pendingUrl}
+                    maxlength="2048"
+                  ></moz-input-url>
+                  <moz-button
+                    size="small"
+                    type="icon ghost"
+                    class="add-page-btn"
+                    iconSrc="chrome://global/skin/icons/plus.svg"
+                    ?disabled=${this.pageUrls.length >=
+                    this._constants.TOTAL_NUM_URLS_IN_MONITOR}
+                    @click=${() => this.addUrl()}
+                    data-l10n-id="ai-tasks-alert-add-url"
+                    data-l10n-attrs="aria-label"
+                  ></moz-button>
+                </div>
+                ${this.pendingUrlError
+                  ? html`<div class="error-message">
+                      ${this.pendingUrlError}
+                    </div>`
+                  : ""}
                 ${this.pageUrls.length
                   ? html`
                       <div class="page-pills-row">
@@ -718,7 +776,8 @@ export class AITasks extends MozLitElement {
                               <button
                                 type="button"
                                 class="page-pill-remove"
-                                aria-label="Remove page"
+                                data-l10n-id="ai-tasks-alert-remove-page-label"
+                                data-l10n-attrs="aria-label,title"
                                 @click=${() => this.removeUrl(url)}
                               ></button>
                             </span>
@@ -727,57 +786,28 @@ export class AITasks extends MozLitElement {
                       </div>
                     `
                   : ""}
-                <div class="page-input-row">
-                  <moz-input-url
-                    class="form-input ${this.pendingUrlError ? "error" : ""}"
-                    placeholder="Enter URL"
-                    @input=${e => this.handlePendingUrlInput(e)}
-                    @keydown=${e => this.handlePendingUrlKeydown(e)}
-                    @blur=${() => this.validatePendingUrl()}
-                    .value=${this.pendingUrl}
-                    maxlength="2048"
-                    aria-label="Add a page URL"
-                  ></moz-input-url>
-                  <moz-button
-                    size="small"
-                    type="icon ghost"
-                    class="add-page-btn"
-                    iconSrc="chrome://global/skin/icons/plus.svg"
-                    ?disabled=${this.pageUrls.length >=
-                    this._constants.TOTAL_NUM_URLS_IN_MONITOR}
-                    @click=${() => this.addUrl()}
-                    aria-label="Add URL"
-                  ></moz-button>
-                </div>
-                ${this.pendingUrlError
-                  ? html`<div class="error-message">
-                      ${this.pendingUrlError}
-                    </div>`
-                  : ""}
-                <p class="form-helper-text">
-                  No page open here — paste one, press Enter, and I'll read its
-                  value. Up to ${this._constants.TOTAL_NUM_URLS_IN_MONITOR}
-                  pages.
-                </p>
               </div>
             </div>
 
             <div class="form-row">
               <div class="schedule-container">
                 <div class="form-section-half">
-                  <label class="form-label">Check</label>
+                  <label
+                    class="form-label"
+                    data-l10n-id="ai-tasks-alert-check-label"
+                  ></label>
                   <moz-select
                     class="form-select"
-                    value=${this.checkFrequency}
+                    .value=${this.checkFrequency}
                     @change=${e => this.handleFrequencyChange(e)}
                   >
                     <moz-option
                       value=${this._constants.SCHEDULE_TYPES.DAILY}
-                      label="Daily"
+                      data-l10n-id="ai-tasks-alert-schedule-daily"
                     ></moz-option>
                     <moz-option
                       value=${this._constants.SCHEDULE_TYPES.WEEKLY}
-                      label="Weekly"
+                      data-l10n-id="ai-tasks-alert-schedule-weekly"
                     ></moz-option>
                   </moz-select>
                 </div>
@@ -785,7 +815,10 @@ export class AITasks extends MozLitElement {
                 ${this.checkFrequency === this._constants.SCHEDULE_TYPES.DAILY
                   ? html`
                       <div class="form-section-half">
-                        <label class="form-label">Time</label>
+                        <label
+                          class="form-label"
+                          data-l10n-id="ai-tasks-alert-time-label"
+                        ></label>
                         <input
                           type="time"
                           class="form-input time-input"
@@ -798,7 +831,10 @@ export class AITasks extends MozLitElement {
                 ${this.checkFrequency === this._constants.SCHEDULE_TYPES.WEEKLY
                   ? html`
                       <div class="form-section-half">
-                        <label class="form-label">Day</label>
+                        <label
+                          class="form-label"
+                          data-l10n-id="ai-tasks-alert-day-label"
+                        ></label>
                         <moz-select
                           class="form-select"
                           value=${this.scheduleWeekday}
@@ -808,14 +844,17 @@ export class AITasks extends MozLitElement {
                             day => html`
                               <moz-option
                                 value=${day.value}
-                                label=${day.label}
+                                data-l10n-id=${day.ftlId}
                               ></moz-option>
                             `
                           )}
                         </moz-select>
                       </div>
                       <div class="form-section-half">
-                        <label class="form-label">Time</label>
+                        <label
+                          class="form-label"
+                          data-l10n-id="ai-tasks-alert-time-label"
+                        ></label>
                         <input
                           type="time"
                           class="form-input time-input"
@@ -832,12 +871,12 @@ export class AITasks extends MozLitElement {
           <div class="dialog-actions">
             <moz-button
               type="default"
-              label="Cancel"
+              data-l10n-id="ai-tasks-alert-cancel-button"
               @click=${() => this.closeDialog()}
             ></moz-button>
             <moz-button
               type="primary"
-              label="Start monitoring"
+              data-l10n-id="ai-tasks-alert-create-button"
               ?disabled=${!this.isFormValid}
               @click=${() => this.handleConfirm()}
             ></moz-button>
@@ -848,12 +887,10 @@ export class AITasks extends MozLitElement {
       <div class="page-wrapper">
         <div class="page-container">
           <div class="header">
-            <h2>Tools</h2>
+            <h2 data-l10n-id="ai-tasks-page-title"></h2>
             <moz-button
               class="add-task-button"
-              label=${this.isMaxMonitorsReached
-                ? "Max Monitors Created"
-                : "Add Monitor"}
+              data-l10n-id="ai-tasks-add-alert-button"
               ?disabled=${this.isMaxMonitorsReached}
               @click=${() => this.openDialog()}
             ></moz-button>

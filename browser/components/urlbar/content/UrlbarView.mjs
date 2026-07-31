@@ -4308,14 +4308,18 @@ export class UrlbarView {
             "awesome-bar-result-menu";
         break;
     }
-    this.input.pickResult(result, event, menuitem);
+    this.input.pickResult({ result, event, element: menuitem });
   }
 
   on_command(event) {
     let contextMenu;
     if ((contextMenu = event.target.closest("#urlbarView-context-menu"))) {
       let row = contextMenu.triggerNode.closest(".urlbarView-row");
-      this.input.pickResult(row.result, event, event.target);
+      this.input.pickResult({
+        result: row.result,
+        event,
+        element: event.target,
+      });
     }
   }
 

@@ -23,6 +23,7 @@ from mozbuild.util import HierarchicalStringList
 from ..testing import REFTEST_FLAVORS, TEST_MANIFESTS, SupportFilesConverter
 from .context import Context, ObjDirPath, Path, SourcePath, SubContext
 from .data import (
+    BaseRustLibrary,
     BaseRustProgram,
     ChromeManifestEntry,
     ComputedFlags,
@@ -53,6 +54,7 @@ from .data import (
     LocalInclude,
     LocalizedFiles,
     LocalizedPreprocessedFiles,
+    MacOSBundle,
     MozSrcFiles,
     ObjdirFiles,
     ObjdirPreprocessedFiles,
@@ -76,6 +78,7 @@ from .data import (
     XPCOMComponentManifests,
     XPIDLModule,
 )
+from .l10n_manifest import emit_l10n_manifest_contexts
 from .reader import SandboxValidationError
 
 
@@ -175,6 +178,16 @@ class TreeMetadataEmitter(LoggingMixin):
             for o in emit_objs(objs):
                 yield o
 
+        # Yield one L10nManifestContext per moz.build directory with
+        # locale-aware content. Runs unconditionally (artifact builds
+        # do l10n too).
+        start = time.monotonic()
+        objs = emit_l10n_manifest_contexts(self, contexts)
+        self._emitter_time += time.monotonic() - start
+
+        for o in emit_objs(objs):
+            yield o
+
     def _emit_libs_derived(self, contexts):
         # First aggregate idl sources.
         webidl_attrs = [
@@ -261,12 +274,12 @@ class TreeMetadataEmitter(LoggingMixin):
         # Check that all static libraries refering shared libraries in
         # USE_LIBS are linked into a shared library or program.
         for lib in self._static_linking_shared:
-            # Rust tests can declare shared libraries in USE_LIBS for
-            # build-order purposes; actual linking is handled by Cargo. The
-            # dead-staticlib check is too strict for this case because it
-            # expects a moz.build-level consumer of the static library,
-            # which Rust-to-Rust linkage doesn't provide.
-            if isinstance(lib, RustTests):
+            # Rust libraries and tests can declare shared libraries in
+            # USE_LIBS for build-order purposes; actual linking is handled
+            # by Cargo. The dead-staticlib check is too strict for this
+            # case because it expects a moz.build-level consumer of the
+            # static library, which Rust-to-Rust linkage doesn't provide.
+            if isinstance(lib, (BaseRustLibrary, RustTests)):
                 continue
             if all(isinstance(o, StaticLibrary) for o in recurse_refs(lib)):
                 shared_libs = sorted(
@@ -391,6 +404,7 @@ class TreeMetadataEmitter(LoggingMixin):
                     HostLibrary,
                     HostSharedLibrary,
                     BaseRustProgram,
+                    BaseRustLibrary,
                     RustTests,
                 ),
             )
@@ -634,11 +648,13 @@ class TreeMetadataEmitter(LoggingMixin):
                 "Can't determine a crate-type for %s from Cargo.toml" % libname, context
             )
 
-        crate_type = crate_type[0]
-        if crate_type != "staticlib":
+        if "staticlib" not in crate_type:
             raise SandboxValidationError(
-                "crate-type %s is not permitted for %s" % (crate_type, libname), context
+                f"crate-type {crate_type} for {libname} must include 'staticlib'",
+                context,
             )
+
+        crate_type = "staticlib"
 
         dependencies = set(config.get("dependencies", {}).keys())
 
@@ -1673,6 +1689,9 @@ class TreeMetadataEmitter(LoggingMixin):
 
         if jsshell_files := context.get("JS_SHELL_ARCHIVE_FILES", []):
             yield JsShellArchive(context, jsshell_files)
+
+        for bundle in context.get("MACOS_BUNDLES", []):
+            yield MacOSBundle(context, bundle)
 
         rust_tests = context.get("RUST_TESTS", [])
         if rust_tests:

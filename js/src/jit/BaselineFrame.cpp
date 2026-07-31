@@ -35,6 +35,14 @@ void BaselineFrame::trace(JSTracer* trc, const JSJitFrameIter& frameIterator) {
     TraceRootRange(trc, numArgs + isConstructing(), argv(), "baseline-args");
   }
 
+  // A resumed generator/async frame stores the resume args (ResumeFrameArgs)
+  // after the formals (for function frames) or before the frame (for module
+  // frames).
+  if (isResumingGenerator()) {
+    TraceRootRange(trc, ResumeFrameArgs::NumSlots, resumeArgs(),
+                   "baseline-resume-args");
+  }
+
   // Trace environment chain, if it exists.
   if (envChain_) {
     TraceRoot(trc, &envChain_, "baseline-envchain");
@@ -130,6 +138,9 @@ void BaselineFrame::setInterpreterFieldsForPrologue(JSScript* script) {
 
 void BaselineFrame::initForOsr(InterpreterFrame* fp, uint32_t numStackValues) {
   mozilla::PodZero(this);
+
+  MOZ_ASSERT(!fp->isResumingGenerator());
+  MOZ_ASSERT(!isResumingGenerator());
 
   envChain_ = fp->environmentChain();
 

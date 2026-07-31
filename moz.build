@@ -41,6 +41,9 @@ with Files(".hgignore"):
 with Files(".hgtags"):
     BUG_COMPONENT = ("Firefox Build System", "General")
 
+with Files(".watchmanconfig"):
+    BUG_COMPONENT = ("Firefox Build System", "General")
+
 with Files("docs/**"):
     BUG_COMPONENT = ("Developer Infrastructure", "Source Documentation")
     SCHEDULES.exclusive = ["docs"]
@@ -135,6 +138,9 @@ with Files("AGENTS.md"):
     BUG_COMPONENT = ("Developer Infrastructure", "AI for Development")
 
 with Files("CLAUDE.md"):
+    BUG_COMPONENT = ("Developer Infrastructure", "AI for Development")
+
+with Files("review-context.toml"):
     BUG_COMPONENT = ("Developer Infrastructure", "AI for Development")
 
 with Files("nsprpub/**"):

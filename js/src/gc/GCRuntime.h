@@ -891,6 +891,8 @@ class GCRuntime {
                         bool budgetWasIncreased);
 
   bool shouldYieldAtEndOfMarkPhase() const;
+  bool shouldYieldBeforeSweep(const JS::SliceBudget& budget) const;
+
   void collectNurseryFromMajorGC(JS::GCReason reason);
   void collectNursery(JS::GCOptions options, JS::GCReason reason,
                       gcstats::PhaseKind phase);
@@ -929,7 +931,7 @@ class GCRuntime {
   std::tuple<JS::SliceBudget, JS::SliceBudget> budgetConcurrentMarking(
       const JS::SliceBudget& requestedBudget);
   void maybeStartConcurrentMarking(JS::SliceBudget& budget);
-  void finishAnyConcurrentMarking(JS::SliceBudget& budget);
+  bool finishAnyConcurrentMarking(JS::SliceBudget& budget);
   friend class BackgroundMarkTask;
   enum ParallelMarking : bool {
     NoParallelMarking = false,

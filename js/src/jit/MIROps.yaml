@@ -3741,6 +3741,7 @@
   result_type: Boolean
   possibly_calls: true
   generate_lir: true
+  lir_temps: 1
 
 - name: MaybeExtractAwaitValue
   gen_boilerplate: false
@@ -5003,7 +5004,6 @@
   gen_boilerplate: false
 #endif
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 - name: AddDisposableResource
   operands:
     environment: Object
@@ -5020,4 +5020,3 @@
     environment: Object
   result_type: Value
   generate_lir: true
-#endif

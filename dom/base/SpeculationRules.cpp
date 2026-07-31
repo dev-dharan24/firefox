@@ -9,6 +9,7 @@
 #include "mozilla/dom/PrefetchCandidates.h"
 #include "mozilla/dom/ReferrerPolicyBinding.h"
 #include "mozilla/dom/SpeculationRuleSet.h"
+#include "mozilla/dom/SpeculationRulesManager.h"
 #include "mozilla/dom/speculationrules_ffi_generated.h"
 #include "nsCycleCollectionParticipant.h"
 #include "nsIScriptElement.h"
@@ -124,8 +125,9 @@ void SpeculationRules::InnerConsiderLoads() {
   }
 
   // Step 4.
-  // TODO(avandolder): Cancel and discard existing speculation rules prefetch
-  // records that are not still being speculated given prefetchCandidates.
+  if (SpeculationRulesManager* srm = mDocument->GetSpeculationRulesManager()) {
+    srm->CancelStalePrefetches(prefetchCandidates->AsArray());
+  }
 
   // Step 5-6.
   // Here, we group the candidates in-place, unlike the spec.
@@ -135,10 +137,9 @@ void SpeculationRules::InnerConsiderLoads() {
   // based on the eagerness value of the candidates.
   // Currently, we only support immediate eagerness, and we fire these
   // prefetches now.
-  for ([[maybe_unused]] PrefetchCandidate& candidate :
-       prefetchCandidates->AsArray()) {
-    // TODO(avandolder): Create a prefetch record and start a referrer-initiated
-    // navigational prefetch given candidate.
+  SpeculationRulesManager* srm = mDocument->EnsureSpeculationRulesManager();
+  for (PrefetchCandidate& candidate : prefetchCandidates->AsArray()) {
+    srm->StartPrefetch(mDocument, candidate);
   }
 }
 

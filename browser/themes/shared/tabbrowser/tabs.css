@@ -29,11 +29,7 @@
       --tab-group-label-size: 27px;
     }
   }
-  @media -moz-pref("browser.nova.enabled") {
-    &[uidensity="compact"] {
-      --tab-margin-block: 4px;
-    }
-  }
+
   --tab-group-counter-size: 24px;
   --split-view-padding-block: 2px;
   --split-view-tab-padding-inline: 2px;
@@ -71,6 +67,14 @@
   --tab-vertical-scrollbar-color: auto;
   @media (-moz-platform: macos) {
     --tab-vertical-scrollbar-color: color-mix(in srgb, currentColor 26%, transparent) transparent;
+  }
+
+  @media -moz-pref("browser.nova.enabled") {
+    --tab-group-label-padding: 8px;
+
+    &[uidensity="compact"] {
+      --tab-margin-block: 4px;
+    }
   }
 
   @media not -moz-pref("browser.nova.enabled") {

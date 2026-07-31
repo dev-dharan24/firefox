@@ -39,7 +39,7 @@ skip-if = [
 
 ["browser_mozicon_file.js"]
 skip-if = [
-  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && nova", # Bug 2057880
+  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && display == 'wayland'", # Bug 2057880
 ]
 
 ["browser_mozicon_file_sandbox_headless.js"]

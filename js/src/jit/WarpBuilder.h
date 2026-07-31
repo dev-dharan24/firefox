@@ -20,8 +20,6 @@ namespace jit {
 
 // JSOps not yet supported by WarpBuilder. See warning at the end of the list.
 #define WARP_UNSUPPORTED_OPCODE_LIST(_)  \
-  /* Intentionally not implemented */    \
-  _(ForceInterpreter)                    \
   /* With */                             \
   _(EnterWith)                           \
   _(LeaveWith)                           \

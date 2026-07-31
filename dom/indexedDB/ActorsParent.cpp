@@ -15878,12 +15878,9 @@ nsresult OpenDatabaseOp::LoadDatabaseInformation(
               QM_TRY_INSPECT(const IndexOrObjectStoreId& objectStoreId,
                              MOZ_TO_RESULT_INVOKE_MEMBER(stmt, GetInt64, 1));
 
-              // XXX Why does this return NS_ERROR_OUT_OF_MEMORY if we don't
-              // know the object store id?
-
               auto objectStoreMetadata = objectStores.Lookup(objectStoreId);
               QM_TRY(OkIf(static_cast<bool>(objectStoreMetadata)),
-                     Err(NS_ERROR_OUT_OF_MEMORY));
+                     Err(NS_ERROR_FILE_CORRUPTED));
 
               MOZ_ASSERT((*objectStoreMetadata)->mCommonMetadata.id() ==
                          objectStoreId);

@@ -29,7 +29,8 @@ class gfxOTSExpandingMemoryStream : public ots::OTSStream {
   explicit gfxOTSExpandingMemoryStream(size_t initial,
                                        size_t limit = DEFAULT_LIMIT)
       : mLength(initial), mLimit(limit), mOff(0) {
-    mPtr = mAlloc.Grow(nullptr, mLength);
+    mPtr = mAlloc.Grow(nullptr, initial);
+    std::memset(mPtr, 0, initial);
   }
 
   ~gfxOTSExpandingMemoryStream() { mAlloc.Free(mPtr); }
@@ -59,6 +60,7 @@ class gfxOTSExpandingMemoryStream : public ots::OTSStream {
         newLength = mLimit;
       }
       mPtr = mAlloc.Grow(mPtr, newLength);
+      std::memset(static_cast<char*>(mPtr) + mLength, 0, newLength - mLength);
       mLength = newLength;
       return WriteRaw(data, length);
     }

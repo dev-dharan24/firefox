@@ -328,9 +328,9 @@ pub fn create_webrender_instance(
     shaders: Option<&SharedShaders>,
 ) -> Result<(Renderer, RenderApiSender), RendererError> {
     if !wr_has_been_initialized() {
-        // If the profiler feature is enabled, try to load the profiler shared library
+        // If the tracy feature is enabled, try to load the shared library
         // if the path was provided.
-        #[cfg(feature = "profiler")]
+        #[cfg(feature = "tracy")]
         unsafe {
             if let Ok(ref tracy_path) = std::env::var("WR_TRACY_PATH") {
                 let ok = tracy_rs::load(tracy_path);
@@ -757,6 +757,7 @@ pub fn create_webrender_instance(
     let mut renderer = Renderer {
         result_rx,
         api_tx: api_tx.clone(),
+        backend_id,
         _render_backend_pool: owned_pool.clone(),
         device,
         active_documents: FastHashMap::default(),

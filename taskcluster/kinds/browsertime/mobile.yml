@@ -167,7 +167,10 @@ browsertime-tp6m:
                         by-test-platform:
                             android-hw-a55.*shippable.*: [trunk-only]
                             default: []
-                    default: [mozilla-central]
+                    default:
+                        by-test-platform:
+                            android-hw-a55.*shippable.*: [trunk-only]
+                            default: [mozilla-central]
             default: []
 
 browsertime-tp6m-essential:

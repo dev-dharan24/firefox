@@ -36,15 +36,22 @@ class BaseHost:
 
     def upstream_tag(self, revision):
         """Temporarily clone the repo to get the latest tag and timestamp"""
+        clone_config = ["-c", "core.autocrlf=input"]
+        if self.manifest["vendoring"].get("tolerate-git-fsck-errors", False):
+            clone_config += [
+                "-c",
+                "fetch.fsckObjects=false",
+                "-c",
+                "transfer.fsckObjects=false",
+            ]
+
         with tempfile.TemporaryDirectory() as temp_repo_clone:
             starting_directory = os.getcwd()
             os.chdir(temp_repo_clone)
             subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "-c",
-                    "core.autocrlf=input",
+                ["git", "clone"]
+                + clone_config
+                + [
                     self.manifest["vendoring"]["url"],
                     self.manifest["origin"]["name"],
                 ],

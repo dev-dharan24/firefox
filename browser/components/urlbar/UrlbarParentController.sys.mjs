@@ -568,6 +568,33 @@ export class UrlbarParentController {
   }
 
   /**
+   * Runs the single-word keyword URI fixup DNS check for a search picked in the
+   * address bar. When a single word is turned directly into a search (bypassing
+   * the docShell), this reproduces the docShell's DNS lookup that offers to
+   * visit the word as a host instead (see `gKeywordURIFixup`). Routed here
+   * because it shows a per-window infobar the content input can't, and it needs
+   * the parent's search service to fix up the string.
+   *
+   * @param {string} searchString
+   *   The string being searched.
+   * @param {?number} browserId
+   *   The browser the search loads into, or null for the selected browser.
+   */
+  checkKeywordURIFixup(searchString, browserId) {
+    let browser =
+      (browserId &&
+        BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement) ||
+      this.browserWindow.gBrowser.selectedBrowser;
+    let fixupInfo = lazy.UrlbarUtils.getURIFixupInfo(
+      searchString,
+      this.isPrivate
+    );
+    if (fixupInfo) {
+      this.browserWindow.gKeywordURIFixup.check(browser, fixupInfo);
+    }
+  }
+
+  /**
    * Cancels an in-progress query. Note, queries may continue running if they
    * can't be cancelled.
    */
@@ -659,9 +686,13 @@ export class UrlbarParentController {
       searchTerms
     );
 
-    this.input.window.openTrustedLinkIn(url, where, {
+    this.browserWindow.openTrustedLinkIn(url, where, {
       inBackground,
       postData,
+      globalHistoryOptions: {
+        triggeringSource: this.sapName,
+        triggeringSearchEngine: searchEngine.name,
+      },
     });
   }
 
@@ -675,12 +706,9 @@ export class UrlbarParentController {
    */
   openSearchForm(engineId, where, inBackground = false) {
     let searchEngine = lazy.SearchService.getEngineById(engineId);
-    lazy.BrowserSearchTelemetry.recordSearchForm(
-      searchEngine,
-      this.input.sapName
-    );
+    lazy.BrowserSearchTelemetry.recordSearchForm(searchEngine, this.sapName);
     let url = searchEngine.searchForm;
-    this.input.window.openTrustedLinkIn(url, where, {
+    this.browserWindow.openTrustedLinkIn(url, where, {
       inBackground,
     });
   }
@@ -1084,6 +1112,19 @@ export class UrlbarParentController {
 
   #engineStoreInitStarted = false;
 
+  #engineObserverRegistered = false;
+
+  /**
+   * Tears down the controller's process-wide registrations, so nothing reaches
+   * it once the input it serves is gone.
+   */
+  destroy() {
+    if (this.#engineObserverRegistered) {
+      Services.obs.removeObserver(this, "browser-search-engine-modified");
+      this.#engineObserverRegistered = false;
+    }
+  }
+
   /**
    * Initializes the engine store synchronously if the search service
    * is already loaded and initialized.
@@ -1133,6 +1174,7 @@ export class UrlbarParentController {
     }
     this.#child.updateEngineStore("init", engineInfos, defaultIndex);
     Services.obs.addObserver(this, "browser-search-engine-modified", true);
+    this.#engineObserverRegistered = true;
   }
 
   QueryInterface = ChromeUtils.generateQI([
@@ -1965,6 +2007,7 @@ export class TelemetryEvent {
    */
   reset() {
     this.#previousSearchWordsSet = null;
+    this._lastSearchDetailsForDisableSuggestTracking = null;
   }
 
   /**

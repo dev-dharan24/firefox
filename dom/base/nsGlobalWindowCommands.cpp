@@ -16,6 +16,7 @@
 #include "mozilla/TextEvents.h"
 #include "mozilla/dom/DataTransfer.h"
 #include "mozilla/dom/Document.h"
+#include "mozilla/dom/EditContext.h"
 #include "mozilla/dom/Selection.h"
 #include "mozilla/dom/UserActivation.h"
 #include "mozilla/intl/WordBreaker.h"
@@ -82,7 +83,14 @@ constexpr nsLiteralCString kPhysicalSelectCommands[] = {
 class nsSelectionCommandsBase : public ControllerCommand {
  public:
   bool IsCommandEnabled(const nsACString&, nsISupports*) override {
-    return true;
+    dom::Element* element = nsFocusManager::GetFocusedElementStatic();
+    if (!element) {
+      return true;
+    }
+    // Disable all selection commands for canvas-based EditContext,
+    // since the web app handles the selection for it.
+    dom::EditContext* editContext = element->OwnerDoc()->GetActiveEditContext();
+    return !editContext || !editContext->IsCanvas();
   }
   void GetCommandStateParams(const nsACString&, nsICommandParams*,
                              nsISupports*) override {}

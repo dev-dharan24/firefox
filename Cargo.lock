@@ -473,6 +473,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "nss-as",
+ "parking_lot",
  "rusqlite 0.37.0",
  "serde",
  "serde_derive",
@@ -3049,6 +3050,8 @@ dependencies = [
  "filter_adult",
  "init_rust_components",
  "logins",
+ "mozilla-central-workspace-hack",
+ "rc_crypto",
  "relevancy",
  "search",
  "suggest",
@@ -4081,8 +4084,9 @@ dependencies = [
 
 [[package]]
 name = "jxl"
-version = "0.4.3"
-source = "git+https://github.com/libjxl/jxl-rs?rev=c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a#c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ad19139224d7643adda1d4b9792caea2346ce7a079ef00ae653b1d7a938dce7"
 dependencies = [
  "array-init",
  "byteorder",
@@ -4104,10 +4108,10 @@ dependencies = [
 
 [[package]]
 name = "jxl_macros"
-version = "0.4.3"
-source = "git+https://github.com/libjxl/jxl-rs?rev=c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a#c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "341267f3e48d02b0fc44aa3102e0ac46204e726bc63a1caa161431f309e9de42"
 dependencies = [
- "proc-macro-error2",
  "proc-macro2",
  "quote",
  "syn",
@@ -4115,15 +4119,16 @@ dependencies = [
 
 [[package]]
 name = "jxl_simd"
-version = "0.4.3"
+version = "0.5.1"
 dependencies = [
  "rustversion",
 ]
 
 [[package]]
 name = "jxl_transforms"
-version = "0.4.3"
-source = "git+https://github.com/libjxl/jxl-rs?rev=c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a#c41cbfaf34c2c8ebc3fb6655c885fe427ab9542a"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2dae97098351cbffdbca17907de1055bf60be86e692f9d657f5b565e336b43b"
 dependencies = [
  "jxl_simd",
 ]
@@ -6400,28 +6405,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6920,15 +6903,6 @@ dependencies = [
  "url",
  "viaduct",
  "viaduct-dev",
-]
-
-[[package]]
-name = "remove_dir_all"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
-dependencies = [
- "winapi",
 ]
 
 [[package]]
@@ -8506,6 +8480,7 @@ dependencies = [
  "extend",
  "heck",
  "indexmap",
+ "mozilla-central-workspace-hack",
  "serde",
  "textwrap",
  "toml 0.5.999",
@@ -8518,6 +8493,7 @@ dependencies = [
 name = "uniffi-bindgen-gecko-js-test-fixtures"
 version = "0.29.0"
 dependencies = [
+ "mozilla-central-workspace-hack",
  "uniffi_bindings_tests",
  "uniffi_bindings_tests_collision",
  "uniffi_bindings_tests_external_types",
@@ -9121,7 +9097,6 @@ dependencies = [
  "num_cpus",
  "objc",
  "rayon",
- "remove_dir_all",
  "rustc-hash 2.1.1",
  "static_prefs",
  "swgl",

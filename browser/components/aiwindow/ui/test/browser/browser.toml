@@ -21,6 +21,8 @@ support-files = [
   "test_memories_icon_button.mjs",
   "test_grouped_chips_page.html",
   "test_grouped_chips.mjs",
+  "test_smartwindow_prompts_page.html",
+  "test_smartwindow_prompts.mjs",
   "test_smartwindow_panel_list_page.html",
   "test_smartwindow_panel_list.mjs",
   "test_website_chip_page.html",
@@ -67,6 +69,8 @@ skip-if = [
 ["browser_aiwindow_agent_monitor_chat.js"]
 
 ["browser_aiwindow_agent_monitor_item.js"]
+
+["browser_aiwindow_agentui_command.js"]
 
 ["browser_aiwindow_ai_action_result.js"]
 
@@ -207,11 +211,15 @@ skip-if = [
   "nova", # Bug 2057549
 ]
 
+["browser_smartwindow_bookmarks_toolbar.js"]
+
 ["browser_smartwindow_chat_browser_tabbable.js"]
 
 ["browser_smartwindow_chat_markdown_parser.js"]
 
 ["browser_smartwindow_classic_mode_switch.js"]
+
+["browser_smartwindow_client_error_telemetry.js"]
 
 ["browser_smartwindow_content.js"]
 
@@ -226,6 +234,8 @@ skip-if = [
 ["browser_smartwindow_disclaimer.js"]
 
 ["browser_smartwindow_footer.js"]
+
+["browser_smartwindow_get_page_content_timeout.js"]
 
 ["browser_smartwindow_history_commands.js"]
 

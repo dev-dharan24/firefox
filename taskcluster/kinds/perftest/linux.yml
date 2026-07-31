@@ -650,6 +650,8 @@ ml-perf-autofill:
         fetch:
             - ort.jsep.wasm
             - mozilla-autofill
+            - mozilla-autofill-embed
+            - mozilla-autofill-head
     description: Run ML Autofill Model
     treeherder:
         symbol: perftest(ml-perf-autofill)

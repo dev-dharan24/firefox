@@ -126,6 +126,14 @@ pub struct FrameBuildingState<'a> {
     pub dirty_region_stack: Vec<DirtyRegion>,
     pub composite_state: &'a mut CompositeState,
     pub num_visible_primitives: u32,
+    /// Primitives visited by the prepare traversal, whether or not they
+    /// produced a draw. Accumulated here and reported once per frame, in the
+    /// same way as `num_visible_primitives`.
+    pub num_visited_primitives: u32,
+    /// Total (primitive, command buffer) pairs emitted.
+    pub num_cmd_targets: u32,
+    /// Pictures that obtained a context this frame.
+    pub num_pictures: u32,
     pub plane_splitters: &'a mut [PlaneSplitter],
     pub surface_builder: SurfaceBuilder,
     pub cmd_buffers: &'a mut CommandBufferList,
@@ -257,7 +265,7 @@ impl FrameBuilder {
         frame_memory: &FrameMemory,
         profile: &mut TransactionProfile,
     ) {
-        profile_scope!("build_layer_screen_rects_and_cull_layers");
+        tracy_rs::profile_scope!("build_layer_screen_rects_and_cull_layers");
 
         let render_picture_cache_slices = present;
 
@@ -314,15 +322,10 @@ impl FrameBuilder {
             false,
         ));
 
-        // Build the per-frame draw header storage with one entry per prim
-        // instance. Identity-indexed by `PrimitiveInstanceIndex.0` for now;
-        // a follow-up will switch this to push-per-draw. The per-prim
-        // `snapped_local_rect` is filled in by the visibility pass.
-        scratch.primitive.frame.draws.clear();
-        scratch.primitive.frame.draws.resize_with(
-            scene.prim_instances.len(),
-            crate::visibility::PrimitiveDrawHeader::new,
-        );
+        // Empty the per-frame draw storage. The visibility pass pushes into it
+        // as it finds drawn primitives; the scene's primitive count only sizes
+        // the instance-to-draw side table.
+        scratch.primitive.frame.reset_draws(scene.prim_instances.len());
 
         // Cluster, prim, and clip-leaf rects are snapped to the device pixel
         // grid as they are produced by the in-frame picture-graph passes:
@@ -351,7 +354,6 @@ impl FrameBuilder {
         }
 
         {
-            profile_scope!("UpdateVisibility");
             profile_marker!("UpdateVisibility");
             profile.start_time(profiler::FRAME_VISIBILITY_TIME);
 
@@ -489,6 +491,8 @@ impl FrameBuilder {
                 }
             }
 
+            scratch.primitive.frame.assert_draws_resolved();
+
             profile.end_time(profiler::FRAME_VISIBILITY_TIME);
         }
 
@@ -514,6 +518,9 @@ impl FrameBuilder {
             dirty_region_stack: scratch.frame.dirty_region_stack.take(),
             composite_state,
             num_visible_primitives: 0,
+            num_visited_primitives: 0,
+            num_cmd_targets: 0,
+            num_pictures: 0,
             plane_splitters: &mut self.plane_splitters,
             surface_builder: SurfaceBuilder::new(),
             cmd_buffers,
@@ -604,6 +611,9 @@ impl FrameBuilder {
         frame_state.surface_builder.finalize();
         profile.end_time(profiler::FRAME_PREPARE_TIME);
         profile.set(profiler::VISIBLE_PRIMITIVES, frame_state.num_visible_primitives);
+        profile.set(profiler::PREPARE_VISITED_PRIMS, frame_state.num_visited_primitives);
+        profile.set(profiler::PREPARE_CMD_TARGETS, frame_state.num_cmd_targets);
+        profile.set(profiler::PREPARE_PICTURES, frame_state.num_pictures);
 
         scratch.frame.dirty_region_stack = frame_state.dirty_region_stack.take();
 
@@ -636,7 +646,6 @@ impl FrameBuilder {
         minimap_data: FastHashMap<ExternalScrollId, MinimapData>,
         chunk_pool: Arc<ChunkPool>,
     ) -> Frame {
-        profile_scope!("build");
         profile_marker!("BuildFrame");
 
         let mut frame_memory = FrameMemory::new(chunk_pool, stamp.frame_id());
@@ -1102,7 +1111,7 @@ pub fn build_render_pass(
     prim_instances: &[PrimitiveInstance],
     cmd_buffers: &CommandBufferList,
 ) -> RenderPass {
-    profile_scope!("build_render_pass");
+    tracy_rs::profile_scope!("build_render_pass");
 
     // TODO(gw): In this initial frame graph work, we try to maintain the existing
     //           build_render_pass code as closely as possible, to make the review

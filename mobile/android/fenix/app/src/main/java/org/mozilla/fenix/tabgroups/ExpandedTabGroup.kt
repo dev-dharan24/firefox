@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -54,23 +55,15 @@ import mozilla.components.ui.icons.R as iconsR
 
 /**
  * Renders an expanded view of a user's tab group.
- * @param group: [TabsTrayItem.TabGroup] item rendered by the card.
- * @param onItemClick Invoked when the user clicks on a [TabsTrayItem] in the group.
- * @param onTabClose Invoked when the user clicks to close a [TabsTrayItem.Tab] in the group.
- * @param onDeleteTabGroupClick Invoked when the user clicks on delete tab group.
- * @param onEditTabGroupClick Invoked when the user clicks to edit the [group].
- * @param onCloseTabGroupClick Invoked when the user clicks to close a tab group.
+ * @param group [TabsTrayItem.TabGroup] item rendered by the card.
+ * @param actions [ExpandedTabGroupActions] invoked in response to user interactions.
  * @param tabInteractionHandler Handler for tab interactions.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpandedTabGroup(
     group: TabsTrayItem.TabGroup,
-    onItemClick: (TabsTrayItem) -> Unit,
-    onTabClose: (TabsTrayItem.Tab) -> Unit,
-    onDeleteTabGroupClick: () -> Unit,
-    onEditTabGroupClick: () -> Unit,
-    onCloseTabGroupClick: () -> Unit,
+    actions: ExpandedTabGroupActions,
     tabInteractionHandler: TabInteractionHandler,
 ) {
     Column(
@@ -85,9 +78,10 @@ fun ExpandedTabGroup(
             title = group.title,
             groupTheme = group.theme,
             groupTabsSize = group.tabs.size,
-            onDeleteTabGroupClick = onDeleteTabGroupClick,
-            onEditTabGroupClick = onEditTabGroupClick,
-            onCloseTabGroupClick = onCloseTabGroupClick,
+            onDeleteTabGroupClick = actions.onDeleteTabGroupClick,
+            onEditTabGroupClick = actions.onEditTabGroupClick,
+            onCloseTabGroupClick = actions.onCloseTabGroupClick,
+            onAddNewTabClick = actions.onAddNewTabClick,
         )
 
         TabLayout(
@@ -101,8 +95,8 @@ fun ExpandedTabGroup(
             selectionMode = TabsTrayState.Mode.Normal,
             tabInteractionHandler = tabInteractionHandler,
             modifier = Modifier,
-            onTabClose = onTabClose,
-            onItemClick = onItemClick,
+            onTabClose = actions.onTabClose,
+            onItemClick = actions.onItemClick,
             onItemLongClick = { item -> }, // Ignore long click
             onDeleteTabGroupClick = { }, // Ignore tab group deletes
             onEditTabGroupClick = { }, // Ignore tab group edits
@@ -122,6 +116,7 @@ private fun ViewTabGroupHeader(
     onDeleteTabGroupClick: () -> Unit,
     onEditTabGroupClick: () -> Unit,
     onCloseTabGroupClick: () -> Unit,
+    onAddNewTabClick: (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -179,15 +174,41 @@ private fun ViewTabGroupHeader(
                 groupTabsSize = groupTabsSize,
                 onClick = {},
             )
+
+            Spacer(modifier = Modifier.width(FirefoxTheme.layout.space.static100))
         }
 
-        Spacer(modifier = Modifier.width(FirefoxTheme.layout.space.static100))
+        if (onAddNewTabClick != null) {
+            AddTabToGroupButton(
+                onClick = onAddNewTabClick,
+            )
+
+            Spacer(modifier = Modifier.width(FirefoxTheme.layout.space.static100))
+        }
 
         TabGroupMenuButton(
             includeCloseOption = true,
             onDeleteTabGroupClick = onDeleteTabGroupClick,
             onEditTabGroupClick = onEditTabGroupClick,
             onCloseTabGroupClick = onCloseTabGroupClick,
+        )
+    }
+}
+
+@Composable
+private fun AddTabToGroupButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        onClick = onClick,
+        contentDescription = stringResource(id = R.string.add_tab),
+        modifier = modifier.testTag(TabsTrayTestTag.BOTTOM_SHEET_ADD_TAB_BUTTON),
+    ) {
+        Icon(
+            painter = painterResource(id = iconsR.drawable.mozac_ic_plus_24),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -240,11 +261,14 @@ private fun ExpandedTabGroupPreview(
             ) {
                 ExpandedTabGroup(
                     group = previewState.group,
-                    onTabClose = {},
-                    onItemClick = {},
-                    onDeleteTabGroupClick = {},
-                    onEditTabGroupClick = {},
-                    onCloseTabGroupClick = {},
+                    actions = ExpandedTabGroupActions(
+                        onItemClick = {},
+                        onTabClose = {},
+                        onDeleteTabGroupClick = {},
+                        onEditTabGroupClick = {},
+                        onCloseTabGroupClick = {},
+                        onAddNewTabClick = {},
+                    ),
                     tabInteractionHandler = NoOpTabInteractionHandler,
                 )
             }
@@ -335,3 +359,23 @@ private class ExpandedTabGroupPreviewProvider :
         return data[index].first
     }
 }
+
+/**
+ * User interactions handled by the [ExpandedTabGroup] view.
+ *
+ * @property onItemClick Invoked when the user clicks on a [TabsTrayItem] in the group.
+ * @property onTabClose Invoked when the user clicks to close a [TabsTrayItem.Tab] in the group.
+ * @property onDeleteTabGroupClick Invoked when the user clicks on delete tab group.
+ * @property onEditTabGroupClick Invoked when the user clicks to edit the group.
+ * @property onCloseTabGroupClick Invoked when the user clicks to close a tab group.
+ * @property onAddNewTabClick Invoked when the user clicks to add a new tab to the group. When null,
+ * the add-tab button is hidden.
+ */
+data class ExpandedTabGroupActions(
+    val onItemClick: (TabsTrayItem) -> Unit,
+    val onTabClose: (TabsTrayItem.Tab) -> Unit,
+    val onDeleteTabGroupClick: () -> Unit,
+    val onEditTabGroupClick: () -> Unit,
+    val onCloseTabGroupClick: () -> Unit,
+    val onAddNewTabClick: (() -> Unit)?,
+)

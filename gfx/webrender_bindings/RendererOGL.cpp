@@ -7,6 +7,7 @@
 #include "GLContext.h"
 #include "base/task.h"
 #include "mozilla/Logging.h"
+#include "mozilla/StaticPrefs_gfx.h"
 #include "mozilla/gfx/Logging.h"
 #include "mozilla/gfx/Types.h"
 #include "mozilla/gfx/gfxVars.h"
@@ -358,9 +359,32 @@ RenderedFrameId RendererOGL::UpdateFrameId() {
   return mCompositor->UpdateFrameId();
 }
 
-void RendererOGL::Pause() { mCompositor->Pause(); }
+void RendererOGL::Pause() {
+  mCompositor->Pause();
 
-bool RendererOGL::Resume() { return mCompositor->Resume(); }
+  // Only trim on the transition into the paused state. Repeated pause
+  // notifications should not generate redundant backend work. Do not use
+  // RenderCompositor::IsPaused() here: on GTK it describes surface state and
+  // remains false for normal paused windows.
+  if (mPausedForResourceTrimming) {
+    return;
+  }
+  mPausedForResourceTrimming = true;
+
+  const uint32_t trimMode =
+      StaticPrefs::gfx_webrender_trim_paused_renderers_mode();
+  if (trimMode > 0) {
+    wr_renderer_trim_transient_resources(mRenderer, trimMode >= 2);
+  }
+}
+
+bool RendererOGL::Resume() {
+  const bool resumed = mCompositor->Resume();
+  if (resumed) {
+    mPausedForResourceTrimming = false;
+  }
+  return resumed;
+}
 
 bool RendererOGL::IsPaused() { return mCompositor->IsPaused(); }
 

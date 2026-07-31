@@ -23,7 +23,7 @@ from mozpack.chrome.manifest import ManifestEntry
 from mozbuild.frontend.context import ObjDirPath, SourcePath
 
 from ..testing import all_test_flavors
-from ..util import group_unified_files
+from ..util import get_rust_build_kind, group_unified_files
 from .context import FinalTargetValue
 
 
@@ -554,16 +554,10 @@ def cargo_output_directory(context, target_var, libname=""):
     # cargo creates several directories and places its build artifacts
     # in those directories.  The directory structure depends not only
     # on the target, but also what sort of build we are doing.
-    # Megazord libraries use custom profiles that output to different directories.
-    if "megazord" in libname:
-        rust_build_kind = "release-megazord"
-        if context.config.substs.get("MOZ_DEBUG_RUST"):
-            rust_build_kind = "dev-megazord"
-    else:
-        rust_build_kind = "release"
-        if context.config.substs.get("MOZ_DEBUG_RUST"):
-            rust_build_kind = "debug"
-    return mozpath.join(context.config.substs[target_var], rust_build_kind)
+    return mozpath.join(
+        context.config.substs[target_var],
+        get_rust_build_kind(context.config.substs, megazord="megazord" in libname),
+    )
 
 
 # We pretend Rust programs are Linkable, despite Cargo handling all the details
@@ -1311,6 +1305,22 @@ class JsShellArchive(ContextDerived):
     def __init__(self, context, files):
         ContextDerived.__init__(self, context)
         self.files = tuple(files)
+
+
+class MacOSBundle(ContextDerived):
+    """Sandbox container object for a MACOS_BUNDLE entry.
+
+    Holds the description of one ``.app`` bundle to assemble: the output
+    path, the skeleton directory, optional generated ``Info.plist`` and
+    ``InfoPlist.strings``, the ``.lproj`` subdirectory, and the binaries to
+    install into ``Contents/MacOS``.
+    """
+
+    __slots__ = ("bundle",)
+
+    def __init__(self, context, bundle):
+        ContextDerived.__init__(self, context)
+        self.bundle = bundle
 
 
 class ObjdirFiles(FinalTargetFiles):

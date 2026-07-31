@@ -22,8 +22,16 @@ import "chrome://browser/content/aiwindow/components/kit-mention.mjs";
 import "chrome://browser/content/aiwindow/components/agent-monitor-item.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://global/content/elements/moz-textarea.mjs";
+import {
+  dispatchClientError,
+  installClientErrorListeners,
+} from "chrome://browser/content/aiwindow/modules/ClientErrorTelemetry.mjs";
 
 const FOLLOW_UP_QTY = 2;
+// Stand-in "error" for invalid message data, which has no error object of its
+// own. Reusing one object lets dispatchClientError's dedup skip a burst of
+// repeated invalid-data reports instead of sending an IPC message each time.
+const INVALID_MESSAGE_DATA = {};
 /**
  * UI labels for tool results and follow-ups.
  */
@@ -96,6 +104,7 @@ export class AIChatContent extends MozLitElement {
   #scrollHandler = null;
   #scrollClickHandler = null;
   #scrollRafId = null;
+  #removeClientErrorListeners = null;
   #pendingAnnouncementMessageId = null;
   #scrollPositions = new Map();
   #actionResultExpandState = new Map();
@@ -148,6 +157,10 @@ export class AIChatContent extends MozLitElement {
     this.#initFooterActionListeners();
     this.#initOverflowObserver();
     this.#initScrollListener();
+    this.#removeClientErrorListeners = installClientErrorListeners(
+      window,
+      (error, source) => dispatchClientError(this, error, source)
+    );
     this.#scrollPositions.clear();
   }
 
@@ -156,6 +169,8 @@ export class AIChatContent extends MozLitElement {
     this.#overflowObserver?.disconnect();
     this.#overflowObserver = null;
     this.#teardownScrollListener();
+    this.#removeClientErrorListeners?.();
+    this.#removeClientErrorListeners = null;
   }
 
   #dispatchAction(action, detail) {
@@ -419,6 +434,14 @@ export class AIChatContent extends MozLitElement {
 
   messageEvent(event) {
     const message = event.detail;
+
+    // Only bail on shapes that can't be handled at all (null, non-object).
+    // Unknown roles fall through to the switch's default arm below, so adding
+    // a new role doesn't require touching telemetry.
+    if (!message || typeof message !== "object") {
+      dispatchClientError(this, INVALID_MESSAGE_DATA, "message-data");
+      return;
+    }
 
     if (message?.content?.isError) {
       this.handleErrorEvent(message?.content);

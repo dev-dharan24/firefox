@@ -31,7 +31,6 @@ import androidx.annotation.IdRes
 import androidx.annotation.VisibleForTesting
 import androidx.appcompat.app.ActionBar
 import androidx.appcompat.widget.Toolbar
-import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -209,8 +208,6 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
     lateinit var browsingModeManager: BrowsingModeManager
 
     private var isVisuallyComplete = false
-
-    var isMicrosurveyPromptDismissed = mutableStateOf(false)
 
     private var privateNotificationObserver: PrivateNotificationFeature<PrivateNotificationService>? =
         null
@@ -479,7 +476,10 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
 
         val shouldShowOnboarding = !intent.isAllowedDuringOnboardingIntent(packageName) &&
             with(components) {
-                settings.shouldShowOnboarding(fenixOnboarding.userHasBeenOnboarded())
+                settings.shouldShowOnboarding(
+                    hasUserBeenOnboarded = fenixOnboarding.userHasBeenOnboarded(),
+                    forceOnboardingForBenchmark = intent.getBooleanExtra(EXTRA_FORCE_ONBOARDING, false),
+                )
             }
 
         SplashScreenManager(
@@ -1684,6 +1684,9 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
         const val OPEN_PASSWORD_MANAGER = "open_password_manager"
         const val UNINSTALL_SURVEY = "uninstall_survey"
         const val APP_ICON = "APP_ICON"
+
+        // Intent extra to force onboarding to show in the benchmark build, where it is otherwise suppressed
+        const val EXTRA_FORCE_ONBOARDING = "EXTRA_FORCE_ONBOARDING"
 
         // PWA must have been used within last 30 days to be considered "recently used" for the
         // telemetry purposes.

@@ -73,7 +73,8 @@ export class SidebarPage extends MozLitElement {
 
   #collectNodes({ children }, nodes) {
     for (const el of children) {
-      const isCard = el.localName === "moz-card" && el.type === "accordion";
+      const isCard =
+        el.localName === "moz-card" && el.getAttribute("type") === "accordion";
       const isTabList = !!el.tabItems;
 
       if (isCard) {
@@ -88,10 +89,11 @@ export class SidebarPage extends MozLitElement {
           this.#collectNodes(el, nodes);
         }
       } else if (isTabList) {
-        for (const item of el.tabItems) {
+        for (const [index, item] of el.tabItems.entries()) {
           nodes.push({
             list: el,
             item,
+            index,
             type: "row",
             get domNode() {
               return el.shadowRoot.querySelector(

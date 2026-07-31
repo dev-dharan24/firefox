@@ -59,6 +59,8 @@ const SUPPORTED_OPTIONS = {
   rdmPaneOrientation: true,
   // Enable allocation tracking, if set, contains an object defining the tracking configurations
   recordAllocations: true,
+  // Enable prefers-reduced-motion emulation.
+  reducedMotionEmulation: true,
   // Reload the page when the touch simulation state changes (only works alongside touchEventsOverride)
   reloadOnTouchSimulationToggle: true,
   // Restore focus in the page after closing DevTools.
@@ -292,6 +294,9 @@ class TargetConfigurationActor extends Actor {
         case "printSimulationEnabled":
           this._setPrintSimulationEnabled(value);
           break;
+        case "reducedMotionEmulation":
+          this._setReducedMotionEmulation(value);
+          break;
         case "rdmPaneMaxTouchPoints":
           this._setRDMPaneMaxTouchPoints(value);
           break;
@@ -344,6 +349,12 @@ class TargetConfigurationActor extends Actor {
       this._setColorSchemeSimulation(null);
     }
 
+    // Restore the reduced motion emulation only if it was explicitly updated
+    // by this actor.
+    if (this._resetReducedMotionEmulationOnDestroy) {
+      this._setReducedMotionEmulation(null);
+    }
+
     // Restore the user agent only if it was explicitly updated by this specific actor.
     if (this._initialUserAgent !== undefined) {
       this._setCustomUserAgent(this._initialUserAgent);
@@ -393,6 +404,17 @@ class TargetConfigurationActor extends Actor {
     if (this._browsingContext.prefersColorSchemeOverride != value) {
       this._browsingContext.prefersColorSchemeOverride = value;
       this._resetColorSchemeSimulationOnDestroy = true;
+    }
+  }
+
+  /**
+   * Disable or enable the reduced-motion simulation.
+   */
+  _setReducedMotionEmulation(override) {
+    const value = override || "none";
+    if (this._browsingContext.prefersReducedMotionOverride != value) {
+      this._browsingContext.prefersReducedMotionOverride = value;
+      this._resetReducedMotionEmulationOnDestroy = true;
     }
   }
 

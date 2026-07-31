@@ -985,6 +985,10 @@ static void AddVulkanDependencies(SandboxBroker::Policy* policy) {
     policy->AddPath(rdwr, nsPrintfCString("/dev/nvidia%d", i).get(),
                     SandboxBroker::Policy::AddIfExistsNow);
   }
+  // NVIDIA Wayland DMA-BUF export for Vulkan video (EGL / copy-ring NV12).
+  // AddAlways because the udmabuf misc device only exists while its module is
+  // loaded, which may happen after this policy is built.
+  policy->AddPath(rdwr, "/dev/udmabuf", SandboxBroker::Policy::AddAlways);
 }
 #endif  // MOZ_ENABLE_VULKAN_VIDEO
 

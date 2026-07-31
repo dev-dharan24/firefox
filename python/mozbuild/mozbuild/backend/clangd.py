@@ -22,10 +22,12 @@ def find_vscode_or_vscodium_cmd(ide):
     import shutil
     import sys
 
-    # Try to look up the `code` binary on $PATH, and use it if present. This
-    # should catch cases like being run from within a vscode-remote shell,
-    # even if vscode itself is also installed on the remote host.
-    path = shutil.which("code")
+    # Try to look up the requested editor's launcher on $PATH, and use it if
+    # present. This should catch cases like being run from within a
+    # vscode-remote shell, even if the editor itself is also installed on the
+    # remote host. Only the launcher matching `ide` is looked up, so that having
+    # both editors installed doesn't start the wrong one.
+    path = shutil.which("code" if ide == "vscode" else "codium")
     if path is not None:
         return [path]
 

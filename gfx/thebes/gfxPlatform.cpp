@@ -563,6 +563,7 @@ static void WebRenderDebugPrefChangeCallback(const char* aPrefName, void*) {
                       wr::DebugFlags::EXTERNAL_COMPOSITE_BORDERS)
   GFX_WEBRENDER_DEBUG(".dl.dump-spatial-tree",
                       wr::DebugFlags::DUMP_SPATIAL_TREE)
+  GFX_WEBRENDER_DEBUG(".color-target-init", wr::DebugFlags::COLOR_TARGET_INIT)
 #undef GFX_WEBRENDER_DEBUG
   gfx::gfxVars::SetWebRenderDebugFlags(flags._0);
 

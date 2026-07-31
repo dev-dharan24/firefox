@@ -448,15 +448,6 @@ const MR_ABOUT_WELCOME_DEFAULT = {
         },
         secondary_button_top: [
           {
-            label: { string_id: "mr1-onboarding-sign-in-button-label" },
-            action: {
-              data: { entrypoint: "activity-stream-firstrun", where: "tab" },
-              type: "SHOW_FIREFOX_ACCOUNTS",
-              addFlowParams: true,
-            },
-            targeting: "!isFxASignedIn",
-          },
-          {
             label: { string_id: "restore-from-backup-secondary-top-button" },
             action: {
               type: "SET_PREF",
@@ -466,6 +457,15 @@ const MR_ABOUT_WELCOME_DEFAULT = {
               navigate: true,
             },
             targeting: "backupRestoreEnabled",
+          },
+          {
+            label: { string_id: "mr1-onboarding-sign-in-button-label" },
+            action: {
+              data: { entrypoint: "activity-stream-firstrun", where: "tab" },
+              type: "SHOW_FIREFOX_ACCOUNTS",
+              addFlowParams: true,
+            },
+            targeting: "!isFxASignedIn",
           },
         ],
       },
@@ -591,6 +591,18 @@ const MR_ABOUT_WELCOME_DEFAULT = {
         },
         secondary_button_top: [
           {
+            label: { string_id: "restore-from-backup-secondary-top-button" },
+            action: {
+              type: "SET_PREF",
+              data: {
+                pref: { name: "showRestoreFromBackup", value: true },
+              },
+              navigate: true,
+            },
+            targeting:
+              "backupRestoreEnabled && isDefaultBrowser && !doesAppNeedPin",
+          },
+          {
             label: {
               string_id: "mr1-onboarding-sign-in-button-label",
             },
@@ -603,18 +615,6 @@ const MR_ABOUT_WELCOME_DEFAULT = {
               addFlowParams: true,
             },
             targeting: "!isFxASignedIn",
-          },
-          {
-            label: { string_id: "restore-from-backup-secondary-top-button" },
-            action: {
-              type: "SET_PREF",
-              data: {
-                pref: { name: "showRestoreFromBackup", value: true },
-              },
-              navigate: true,
-            },
-            targeting:
-              "backupRestoreEnabled && isDefaultBrowser && !doesAppNeedPin",
           },
         ],
       },

@@ -4992,6 +4992,7 @@ nsresult nsCocoaWindow::Create(nsIWidget* aParent, const DesktopIntRect& aRect,
 
   mAlwaysOnTop = aInitData.mAlwaysOnTop;
   mIsAlert = aInitData.mIsAlert;
+  mIsInitialFullscreenSuppressed = aInitData.mIsInitialFullscreenSuppressed;
 
   nsresult rv = CreateNativeWindow(nsCocoaUtils::GeckoRectToCocoaRect(aRect),
                                    mBorderStyle, false, aInitData.mIsPrivate);
@@ -5513,12 +5514,14 @@ void nsCocoaWindow::Show(bool aState) {
     // opened from an existing fullscreen window, then macOS will open the new
     // window in fullscreen, too. For some windows, this is not desirable. We
     // want to prevent it for any popup, alert, or alwaysOnTop windows that
-    // aren't already in fullscreen. If the user already got the window into
-    // fullscreen somehow, that's fine, but we don't want the initial display to
-    // be in fullscreen.
+    // aren't already in fullscreen, as well as windows that explicitly asked to
+    // suppress it (e.g. a window created by detaching a tab from a fullscreen
+    // window). If the user already got the window into fullscreen somehow,
+    // that's fine, but we don't want the initial display to be in fullscreen.
     bool savedValueForSupportsNativeFullscreen = GetSupportsNativeFullscreen();
     if (!mInFullScreenMode &&
-        ((mWindowType == WindowType::Popup) || mAlwaysOnTop || mIsAlert)) {
+        ((mWindowType == WindowType::Popup) || mAlwaysOnTop || mIsAlert ||
+         mIsInitialFullscreenSuppressed)) {
       SetSupportsNativeFullscreen(false);
     }
 

@@ -133,10 +133,8 @@ const char* const XPCJSRuntime::mStrings[] = {
     "indexedDB",        // IDX_INDEXEDDB
     "structuredClone",  // IDX_STRUCTUREDCLONE
     "locks",            // IDX_LOCKS
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-    "suppressed",  // IDX_SUPPRESSED
-    "error",       // IDX_ERROR
-#endif
+    "suppressed",       // IDX_SUPPRESSED
+    "error",            // IDX_ERROR
 };
 
 /***************************************************************************/
@@ -155,7 +153,7 @@ class AsyncFreeSnowWhite : public Runnable {
     auto timerId =
         glean::cycle_collector::async_snow_white_freeing.ProcessGet().Start();
     // 2 ms budget, given that kICCSliceBudget is only 3 ms
-    SliceBudget budget = SliceBudget(TimeBudget(2));
+    SliceBudget budget = SliceBudget(TimeDuration::FromMilliseconds(2));
     bool hadSnowWhiteObjects =
         nsCycleCollector_doDeferredDeletionWithBudget(budget);
     glean::cycle_collector::async_snow_white_freeing.ProcessGet()

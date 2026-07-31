@@ -129,8 +129,8 @@ add_task(async function test_aboutwelcome_easy_setup_screen_impression() {
     [
       `main.screen[pos="split"]`,
       "div.secondary-cta.top",
-      "button[value='secondary_button_top_0']", //sign in button
-      "button[value='secondary_button_top_1']", //backup restore button
+      "button[value='secondary_button_top_0']", //backup restore button
+      "button[value='secondary_button_top_1']", //sign in button
     ]
   );
 

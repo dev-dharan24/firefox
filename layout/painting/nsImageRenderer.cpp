@@ -718,9 +718,37 @@ ImgDrawResult nsImageRenderer::BuildWebRenderDisplayItems(
 
       if (extendMode == ExtendMode::CLAMP) {
         // The image is not repeating. Just push as a regular image.
+        //
+        // Only part of the image may be visible, as with a CSS sprite sheet
+        // positioned by a negative background-position. Restrict sampling to
+        // that part, so filtering can't pull in the neighbouring cells, the way
+        // the non-WebRender path does via
+        // ImageRegion::CreateWithSamplingRestriction.
+        // This mirrors the `subimage` computed by
+        // ComputeSnappedImageDrawingParameters: the set of pixels an ideal
+        // rendering would sample, rounded out. It restricts sampling only --
+        // `dest` still maps the whole image onto the whole destination, so the
+        // geometry is unaffected and the rounding cannot displace anything.
+        Maybe<wr::DeviceIntRect> subRect;
+        if (!region && !aDest.IsEmpty() && !decodeSize.IsEmpty()) {
+          const ImageIntRect imageRect(0, 0, decodeSize.width,
+                                       decodeSize.height);
+          const double sx = double(decodeSize.width) / aDest.Width();
+          const double sy = double(decodeSize.height) / aDest.Height();
+          const nsRect fill = aFill - aDest.TopLeft();
+          ImageIntRect sub = ImageIntRect::FromUnknownRect(
+              gfx::IntRect::RoundOut(fill.X() * sx, fill.Y() * sy,
+                                     fill.Width() * sx, fill.Height() * sy));
+          sub = sub.Intersect(imageRect);
+          if (!sub.IsEmpty() && !sub.IsEqualEdges(imageRect)) {
+            subRect = Some(wr::ToDeviceIntRect(sub));
+          }
+        }
+
         aBuilder.PushImage(dest, clip, !aItem->BackfaceIsHidden(), false,
                            rendering, key.value(), true,
-                           wr::ColorF{1.0f, 1.0f, 1.0f, aOpacity});
+                           wr::ColorF{1.0f, 1.0f, 1.0f, aOpacity}, false, false,
+                           subRect);
       } else {
         nsPoint firstTilePos = nsLayoutUtils::GetBackgroundFirstTilePos(
             aDest.TopLeft(), aFill.TopLeft(), aRepeatSize);

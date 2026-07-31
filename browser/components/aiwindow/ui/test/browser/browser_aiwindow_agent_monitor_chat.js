@@ -114,15 +114,13 @@ async function getDisplayCardActionDetail(
           "Wait for the expanded body"
         );
 
-        const buttonsByText = text =>
-          Array.from(card.shadowRoot.querySelectorAll("moz-button")).filter(b =>
-            b.textContent.includes(text)
-          );
-
         if (args.edit) {
           card.shadowRoot.querySelector(".page-action.edit").click();
           await ContentTaskUtils.waitForCondition(
-            () => buttonsByText("Save").length,
+            () =>
+              card.shadowRoot.querySelector(
+                'moz-button[data-l10n-id="ai-tasks-alert-save-button"]'
+              ),
             "Wait for edit mode Save button"
           );
         }
@@ -134,12 +132,7 @@ async function getDisplayCardActionDetail(
           { once: true }
         );
 
-        const candidates = card.shadowRoot.querySelectorAll(args.selector);
-        const button = args.matchText
-          ? Array.from(candidates).find(b =>
-              b.textContent.includes(args.matchText)
-            )
-          : candidates[0];
+        const button = card.shadowRoot.querySelector(args.selector);
         Assert.ok(button, `Action button (${args.selector}) exists`);
         button.click();
         await new Promise(resolve => content.setTimeout(resolve, 0));
@@ -231,9 +224,9 @@ add_task(async function test_monitor_start_dispatches_create_update() {
       );
 
       const startButton = card.shadowRoot.querySelector(
-        `moz-button[label="Start monitoring"]`
+        'moz-button[data-l10n-id="ai-tasks-alert-create-button"]'
       );
-      Assert.ok(startButton, "Start monitoring button exists");
+      Assert.ok(startButton, "Create alert button exists");
       startButton.click();
       await new Promise(resolve => content.setTimeout(resolve, 0));
 
@@ -301,7 +294,7 @@ add_task(async function test_monitor_cancel_dispatches_cancel_update() {
       );
 
       const cancelButton = card.shadowRoot.querySelector(
-        `moz-button[label="Cancel"]`
+        'moz-button[data-l10n-id="ai-tasks-alert-cancel-button"]'
       );
       Assert.ok(cancelButton, "Cancel button exists");
       cancelButton.click();
@@ -327,10 +320,12 @@ add_task(async function test_monitor_cancel_dispatches_cancel_update() {
 });
 
 add_task(async function test_display_save_dispatches_update_update() {
-  const detail = await getDisplayCardActionDetail("moz-button", {
-    matchText: "Save",
-    edit: true,
-  });
+  const detail = await getDisplayCardActionDetail(
+    'moz-button[data-l10n-id="ai-tasks-alert-save-button"]',
+    {
+      edit: true,
+    }
+  );
   Assert.ok(detail, "ToolUIUpdate fires when saving an edit");
   Assert.equal(
     detail.updateType,
@@ -362,10 +357,7 @@ add_task(async function test_delete_dispatches_delete_update() {
 
 add_task(async function test_pause_dispatches_pause_update() {
   const detail = await getDisplayCardActionDetail(
-    ".monitor-card-actions moz-button",
-    {
-      matchText: "Pause",
-    }
+    'moz-button[data-l10n-id="ai-tasks-alert-pause-button"]'
   );
   Assert.ok(detail, "ToolUIUpdate fires on pause");
   Assert.equal(
@@ -381,9 +373,10 @@ add_task(async function test_pause_dispatches_pause_update() {
 });
 
 add_task(async function test_check_now_dispatches_check_update() {
-  const detail = await getDisplayCardActionDetail("moz-button", {
-    matchText: "Check now",
-  });
+  const detail = await getDisplayCardActionDetail(
+    'moz-button[data-l10n-id="ai-tasks-alert-check-now-button"]',
+    {}
+  );
   Assert.ok(detail, "ToolUIUpdate fires on check now");
   Assert.equal(
     detail.updateType,

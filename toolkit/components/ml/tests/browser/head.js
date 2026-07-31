@@ -98,15 +98,20 @@ async function setup({
 }
 
 function getDefaultWasmRecords(backend) {
+  // A requested backend that isn't itself a wasm runtime (e.g. "best-onnx" or
+  // "onnx-native") can still fall back to the wasm onnx backend at engine
+  // creation time -- on platforms without the native onnxruntime, "best-onnx"
+  // resolves to "onnx". WASM_FILENAME only knows the real wasm backends, so
+  // map anything else to DEFAULT_BACKEND and register the concrete wasm record
+  // that fallback would request.
+  const wasmBackend =
+    backend && MLEngineParent.WASM_FILENAME[backend]
+      ? backend
+      : MLEngineParent.DEFAULT_BACKEND;
   return [
     {
-      name: MLEngineParent.WASM_FILENAME[
-        backend || MLEngineParent.DEFAULT_BACKEND
-      ],
-      version:
-        MLEngineParent.WASM_MAJOR_VERSION[
-          backend || MLEngineParent.DEFAULT_BACKEND
-        ] + ".0",
+      name: MLEngineParent.WASM_FILENAME[wasmBackend],
+      version: MLEngineParent.WASM_MAJOR_VERSION[wasmBackend] + ".0",
     },
   ];
 }

@@ -214,9 +214,6 @@ class SessionModule extends RootBiDiModule {
    * @param {object=} params
    * @param {Array<string>=} params.events
    *     List of events to unsubscribe from.
-   * @param {Array<string>=} params.contexts
-   *     Optional list of top-level browsing context ids
-   *     to unsubscribe the events from.
    * @param {Array<string>=} params.subscriptions
    *     List of subscription identifiers to unsubscribe from.
    *
@@ -224,11 +221,11 @@ class SessionModule extends RootBiDiModule {
    *     If <var>events</var> or <var>contexts</var> are not valid types.
    */
   async unsubscribe(params = {}) {
-    const { events = null, contexts = null, subscriptions = null } = params;
+    const { events = null, subscriptions = null } = params;
 
     const listeners =
       subscriptions === null
-        ? this.#unsubscribeByAttributes(events, contexts)
+        ? this.#unsubscribeByEventNames(events)
         : this.#unsubscribeById(subscriptions);
 
     // Unsubscribe from the relevant engine-internal events.
@@ -602,24 +599,6 @@ class SessionModule extends RootBiDiModule {
     );
   }
 
-  #getTopLevelTraversableContextIds(contextIds) {
-    const topLevelTraversableContextIds = new Set();
-    const inputContextIds = new Set(contextIds);
-
-    if (inputContextIds.size !== 0) {
-      const navigables = this.#getValidNavigablesByIds(inputContextIds);
-      const topLevelTraversable = this.#getTopLevelTraversables(navigables);
-
-      for (const navigable of topLevelTraversable) {
-        topLevelTraversableContextIds.add(
-          lazy.NavigableManager.getIdForBrowsingContext(navigable)
-        );
-      }
-    }
-
-    return topLevelTraversableContextIds;
-  }
-
   /**
    * Get a list of top-level traversables for provided navigables.
    *
@@ -828,26 +807,19 @@ class SessionModule extends RootBiDiModule {
     this.messageHandler.emitProtocolEvent(name, event);
   };
 
-  #unsubscribeByAttributes(events, contextIds) {
+  #unsubscribeByEventNames(events) {
     const listeners = [];
 
     // Check input types until we run schema validation.
     this.#assertNonEmptyArrayWithStrings(events, "events");
-    if (contextIds !== null) {
-      this.#assertNonEmptyArrayWithStrings(contextIds, "contexts");
-    }
 
     const eventNames = new Set();
     events.forEach(name => {
       this.#obtainEvents(name).forEach(event => eventNames.add(event));
     });
 
-    const topLevelTraversableContextIds =
-      this.#getTopLevelTraversableContextIds(contextIds);
-
     const newSubscriptions = [];
     const matchedEvents = new Set();
-    const matchedContexts = new Set();
 
     for (const subscription of this.#subscriptions) {
       // Keep subscription if it doesn't contain any target events.
@@ -856,118 +828,39 @@ class SessionModule extends RootBiDiModule {
         continue;
       }
 
-      // Unsubscribe globally.
-      if (topLevelTraversableContextIds.size === 0) {
-        // Keep subscription if verified subscription is not global.
-        if (!this.#isSubscriptionGlobal(subscription)) {
-          newSubscriptions.push(subscription);
-          continue;
-        }
+      // Keep subscription if verified subscription is not global.
+      if (!this.#isSubscriptionGlobal(subscription)) {
+        newSubscriptions.push(subscription);
+        continue;
+      }
 
-        // Delete event names from the subscription.
-        const subscriptionEventNames = new Set(subscription.eventNames);
-        for (const eventName of eventNames) {
-          if (subscriptionEventNames.has(eventName)) {
-            matchedEvents.add(eventName);
-            subscriptionEventNames.delete(eventName);
+      // Delete event names from the subscription.
+      const subscriptionEventNames = new Set(subscription.eventNames);
+      for (const eventName of eventNames) {
+        if (subscriptionEventNames.has(eventName)) {
+          matchedEvents.add(eventName);
+          subscriptionEventNames.delete(eventName);
 
-            listeners.push(this.#createListenerToUnsubscribe({ eventName }));
-          }
-        }
-
-        // If the subscription still contains some event,
-        // save a new partial subscription.
-        if (subscriptionEventNames.size !== 0) {
-          const clonedSubscription = {
-            subscriptionId: subscription.subscriptionId,
-            eventNames: new Set(subscriptionEventNames),
-            topLevelTraversableIds: new Set(),
-            userContextIds: new Set(subscription.userContextIds),
-          };
-          newSubscriptions.push(clonedSubscription);
+          listeners.push(this.#createListenerToUnsubscribe({ eventName }));
         }
       }
-      // Keep the subscription if it's global but we want to unsubscribe only from some contexts.
-      else if (this.#isSubscriptionGlobal(subscription)) {
-        newSubscriptions.push(subscription);
-      } else {
-        // Map with an event name as a key and the set of subscribed traversable ids as a value.
-        const eventMap = new Map();
 
-        // Populate the map.
-        for (const eventName of subscription.eventNames) {
-          eventMap.set(eventName, new Set(subscription.topLevelTraversableIds));
-        }
-
-        for (const eventName of eventNames) {
-          // Skip if there is no subscription related to this event.
-          if (!eventMap.has(eventName)) {
-            continue;
-          }
-
-          for (const topLevelTraversableId of topLevelTraversableContextIds) {
-            // Skip if there is no subscription related to this event and this traversable id.
-            if (!eventMap.get(eventName).has(topLevelTraversableId)) {
-              continue;
-            }
-
-            matchedContexts.add(topLevelTraversableId);
-            matchedEvents.add(eventName);
-            eventMap.get(eventName).delete(topLevelTraversableId);
-
-            listeners.push(
-              this.#createListenerToUnsubscribe({
-                eventName,
-                traversableId: topLevelTraversableId,
-              })
-            );
-          }
-
-          if (eventMap.get(eventName).size === 0) {
-            eventMap.delete(eventName);
-          }
-        }
-
-        // Build new partial subscriptions based on the remaining data in eventMap.
-        for (const [
-          eventName,
-          remainingTopLevelTraversableIds,
-        ] of eventMap.entries()) {
-          const partialSubscription = {
-            subscriptionId: subscription.subscriptionId,
-            eventNames: new Set([eventName]),
-            topLevelTraversableIds: remainingTopLevelTraversableIds,
-            userContextIds: new Set(subscription.userContextIds),
-          };
-
-          newSubscriptions.push(partialSubscription);
-
-          const traversableIdsToUnsubscribe =
-            subscription.topLevelTraversableIds.difference(
-              remainingTopLevelTraversableIds
-            );
-
-          for (const traversableId of traversableIdsToUnsubscribe) {
-            listeners.push(
-              this.#createListenerToUnsubscribe({ eventName, traversableId })
-            );
-          }
-        }
+      // If the subscription still contains some event,
+      // save a new partial subscription.
+      if (subscriptionEventNames.size !== 0) {
+        const clonedSubscription = {
+          subscriptionId: subscription.subscriptionId,
+          eventNames: new Set(subscriptionEventNames),
+          topLevelTraversableIds: new Set(),
+          userContextIds: new Set(subscription.userContextIds),
+        };
+        newSubscriptions.push(clonedSubscription);
       }
     }
 
     if (matchedEvents.symmetricDifference(eventNames).size > 0) {
       throw new lazy.error.InvalidArgumentError(
         `Failed to unsubscribe from events: ${Array.from(eventNames).join(", ")}`
-      );
-    }
-    if (
-      topLevelTraversableContextIds.size > 0 &&
-      matchedContexts.symmetricDifference(topLevelTraversableContextIds).size >
-        0
-    ) {
-      throw new lazy.error.InvalidArgumentError(
-        `Failed to unsubscribe from events: ${Array.from(eventNames).join(", ")} for context ids: ${Array.from(topLevelTraversableContextIds).join(", ")}`
       );
     }
 

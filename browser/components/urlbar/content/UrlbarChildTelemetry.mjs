@@ -324,17 +324,23 @@ export class UrlbarChildTelemetry {
    * @param {object} details The interaction details.
    */
   async startTrackingBounceEvent(browserId, event, details) {
+    // Resolve the session and the input/view content the snapshot needs before
+    // awaiting below: the engagement record that follows this call ends the
+    // session and closes the view, and the await yields to it.
+    let startEventInfo = this.#startEventInfo;
+    let { input, view } = this.#controller;
+    let engagementData = lazy.UrlbarTelemetryUtils.engagementData(input, view);
+    let smartbarData = lazy.UrlbarTelemetryUtils.smartbarData(input);
+
     // Another engagement while already tracking could itself be a bounce.
     if (this.#bounceStates.has(browserId)) {
       await this.handleBounceEventTrigger(browserId);
     }
 
-    let { input, view } = this.#controller;
-    let engagementData = lazy.UrlbarTelemetryUtils.engagementData(input, view);
     let snapshot = lazy.UrlbarTelemetryUtils.collectBounceSnapshot(
       event,
       details,
-      this.#startEventInfo,
+      startEventInfo,
       engagementData.visibleResults
     );
 
@@ -353,7 +359,6 @@ export class UrlbarChildTelemetry {
         searchMode,
         this.#previousSearchWords
       );
-      let smartbarData = lazy.UrlbarTelemetryUtils.smartbarData(input);
       built = lazy.UrlbarTelemetryUtils.buildEventInfo({
         method: "bounce",
         action: snapshot.action,

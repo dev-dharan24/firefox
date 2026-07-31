@@ -690,7 +690,11 @@ class DisplayListBuilder final {
                  bool aPremultipliedAlpha = true,
                  const wr::ColorF& aColor = wr::ColorF{1.0f, 1.0f, 1.0f, 1.0f},
                  bool aPreferCompositorSurface = false,
-                 bool aSupportsExternalCompositing = false);
+                 bool aSupportsExternalCompositing = false,
+                 // Restricts sampling to this sub-rect of the image, in image
+                 // pixels; aBounds must map to it rather than to the whole
+                 // image. Used for CSS sprite sheets.
+                 const Maybe<wr::DeviceIntRect>& aSubRect = Nothing());
 
   void PushRepeatingImage(
       const wr::LayoutRect& aBounds, const wr::LayoutRect& aClip,

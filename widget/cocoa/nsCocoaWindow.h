@@ -671,6 +671,9 @@ class nsCocoaWindow final : public nsIWidget {
   bool mAlwaysOnTop = false;
   bool mAspectRatioLocked = false;
   bool mIsAlert = false;  // True if this is an non-native alert window.
+  // True if this window should not auto-enter native fullscreen on its initial
+  // show (e.g. a window created by detaching a tab from a fullscreen window).
+  bool mIsInitialFullscreenSuppressed = false;
   bool mWasShown = false;
 
   int32_t mNumModalDescendants = 0;

@@ -787,7 +787,7 @@ class gfxTextRun : public gfxShapedText {
     if (!glyphCount) {
       return 0;
     }
-    const DetailedGlyph* details = GetDetailedGlyphs(aIndex);
+    const DetailedGlyph* details = GetDetailedGlyphs(aIndex, glyphCount);
     nscoord advance = 0;
     if (glyphData.ApplyLetterSpacingBetweenDetailedGlyphs()) {
       advance += (glyphCount - 1) * aLetterSpacing;

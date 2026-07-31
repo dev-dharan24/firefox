@@ -522,7 +522,6 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
       ReportBrokenSite.REGISTER_CUSTOM_ELEMENTS_SCRIPT,
       {
         target: window,
-        async: true,
       }
     );
     ReportBrokenSite.#hasCustomElements.add(window);
@@ -834,7 +833,11 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
     this.#recordGleanEvent("send", {
       sent_with_blocked_trackers: state.shouldSendBlockedTrackers,
     });
-    await this.#sendReportAsGleanPing(state);
+
+    const { documentGlobal } = target;
+    const { gBrowser } = documentGlobal;
+    await this.#sendReportAsGleanPing(gBrowser._selectedBrowser, state);
+
     multiview.showSubView("report-broken-site-popup-reportSentView");
     state.reset();
   }
@@ -1093,20 +1096,6 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
     });
   }
 
-  #removeTabSpecificReportData(webcompatInfo) {
-    for (const [categoryName, categoryItems] of Object.entries(webcompatInfo)) {
-      if (categoryItems.isTabSpecific) {
-        delete webcompatInfo[categoryName];
-        continue;
-      }
-      for (let [name, { isTabSpecific }] of Object.entries(categoryItems)) {
-        if (isTabSpecific) {
-          delete webcompatInfo[categoryName][name];
-        }
-      }
-    }
-  }
-
   async #openWebCompatTab(tabbrowser) {
     const { document } = tabbrowser.selectedBrowser.documentGlobal;
     const {
@@ -1115,15 +1104,12 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
       screenshotToggle,
       url,
       currentTabWebcompatDetailsPromise,
+      shouldSendBlockedTrackers,
       wrongTabInfo,
     } = ViewState.get(document);
     const webcompatInfo = await currentTabWebcompatDetailsPromise;
     if (!screenshotToggle.pressed) {
       webcompatInfo.tabInfo.screenshot.value = undefined;
-    }
-
-    if (wrongTabInfo) {
-      this.#removeTabSpecificReportData(webcompatInfo);
     }
 
     const endpointUrl =
@@ -1145,6 +1131,8 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
           endpointUrl,
           reportUrl: url,
           reporterConfig: ReportBrokenSite.WEBCOMPAT_REPORTER_CONFIG,
+          sendTabSpecificInfo: !wrongTabInfo,
+          sendBlockedUrls: shouldSendBlockedTrackers,
           webcompatInfo,
         },
         tab.linkedBrowser
@@ -1157,61 +1145,29 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
       });
   }
 
-  async #sendReportAsGleanPing({
-    currentTabWebcompatDetailsPromise,
-    description,
-    reason,
-    shouldSendBlockedTrackers,
-    url,
-    wrongTabInfo,
-  }) {
-    const gBase = Glean.brokenSiteReport;
-
-    if (reason) {
-      gBase.breakageCategory.set(reason);
+  #sendReportAsGleanPing(
+    browser,
+    {
+      currentTabWebcompatDetailsPromise,
+      description,
+      reason,
+      shouldSendBlockedTrackers,
+      url,
+      wrongTabInfo,
     }
-
-    gBase.description.set(description);
-    gBase.url.set(url);
-
-    const details = await currentTabWebcompatDetailsPromise;
-
-    if (!details) {
-      GleanPings.brokenSiteReport.submit();
-      return;
-    }
-
-    if (!shouldSendBlockedTrackers) {
-      delete details.antitracking.blockedOrigins;
-    }
-
-    if (wrongTabInfo) {
-      this.#removeTabSpecificReportData(details);
-    }
-
-    for (const categoryItems of Object.values(details)) {
-      for (let [name, { glean, json, value }] of Object.entries(
-        categoryItems
-      )) {
-        if (!glean) {
-          continue;
-        }
-        // Transform glean=xx.yy.zz to brokenSiteReportXxYyZz.
-        glean =
-          "brokenSiteReport" +
-          glean
-            .split(".")
-            .map(v => `${v[0].toUpperCase()}${v.substr(1)}`)
-            .join("");
-        if (json) {
-          name = `${name}Json`;
-          value = JSON.stringify(value);
-        }
-        Glean[glean][name].set(value);
-      }
-    }
-
-    GleanPings.brokenSiteReport.submit();
+  ) {
+    return currentTabWebcompatDetailsPromise
+      .catch(() => undefined)
+      .then(details => {
+        return this.#getActor(browser).sendBrokenSiteReport({
+          details,
+          description,
+          reason,
+          sendTabSpecificInfo: !wrongTabInfo,
+          sendBlockedUrls: shouldSendBlockedTrackers,
+          url,
+        });
+      });
   }
 
   open(event) {

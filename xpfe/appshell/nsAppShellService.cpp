@@ -495,6 +495,10 @@ nsresult nsAppShellService::JustCreateTopWindow(
     widgetInitData.mIsAnimationSuppressed = true;
   }
 
+  if (aChromeMask & nsIWebBrowserChrome::CHROME_SUPPRESS_INITIAL_FULLSCREEN) {
+    widgetInitData.mIsInitialFullscreenSuppressed = true;
+  }
+
   if (aChromeMask & nsIWebBrowserChrome::CHROME_ALWAYS_ON_TOP) {
     widgetInitData.mAlwaysOnTop = true;
   }

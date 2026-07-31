@@ -1312,8 +1312,9 @@
           // Notification box is already in the container.
           return;
         }
-        let browserStack = browserContainer.querySelector(".browserStack");
-        browserContainer.insertBefore(box, browserStack);
+        // Display the notification box as the first item in .browserContainer, so it will
+        // be placed before the Responsive Design Mode toolbar when it's displayed.
+        browserContainer.prepend(box);
         return;
       }
       this.getTabNotificationDeck().append(box);
@@ -2881,7 +2882,7 @@
       stack.className = "browserStack";
       stack.appendChild(b);
 
-      let browserContainer = document.createXULElement("vbox");
+      let browserContainer = document.createXULElement("box");
       browserContainer.className = "browserContainer";
       browserContainer.appendChild(stack);
 

@@ -289,6 +289,7 @@ void FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::InitDrmModifiers(
     const nsTArray<uint64_t>* aCompositorMods, VkImageUsageFlags aImageUsages) {
   mDrmModifiers.clear();
   mExportRequiresDedicatedByModifier.Clear();
+  mForcedNvidiaBlockLinear = false;
 
   FFMPEGV_LOG("[VULKAN] Compositor {} modifier(s) for intersection",
               aCompositorMods ? aCompositorMods->Length() : 0);
@@ -430,6 +431,32 @@ void FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::InitDrmModifiers(
   if (mDrmModifiers.empty()) {
     mDrmModifiers.push_back(DRM_FORMAT_MOD_LINEAR);
     FFMPEGV_LOG("[VULKAN] No suitable modifiers found, using LINEAR");
+  }
+
+  // NVIDIA: Vulkan may under-report / fail validation for tiled modifiers on
+  // older drivers. If negotiation left only LINEAR, force a known-working one
+  // when the compositor already advertises it
+  if (aCompositorMods && mNegotiatedCompositorDecoderVendorID == 0x10de &&
+      mDecoderMatchesCompositor && mDrmModifiers.size() == 1 &&
+      mDrmModifiers[0] == DRM_FORMAT_MOD_LINEAR) {
+    // TU102 (Turing) starts at deviceID 0x1E00; everything below is Fermi-Volta
+    // (including GV100). 0xfe is not a valid kind on Turing+.
+    const uint64_t nvidiaMod =
+        mNegotiatedCompositorDecoderDeviceID < 0x1E00
+            ? DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D(0, 1, 0, 0xfe, 1)
+            : DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D(0, 1, 2, 6, 1);
+    FFMPEGV_LOG(
+        "[VULKAN] ImageFormatProperties2 left only LINEAR; considering NVIDIA "
+        "BL override 0x{:x} (deviceID=0x{:x})",
+        (unsigned long long)nvidiaMod, mNegotiatedCompositorDecoderDeviceID);
+    if (aCompositorMods->Contains(nvidiaMod)) {
+      mDrmModifiers[0] = nvidiaMod;
+      // ImageFormatProperties2 failed for YCbCr tiled mods; keep BL for the
+      // copy path but do not attempt direct decode export.
+      mForcedNvidiaBlockLinear = true;
+      FFMPEGV_LOG("[VULKAN] Using forced NVIDIA BL modifier 0x{:x}",
+                  (unsigned long long)nvidiaMod);
+    }
   }
 
   FFMPEGV_LOG("[VULKAN] Using {} modifiers, first=0x{:x}", mDrmModifiers.size(),

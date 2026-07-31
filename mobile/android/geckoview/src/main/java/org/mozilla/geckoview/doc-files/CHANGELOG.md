@@ -23,6 +23,8 @@ exclude: true
 - ⚠️ Made [`ScrollPositionUpdate`][154.10] immutable: its fields are now `final` and instances are constructed via `ScrollPositionUpdate(float, float, float, int)` instead of the previous no-argument constructor with mutable fields. ([bug 1994863]({{bugzilla}}1994863))
 - Added [`GeckoSession.getBrokenSiteReport`][154.11] that returns a `GeckoResult<JSONObject>` containing information for a broken site report. ([bug 2049050]({{bugzilla}}2049050)).
 - Changed [`GeckoSession.setHistoryDelegate`][154.12], [`setContentBlockingDelegate`][154.13], [`setMediaDelegate`][154.14], [`setMediaSessionDelegate`][154.15], [`setTranslationsSessionDelegate`][154.16], [`setPrintDelegate`][154.17], and [`setExperimentDelegate`][154.18] from `@AnyThread` to `@UiThread`, reflecting that they must be called on the UI thread.
+- Added [`MediaSession.notifySystemAudioFocusChange`][154.19] so embedders can route a system audio-focus change to the tab's W3C Audio Session interrupt, suspending and resuming the tab's audible media elements, Web Audio, and Web Speech. ([bug 2048732]({{bugzilla}}2048732))
+- Added [`GeckoSession.sendGleanBrokenSiteReport`][154.20] which sends a broken site report using Glean. ([bug 2054543]({{bugzilla}}2054543)).
 
 [154.1]: {{javadoc_uri}}/Autofill.Node.html#getDatalist()
 [154.2]: https://developer.mozilla.org/en/docs/Web/HTML/Reference/Elements/datalist
@@ -41,6 +43,7 @@ exclude: true
 [154.16]: {{javadoc_uri}}/GeckoSession.html#setTranslationsSessionDelegate(org.mozilla.geckoview.TranslationsController.SessionTranslation.Delegate)
 [154.17]: {{javadoc_uri}}/GeckoSession.html#setPrintDelegate(org.mozilla.geckoview.GeckoSession.PrintDelegate)
 [154.18]: {{javadoc_uri}}/GeckoSession.html#setExperimentDelegate(org.mozilla.geckoview.GeckoSession.ExperimentDelegate)
+[154.19]: {{javadoc_uri}}/MediaSession.html#notifySystemAudioFocusChange(int)
 
 ## v153
 - Added [`SourceType`][153.1] annotation to [`ScrollPositionUpdate.source`][153.2]
@@ -2022,4 +2025,4 @@ to allow adding gecko profiler markers.
 [65.24]: {{javadoc_uri}}/CrashReporter.html#sendCrashReport(android.content.Context,android.os.Bundle,java.lang.String)
 [65.25]: {{javadoc_uri}}/GeckoResult.html
 
-[api-version]: 7852d43e8d3683b804f976bf71ae4339afd0f3d7
+[api-version]: 612bc960b243562de7cace54e98c2e3d967b5847

@@ -1476,6 +1476,11 @@ bool ValidatePrincipalCouldPotentiallyBeLoadedBy(
   nsAutoCString originScheme;
   MOZ_ALWAYS_SUCCEEDS(net_ExtractURLScheme(originNoSuffix, originScheme));
 
+  // We never load a chrome:// principal within a content process.
+  if (originScheme == "chrome"_ns) {
+    return false;
+  }
+
   // We can load a `resource://` URI in any process. This usually comes up due
   // to pdf.js and the JSON viewer. See bug 1686200.
   if (originScheme == "resource"_ns) {

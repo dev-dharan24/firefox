@@ -107,9 +107,10 @@ skip-if = [
 
 ["browser_popupNotification_popupshown_leak.js"]
 
+["browser_popupNotification_replace_while_opening.js"]
+
 ["browser_popupNotification_security_delay.js"]
 skip-if = [
-  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && opt && nova", # Bug 2057530
   "os == 'win' && arch == 'x86'", # Bug 1882452
 ]
 

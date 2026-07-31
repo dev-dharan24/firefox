@@ -1028,7 +1028,7 @@ add_task(async function test_secondary_button_top_configuration() {
     // Expected styles:
     {
       display: "flex",
-      "flex-direction": "row-reverse",
+      "flex-direction": "row",
       position: "fixed",
       top: "10px",
     }

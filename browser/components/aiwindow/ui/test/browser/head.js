@@ -778,7 +778,8 @@ async function waitForSmartbarAction(browser, expectedAction) {
 }
 
 /**
- * Stub the smartbar method _loadURL to prevent navigation.
+ * Stub the smartbar's load path to prevent navigation. The load funnels through
+ * the private #loadURL into controller.loadURL, so the controller is the seam.
  *
  * @param {MozBrowser} browser - The browser element
  * @param {object} [options] - Options for the stub
@@ -796,12 +797,13 @@ async function stubLoadURL(browser, { captureURL = false } = {}) {
     if (capture) {
       content._stubLoadURLCalled = false;
       content._stubLoadedURL = null;
-      smartbar._loadURL = url => {
+      smartbar.controller.loadURL = ({ url }) => {
         content._stubLoadURLCalled = true;
         content._stubLoadedURL = url;
+        return {};
       };
     } else {
-      smartbar._loadURL = () => {};
+      smartbar.controller.loadURL = () => ({});
     }
   });
 }

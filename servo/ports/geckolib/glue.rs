@@ -4858,7 +4858,10 @@ pub extern "C" fn Servo_ComputedValues_SpecifiesAnimationsOrTransitions(
     values: &ComputedValues,
 ) -> bool {
     let ui = values.get_ui();
-    ui.specifies_animations() || ui.specifies_transitions()
+    ui.specifies_animations()
+        || ui.specifies_transitions()
+        || ui.specifies_scroll_timelines()
+        || ui.specifies_view_timelines()
 }
 
 #[repr(u8)]
@@ -8313,12 +8316,15 @@ pub extern "C" fn Servo_StyleSet_MightHaveAttributeDependencyInContainer(
 ) -> ContainerAttributeDependencyKind {
     let data = raw_data.borrow();
     let element = GeckoElement(element);
-
-    ContainerAttributeDependencyKind::element_container_dependency_kind(
-        element,
-        local_name,
-        &data.stylist,
-    )
+    unsafe {
+        AtomIdent::with(local_name, |local_name| {
+            ContainerAttributeDependencyKind::element_container_dependency_kind(
+                element,
+                local_name,
+                &data.stylist,
+            )
+        })
+    }
 }
 
 #[no_mangle]

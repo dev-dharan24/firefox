@@ -98,9 +98,6 @@ skip-if = [
 ]
 
 ["browser_editPassportDialog.js"]
-skip-if = [
-  "true", # Bug 2056496: opens the Application Services autofill store, which crashes at LateWriteChecks on shutdown until the store's shutdown() lands
-]
 
 ["browser_email_dropdown.js"]
 
@@ -136,9 +133,6 @@ skip-if = [
 ["browser_manageAddressesDialog.js"]
 
 ["browser_managePersonalInfoSubpage.js"]
-skip-if = [
-  "true", # Bug 2056496: opens the Application Services autofill store, which crashes at LateWriteChecks on shutdown until the store's shutdown() lands
-]
 
 ["browser_ml_heuristics.js"]
 
@@ -151,6 +145,8 @@ skip-if = [
 ]
 
 ["browser_passport_capture_doorhanger.js"]
+
+["browser_passport_telemetry.js"]
 skip-if = [
   "true", # Bug 2056496: enables passports, which opens the Application Services autofill store and crashes at LateWriteChecks on shutdown until the store's shutdown() lands
 ]

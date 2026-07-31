@@ -3134,10 +3134,12 @@ var gUIDensity = {
     "privacy.resistFingerprinting.letterboxing",
   ]),
 
-  // Natural (non-compact) tabstrip height in CSS pixels. Used as the
-  // numerator of the auto-compact ratio so the trigger doesn't flap when
-  // compact mode itself shrinks the tabstrip.
-  AUTO_COMPACT_REFERENCE_TABSTRIP_HEIGHT: 40,
+  // Compact-mode tabstrip height in CSS pixels: compact tab min-height
+  // (--tab-min-height, 28px) plus tab block margin on each side
+  // (--tab-margin-block, 4px). Used as a fixed numerator of the auto-compact
+  // ratio so the trigger doesn't flap as compact mode changes the live
+  // tabstrip height (see tabs.css).
+  AUTO_COMPACT_REFERENCE_TABSTRIP_HEIGHT: 36,
 
   // Natural (non-compact) collapsed sidebar.revamp launcher width in CSS
   // pixels: icon button width (--button-size-icon, 32px) plus outer inline

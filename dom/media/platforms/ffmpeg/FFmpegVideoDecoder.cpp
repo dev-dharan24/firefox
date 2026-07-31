@@ -434,7 +434,18 @@ int FFmpegVideoDecoder<LIBAV_VER>::ChooseVulkanPixelFormatFromContext(
           (mVulkanDecoder.mDrmModifiers[0] == DRM_FORMAT_MOD_LINEAR) &&
           (mVulkanDecoder.mDrmModifiers.size() == 1);
     }
-    if (VulkanDirectDecodeExportEnabled() && !drmModsAreLinearOrEmpty) {
+    // Forced BL means ImageFormatProperties2 rejected YCbCr tiled modifiers, so
+    // the decode image cannot reliably use DRM-modifier tiling. Keep BL only
+    // for the copy-path export buffers; skip direct export (avoids GL import
+    // hangs and a useless LINEAR decode path that would double-copy).
+    if (VulkanDirectDecodeExportEnabled() &&
+        mVulkanDecoder.mForcedNvidiaBlockLinear) {
+      FFMPEGV_LOG(
+          "[VULKAN] Direct export disabled: forced NVIDIA BL after "
+          "ImageFormatProperties2 left only LINEAR");
+    }
+    if (VulkanDirectDecodeExportEnabled() &&
+        !mVulkanDecoder.mForcedNvidiaBlockLinear && !drmModsAreLinearOrEmpty) {
       AVVulkanFramesContext* hwfc = (AVVulkanFramesContext*)frames_ctx->hwctx;
       void* const originalCreatePnext = hwfc->create_pnext;
       int formatCount = 0;
@@ -623,6 +634,15 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitVulkanDecoder() {
     FFMPEG_LOG(
         "Vulkan AV1 decode KHR extension is unavailable with libavcodec 60; "
         "falling back");
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+#    endif
+
+#    if LIBAVCODEC_VERSION_MAJOR < 62
+  if (mCodecID == AV_CODEC_ID_VP9) {
+    FFMPEG_LOG(
+        "Vulkan VP9 decoding requires libavcodec 62 or newer; trying another "
+        "hardware decoder");
     return NS_ERROR_NOT_AVAILABLE;
   }
 #    endif
@@ -2166,10 +2186,21 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::CreateImageVulkan(
 
   auto* devCtx = (AVHWDeviceContext*)mVulkanDeviceContext->data;
   auto* vkDevCtx = (AVVulkanDeviceContext*)devCtx->hwctx;
-  if (!mVulkanDecoder.InitCtx(
-          vkDevCtx->act_dev, vkDevCtx->phys_dev, vkDevCtx->get_proc_addr,
-          vkDevCtx->inst,
-          (uint32_t)std::max<int>(vkDevCtx->queue_family_tx_index, 0))) {
+  uint32_t txQueueFamily = 0;
+#    if LIBAVCODEC_VERSION_MAJOR >= 63
+  // FFmpeg 63 replaced queue_family_tx_index with the qf array.
+  for (int i = 0; i < vkDevCtx->nb_qf; i++) {
+    if (vkDevCtx->qf[i].flags & VK_QUEUE_TRANSFER_BIT) {
+      txQueueFamily = (uint32_t)std::max(vkDevCtx->qf[i].idx, 0);
+      break;
+    }
+  }
+#    else
+  txQueueFamily = (uint32_t)std::max<int>(vkDevCtx->queue_family_tx_index, 0);
+#    endif
+  if (!mVulkanDecoder.InitCtx(vkDevCtx->act_dev, vkDevCtx->phys_dev,
+                              vkDevCtx->get_proc_addr, vkDevCtx->inst,
+                              txQueueFamily)) {
     return MediaResult(
         NS_ERROR_DOM_MEDIA_FATAL_ERR,
         RESULT_DETAIL("Failed to init Vulkan Context structure"));

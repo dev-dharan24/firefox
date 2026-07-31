@@ -1073,11 +1073,11 @@ dom::EditContext* HTMLEditor::ComputeEditContext() const {
       !EditContext::IsAnyAttached()) {
     return nullptr;
   }
-  if (auto* element = nsGenericHTMLElement::FromNodeOrNull(
-          ComputeEditingHost(LimitInBodyElement::No))) {
-    return element->GetEditContext();
+  Document* document = GetDocument();
+  if (!document) {
+    return nullptr;
   }
-  return nullptr;
+  return document->GetActiveEditContext();
 }
 
 bool HTMLEditor::IsFiringTextUpdate() const {
@@ -7287,6 +7287,15 @@ Element* HTMLEditor::ComputeEditingHostInternal(
     if (aContent) {
       return aContent;
     }
+    // If an EditContext is active, always return its associated element.
+    // (The selection may be set in accessible content for <canvas>-based
+    //  EditContext for example, so we shouldn't look at it.)
+    if (EditContext* editContext = document->GetActiveEditContext()) {
+      MOZ_ASSERT(
+          editContext->GetAssociatedElement(),
+          "EditContext should not be active without an associated element.");
+      return editContext->GetAssociatedElement();
+    }
     // If there are selection ranges, let's look for their common ancestor's
     // editing host because selection ranges may be visible for users.
     nsIContent* selectionCommonAncestor = nullptr;
@@ -7600,6 +7609,10 @@ bool HTMLEditor::IsAcceptableInputEvent(WidgetGUIEvent* aGUIEvent) const {
 Result<widget::IMEState, nsresult> HTMLEditor::GetPreferredIMEState() const {
   // HTML editor don't prefer the CSS ime-mode because IE didn't do so too.
   bool enableIME = [&]() {
+    if (ComputeEditContext()) {
+      // Always enable IME if EditContext is active, regardless of selection.
+      return true;
+    }
     if (IsReadonly()) {
       return false;
     }

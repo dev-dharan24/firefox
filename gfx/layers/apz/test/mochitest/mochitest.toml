@@ -61,7 +61,6 @@ run-if = [
   "os == 'mac'",
 ]
 skip-if = [
-  "nova", # Bug 2058189
   "macos_vm", # Bug 2037084: APZ touch-zoom needs a real display
 ]
 
@@ -249,7 +248,6 @@ skip-if = [
 
 ["test_group_zoom.html"]
 skip-if = [
-  "os == 'linux' && nova", # Bug 2058108
   "os == 'win'", # see bug 1495580 for Windows
 ]
 

@@ -574,15 +574,28 @@ void WebRenderAPI::FlushPendingWrTransactionEventsWithWait() {
 void WebRenderAPI::HandleWrTransactionEvents(RemoteTextureWaitType aType) {
   auto& events = mPendingWrTransactionEvents;
 
+  // Events can be flushed asynchronously (e.g. from a RemoteTextureMap
+  // readiness callback that holds a reference to this api), so re-check what
+  // SendTransaction checked when they were queued. Once the renderer is gone
+  // there is nothing left to submit to: drain the queue without waiting on
+  // remote textures, and without sending anything to the render backend.
+  const bool rendererDestroyed = mRootApi && mRootApi->mRendererDestroyed;
+  if (rendererDestroyed) {
+    aType = RemoteTextureWaitType::FlushWithoutWait;
+  }
+
   while (!events.empty()) {
     auto& front = events.front();
     switch (front.mTag) {
       case WrTransactionEvent::Tag::Transaction:
-        wr_api_send_transaction(mDocHandle, front.RawTransaction(),
-                                front.UseSceneBuilderThread());
-        if (front.GetTransactionBuilder()->mRemoteTextureTxnScheduler) {
-          front.GetTransactionBuilder()->mRemoteTextureTxnScheduler->NotifyTxn(
-              front.GetTransactionBuilder()->mRemoteTextureTxnId);
+        if (!rendererDestroyed) {
+          wr_api_send_transaction(mDocHandle, front.RawTransaction(),
+                                  front.UseSceneBuilderThread());
+          if (front.GetTransactionBuilder()->mRemoteTextureTxnScheduler) {
+            front.GetTransactionBuilder()
+                ->mRemoteTextureTxnScheduler->NotifyTxn(
+                    front.GetTransactionBuilder()->mRemoteTextureTxnId);
+          }
         }
         break;
       case WrTransactionEvent::Tag::PendingRemoteTextures: {
@@ -1548,13 +1561,15 @@ void DisplayListBuilder::PushImage(
     bool aIsBackfaceVisible, bool aForceAntiAliasing,
     wr::ImageRendering aFilter, wr::ImageKey aImage, bool aPremultipliedAlpha,
     const wr::ColorF& aColor, bool aPreferCompositorSurface,
-    bool aSupportsExternalCompositing) {
+    bool aSupportsExternalCompositing,
+    const Maybe<wr::DeviceIntRect>& aSubRect) {
   WRDL_LOG("PushImage b=%s cl=%s\n", mWrState, ToString(aBounds).c_str(),
            ToString(aClip).c_str());
   wr_dp_push_image(mWrState, aBounds, aClip, aIsBackfaceVisible,
                    aForceAntiAliasing, &mCurrentSpaceAndClipChain, aFilter,
                    aImage, aPremultipliedAlpha, aColor,
-                   aPreferCompositorSurface, aSupportsExternalCompositing);
+                   aPreferCompositorSurface, aSupportsExternalCompositing,
+                   aSubRect.ptrOr(nullptr));
 }
 
 void DisplayListBuilder::PushRepeatingImage(

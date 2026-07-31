@@ -20,6 +20,12 @@ XPCOMUtils.defineLazyPreferenceGetter(
   "canvasMaxSize",
   "gfx.canvas.max-size"
 );
+XPCOMUtils.defineLazyPreferenceGetter(
+  lazy,
+  "compositorReadback",
+  "remote.screenshot.use_readback",
+  false
+);
 
 const CONTEXT_2D = "2d";
 const BG_COLOUR = "rgb(255,255,255)";
@@ -65,7 +71,8 @@ capture.Format = {
  *     Vertical offset between the browser window and content area. Defaults to 0.
  * @param {boolean=} options.readback
  *     If true, read back a snapshot of the pixel data currently in the
- *     compositor/window. Defaults to false.
+ *     compositor/window. Defaults to false, unless the
+ *     `remote.screenshot.use_readback` preference is set.
  *
  * @returns {HTMLCanvasElement}
  *     The canvas on which the selection from the window's framebuffer
@@ -80,6 +87,17 @@ capture.canvas = async function (
   height,
   { canvas = null, flags = null, dX = 0, dY = 0, readback = false } = {}
 ) {
+  if (lazy.compositorReadback && !readback) {
+    // Readback can only return the content area composited on screen, and its
+    // coordinates are relative to the chrome window rather than the document,
+    // so any requested region degrades to the whole content area.
+    const browser = browsingContext.top.embedderElement;
+    if (browser) {
+      readback = true;
+      ({ left, top, width, height } = browser.getBoundingClientRect());
+    }
+  }
+
   // FIXME(bug 1761032): This looks a bit sketchy, overrideDPPX doesn't
   // influence rendering...
   const scale = browsingContext.overrideDPPX || win.devicePixelRatio;

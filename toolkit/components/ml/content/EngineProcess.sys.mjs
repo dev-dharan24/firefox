@@ -169,6 +169,19 @@ export const FEATURES = {
     engineId: "formfill-classification-engine",
     fluentId: "mlmodel-formfill-engine",
   },
+  // Triple-encoder Approach 3: the field-type classifier is split into a stock
+  // feature-extraction encoder (produces per-field pooled embeddings) and a
+  // small ONNX fusion "head" (windowed embeddings -> field-type logits).
+  // Both engines are driven from
+  // toolkit/components/formautofill/shared/FormAutofillML.sys.mjs
+  "formfill-encoder": {
+    engineId: "formfill-encoder-engine",
+    fluentId: "mlmodel-formfill-engine",
+  },
+  "formfill-head": {
+    engineId: "formfill-head-engine",
+    fluentId: "mlmodel-formfill-engine",
+  },
   // see toolkit/components/ml/content/nlp/EmbeddingsGenerator.sys.mjs
   "simple-text-embedder": {
     engineId: "simple-text-embedder-engine",

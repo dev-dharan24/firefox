@@ -150,10 +150,13 @@ let propNameAllowlist = [
 
   // These are referenced from devtools files.
   {
-    propName: "--browser-stack-z-index-devtools-splitter",
+    propName: "--browser-container-z-index-devtools-toolbox",
     isFromDevTools: false,
   },
-  { propName: "--browser-stack-z-index-rdm-toolbar", isFromDevTools: false },
+  {
+    propName: "--browser-container-z-index-devtools-splitter",
+    isFromDevTools: false,
+  },
 
   // These variables are specified from devtools but read from non-devtools
   // styles, which confuses the test.

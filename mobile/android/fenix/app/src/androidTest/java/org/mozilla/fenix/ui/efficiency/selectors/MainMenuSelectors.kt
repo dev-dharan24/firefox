@@ -70,8 +70,11 @@ object MainMenuSelectors {
         groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
     )
 
+    // UIAutomator, not Compose: with shouldUseExpandedToolbar the menu renders differently and the Compose
+    // content-description lookup finds nothing, while the device-level one resolves in both layouts. This
+    // mirrors what the legacy ThreeDotMenuMainRobot.verifyPageMainMenuItems does (itemWithDescription).
     val BOOKMARK_THIS_PAGE_BUTTON = Selector(
-        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_DESCRIPTION_CONTAINS,
         value = getStringResource(R.string.browser_menu_bookmark_this_page_2),
         description = "Bookmark this page button",
         groups = listOf("bookmarkActions", "browserViewMainMenuItems"),
@@ -221,6 +224,13 @@ object MainMenuSelectors {
         groups = listOf("moreMenuItems"),
     )
 
+    val PRINT_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        value = getStringResource(R.string.browser_menu_print_2),
+        description = "Print page button",
+        groups = listOf("moreMenuItems"),
+    )
+
     val REMOVE_FROM_SHORTCUTS_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
         value = getStringResource(R.string.browser_menu_remove_from_shortcuts),
@@ -233,6 +243,21 @@ object MainMenuSelectors {
         value = getStringResource(R.string.browser_menu_add_to_homescreen),
         description = "Main menu add to homescreen button",
         groups = listOf("browserViewMainMenuMoreItems"),
+    )
+
+    val OPEN_IN_APP_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        value = getStringResource(R.string.browser_menu_open_app_link),
+        description = "Main menu Open in app button",
+        groups = listOf("browserViewMainMenuMoreItems"),
+    )
+
+    @Suppress("ktlint:standard:function-naming", "FunctionName")
+    fun OPEN_IN_APP_NAME_BUTTON(appName: String = "") = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        value = getStringResource(R.string.browser_menu_open_in_fenix, appName),
+        description = "Main menu Open in $appName button",
+        groups = listOf(),
     )
 
     val all = listOf(
@@ -265,7 +290,10 @@ object MainMenuSelectors {
         TRANSLATE_BUTTON,
         TRANSLATED_BUTTON,
         SAVE_AS_PDF_BUTTON,
+        PRINT_BUTTON,
         REMOVE_FROM_SHORTCUTS_BUTTON,
         ADD_TO_HOMESCREEN_BUTTON,
+        OPEN_IN_APP_BUTTON,
+        OPEN_IN_APP_NAME_BUTTON(),
     )
 }

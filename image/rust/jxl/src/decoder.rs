@@ -196,10 +196,7 @@ impl JxlApiDecoder {
             .checked_mul(self.bytes_per_pixel())
             .ok_or(Error::Overflow)?;
 
-        log::trace!(
-            "flush_pixels: {width}x{height} bytes_per_row={bytes_per_row} completed_passes={}",
-            self.num_completed_passes()
-        );
+        log::trace!("flush_pixels: {width}x{height} bytes_per_row={bytes_per_row}");
 
         let result = match k_buffer {
             Some(k) if self.has_black_channel => {
@@ -221,10 +218,6 @@ impl JxlApiDecoder {
             Err(e) => log::debug!("flush_pixels: error: {e:?}"),
         }
         result
-    }
-
-    pub fn num_completed_passes(&self) -> usize {
-        self.inner.num_completed_passes().unwrap_or(0)
     }
 
     pub fn get_basic_info(&self) -> Option<BasicInfo> {

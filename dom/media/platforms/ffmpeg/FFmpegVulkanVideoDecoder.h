@@ -120,6 +120,8 @@ struct FFmpegVulkanVideoDecoder {
       '\0',
   };
   bool mDecoderMatchesCompositor = false;
+  // Set when ImageFormatProperties2 left only LINEAR and we forced NVIDIA BL.
+  bool mForcedNvidiaBlockLinear = false;
   ~FFmpegVulkanVideoDecoder();
   void Cleanup();
 

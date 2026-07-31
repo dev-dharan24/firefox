@@ -31,6 +31,7 @@ task-defaults:
             - '**/*.cxx'
             - '**/*.m'
             - '**/*.mm'
+            - 'tools/clang-tidy/**'
 
 tidy:
     description: Run static-analysis (clang-tidy) on C/C++ patches

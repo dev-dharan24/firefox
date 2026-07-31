@@ -658,7 +658,7 @@ def add_simpleperf(config, tests):
         app = test.get("app")
         if (
             app in app_packages
-            and "speedometer3-mobile" in test.get("test-name", None)
+            and "speedometer3-mobile" in test.get("test-name", "")
             and (
                 "no-fission"
                 not in (test.get("attributes", {}).get("unittest_variant") or "")
@@ -716,7 +716,7 @@ def add_etw_profile(config, tests):
                 "--browsertime-arg=chrome.args=--js-flags=--no-compact-code-space",
             ])
 
-        if "speedometer3" in test.get("test-name", None):
+        if "speedometer3" in test.get("test-name", ""):
             test["max-run-time"] = 4200  # seconds
             if "--extra-profiler-run" in extra_options:
                 extra_options.remove("--extra-profiler-run")
@@ -736,7 +736,7 @@ def add_etw_profile(config, tests):
 
     for test in tests:
         if "win" in test.get("test-platform", "") and "speedometer3" in test.get(
-            "test-name", None
+            "test-name", ""
         ):
             np_test = deepcopy(test)
             np_test["test-name"] += "-native-profiling"
@@ -759,6 +759,131 @@ def add_etw_profile(config, tests):
 
 
 @transforms.add
+def add_samply_profile(config, tests):
+    def _setup_samply_profiling(test):
+        extra_options = test.setdefault("mozharness", {}).setdefault(
+            "extra-options", []
+        )
+
+        if "speedometer3" in test.get("test-name", ""):
+            test["max-run-time"] = 4200  # seconds
+            if "--extra-profiler-run" in extra_options:
+                extra_options.remove("--extra-profiler-run")
+
+        extra_options.extend([
+            "--samply-profile",
+        ])
+
+        fetches = test.setdefault("fetches", {})
+        toolchain = fetches.setdefault("toolchain", [])
+
+        if "macos" in test.get("test-platform", ""):
+            if "aarch64" in test.get("test-platform", ""):
+                toolchains = [
+                    "macosx64-aarch64-clang",
+                    "macosx64-sdk-toolchain",
+                    "macosx64-aarch64-samply",
+                    "profiler-node-tools",
+                ]
+            else:
+                toolchains = [
+                    "macosx64-clang",
+                    "macosx64-sdk-toolchain",
+                    "macosx64-samply",
+                    "profiler-node-tools",
+                ]
+
+            for tool in toolchains:
+                if tool not in toolchain:
+                    toolchain.append(tool)
+
+        fetches.setdefault("build", []).append({
+            "artifact": "target.crashreporter-symbols.zip",
+            "extract": False,
+        })
+
+    for test in tests:
+        if (
+            "speedometer3" in test.get("test-name", "")
+            and "macos" in test.get("test-platform", "")
+            and test.get("app") in ["firefox"]
+        ):
+            np_test = deepcopy(test)
+            np_test["test-name"] += "-native-profiling"
+            np_test["try-name"] += "-native-profiling"
+            _setup_samply_profiling(np_test)
+
+            run_on_projects = test.get("run-on-projects", [])
+            if "autoland" in run_on_projects or "trunk" in run_on_projects:
+                # On Autoland, run duplicates of the following macOS tasks with native profiling:
+                # - Sp3 on Firefox macOS x86_64 Shippable base variant (trunk)
+                # - Sp3 on Firefox macOS AArch64 Shippable  base variant (trunk)
+                # - Sp3 on Firefox macOS x86_64 NightlyAsRelease base variant (autoland)
+                np_test["run-on-projects"] = ["autoland-only"]
+            else:
+                np_test["run-on-projects"] = []
+
+            yield np_test
+
+        yield test
+
+
+@transforms.add
+def add_perf_profile(config, tests):
+    def _setup_perf_profiling(test):
+        extra_options = test.setdefault("mozharness", {}).setdefault(
+            "extra-options", []
+        )
+
+        if "speedometer3" in test.get("test-name", ""):
+            test["max-run-time"] = 4200  # seconds
+            if "--extra-profiler-run" in extra_options:
+                extra_options.remove("--extra-profiler-run")
+
+        extra_options.extend([
+            "--perf-profile",
+        ])
+
+        fetches = test.setdefault("fetches", {})
+        toolchain = fetches.setdefault("toolchain", [])
+
+        if "linux" in test.get("test-platform", ""):
+            toolchains = ["linux64-samply", "profiler-node-tools"]
+            for tool in toolchains:
+                if tool not in toolchain:
+                    toolchain.append(tool)
+
+        fetches.setdefault("build", []).append({
+            "artifact": "target.crashreporter-symbols.zip",
+            "extract": False,
+        })
+
+    for test in tests:
+        if (
+            "speedometer3" in test.get("test-name", "")
+            and "linux" in test.get("test-platform", "")
+            and test.get("app") == "firefox"
+        ):
+            np_test = deepcopy(test)
+            np_test["test-name"] += "-native-profiling"
+            np_test["try-name"] += "-native-profiling"
+            _setup_perf_profiling(np_test)
+
+            run_on_projects = test.get("run-on-projects", [])
+            if "autoland" in run_on_projects or "trunk" in run_on_projects:
+                # On Autoland, run duplicates of the following Linux tasks with native profiling:
+                # - Sp3 on Firefox Linux Shippable base variant (trunk)
+                # - Sp3 on Firefox Linux NightlyAsRelease base variant (autoland)
+                np_test["run-on-projects"] = ["autoland-only"]
+            else:
+                np_test["run-on-projects"] = []
+
+            yield np_test
+
+        yield test
+
+
+@transforms.add
 def handle_native_profiling_symbol(config, tests):
     for test in tests:
         extra_options = test.get("mozharness", {}).get("extra-options", [])
@@ -766,6 +891,8 @@ def handle_native_profiling_symbol(config, tests):
         native_profiling_args = [
             "--simpleperf",
             "--etw-profile",
+            "--samply-profile",
+            "--perf-profile",
         ]
 
         if any(arg in extra_options for arg in native_profiling_args):

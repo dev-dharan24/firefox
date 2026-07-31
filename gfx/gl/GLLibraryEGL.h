@@ -124,6 +124,7 @@ enum class EGLExtension {
   KHR_no_config_context,
   ANGLE_iosurface_client_buffer,
   ANGLE_metal_commands_scheduled_sync,
+  ANGLE_metal_shared_event_sync,
   Max
 };
 
@@ -570,6 +571,11 @@ class GLLibraryEGL final {
                                   external_only, num_modifiers));
   }
 
+  // EGL_ANGLE_metal_shared_event_sync
+  void* fCopyMetalSharedEventANGLE(EGLDisplay dpy, EGLSync sync) const {
+    WRAP(fCopyMetalSharedEventANGLE(dpy, sync));
+  }
+
 #undef WRAP
 
 #undef WRAP
@@ -726,6 +732,9 @@ class GLLibraryEGL final {
     EGLBoolean(GLAPIENTRY* fQueryDmaBufModifiersEXT)(
         EGLDisplay dpy, EGLint format, EGLint max_modifiers,
         uint64_t* modifiers, EGLBoolean* external_only, EGLint* num_modifiers);
+
+    // EGL_ANGLE_metal_shared_event_sync
+    void*(GLAPIENTRY* fCopyMetalSharedEventANGLE)(EGLDisplay dpy, EGLSync sync);
   } mSymbols = {};
 };
 
@@ -1008,6 +1017,13 @@ class EglDisplay final {
                                 EGLint* offsets) const {
     MOZ_ASSERT(IsExtensionSupported(EGLExtension::MESA_image_dma_buf_export));
     return mLib->fExportDMABUFImage(mDisplay, image, fds, strides, offsets);
+  }
+
+  // EGL_ANGLE_metal_shared_event_sync
+  void* fCopyMetalSharedEventANGLE(EGLSync sync) const {
+    MOZ_ASSERT(
+        IsExtensionSupported(EGLExtension::ANGLE_metal_shared_event_sync));
+    return mLib->fCopyMetalSharedEventANGLE(mDisplay, sync);
   }
 };
 

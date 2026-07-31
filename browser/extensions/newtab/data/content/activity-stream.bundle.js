@@ -21806,13 +21806,14 @@ function getClockWidgetDisplayState({
  *
  * @param {object} props
  * @param {Function} props.dispatch
- * @param {"small"|"medium"|"large"} [props.size] Defaults to "medium".
+ * @param {Function} props.handleUserInteraction
  */
 function Clocks({
   dispatch,
-  size,
+  handleUserInteraction,
   widgetEnabledMap
 }) {
+  const size = (0,external_ReactRedux_namespaceObject.useSelector)(state => resolveWidgetSize(CLOCKS_WIDGET, state.Prefs.values));
   const clocksZonesPref = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values[PREF_CLOCKS_ZONES]);
   const hourFormatPref = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values[PREF_CLOCKS_HOUR_FORMAT]);
   const [now, setNow] = (0,external_React_namespaceObject.useState)(null);
@@ -21869,6 +21870,7 @@ function Clocks({
     tick();
     return () => clearTimeout(timeoutId);
   }, []);
+  const handleClocksInteraction = (0,external_React_namespaceObject.useCallback)(() => handleUserInteraction("clocks"), [handleUserInteraction]);
   const handleChangeSize = (0,external_React_namespaceObject.useCallback)(newSize => {
     (0,external_ReactRedux_namespaceObject.batch)(() => {
       dispatch(actionCreators.OnlyToMain({
@@ -21884,8 +21886,9 @@ function Clocks({
         size: newSize
       });
     });
+    handleClocksInteraction();
     closeContextMenu();
-  }, [dispatch, recordUserAction, closeContextMenu]);
+  }, [dispatch, recordUserAction, handleClocksInteraction, closeContextMenu]);
   const handleToggleHourFormat = (0,external_React_namespaceObject.useCallback)(() => {
     const nextFormat = use12HourFormat ? "24" : "12";
     (0,external_ReactRedux_namespaceObject.batch)(() => {
@@ -21901,14 +21904,16 @@ function Clocks({
         value: nextFormat
       });
     });
+    handleClocksInteraction();
     closeContextMenu();
-  }, [use12HourFormat, dispatch, recordUserAction, closeContextMenu]);
+  }, [use12HourFormat, dispatch, recordUserAction, closeContextMenu, handleClocksInteraction]);
   const handleLearnMore = (0,external_React_namespaceObject.useCallback)(() => {
     recordUserAction(Clocks_USER_ACTION_TYPES.LEARN_MORE, {
       source: CLOCK_WIDGET_SOURCE.CONTEXT_MENU
     });
+    handleClocksInteraction();
     closeContextMenu();
-  }, [recordUserAction, closeContextMenu]);
+  }, [recordUserAction, closeContextMenu, handleClocksInteraction]);
   const clockZones = (0,external_React_namespaceObject.useMemo)(() => parseClockZonesPref(clocksZonesPref) || buildDefaultZones(), [clocksZonesPref]);
   (0,external_React_namespaceObject.useEffect)(() => {
     if (!clockZones.some(clock => clock.label && !clock.labelColor)) {
@@ -21932,7 +21937,8 @@ function Clocks({
     setFormSource(source);
     setEditingClockIndex(null);
     setIsDismissed(false);
-  }, []);
+    handleClocksInteraction();
+  }, [handleClocksInteraction]);
   const handleShowEditClocks = (0,external_React_namespaceObject.useCallback)(source => {
     setActivePanel(CLOCKS_PANEL.EDIT);
     setPanelOpenSource(source);
@@ -21940,7 +21946,8 @@ function Clocks({
     recordUserAction(Clocks_USER_ACTION_TYPES.EXPAND, {
       source
     });
-  }, [recordUserAction]);
+    handleClocksInteraction();
+  }, [recordUserAction, handleClocksInteraction]);
   const handleCloseDisplayPanel = (0,external_React_namespaceObject.useCallback)(() => {
     if (activePanel === CLOCKS_PANEL.EDIT) {
       recordUserAction(Clocks_USER_ACTION_TYPES.COLLAPSE, {
@@ -21991,8 +21998,9 @@ function Clocks({
       resetAddClockForm();
       return;
     }
+    handleClocksInteraction();
     handleCloseDisplayPanel();
-  }, [clockZones, formSource, editingClockIndex, handleCloseDisplayPanel, resetAddClockForm, dispatch, recordUserAction]);
+  }, [clockZones, formSource, editingClockIndex, handleCloseDisplayPanel, resetAddClockForm, dispatch, recordUserAction, handleClocksInteraction]);
   const handleRemoveClock = (0,external_React_namespaceObject.useCallback)((index, source = CLOCK_WIDGET_SOURCE.ROW) => {
     if (clockZones.length <= 1) {
       return;
@@ -22009,7 +22017,8 @@ function Clocks({
         source
       });
     });
-  }, [clockZones, dispatch, recordUserAction]);
+    handleClocksInteraction();
+  }, [clockZones, dispatch, recordUserAction, handleClocksInteraction]);
   const isClockFormOpen = activePanel === CLOCKS_PANEL.FORM;
   const isEditingClocks = activePanel === CLOCKS_PANEL.EDIT;
   const hasAnyLabel = clockZones.some(c => !!c.label);
@@ -23514,7 +23523,6 @@ const PictureOfTheDay_PictureOfTheDay = ({
 
 
 const weatherEntry = WIDGET_REGISTRY.find(w => w.id === "weather");
-const clocksEntry = WIDGET_REGISTRY.find(w => w.id === "clocks");
 function WeatherRowWidget({
   dispatch,
   widgetEnabledMap
@@ -23539,24 +23547,12 @@ function WeatherSidebarWidget({
     size: "small"
   });
 }
-function ClocksRowWidget({
-  dispatch,
-  widgetEnabledMap
-}) {
-  const prefs = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values);
-  const clocksSize = resolveWidgetSize(clocksEntry, prefs);
-  return /*#__PURE__*/external_React_default().createElement(Clocks, {
-    dispatch: dispatch,
-    size: clocksSize,
-    widgetEnabledMap: widgetEnabledMap
-  });
-}
 const WIDGET_ROW_COMPONENTS = {
   lists: Lists,
   focusTimer: FocusTimer,
   weather: WeatherRowWidget,
   sportsWidget: SportsWidget_SportsWidget,
-  clocks: ClocksRowWidget,
+  clocks: Clocks,
   privacy: Privacy,
   crossword: Crossword,
   stocks: Stocks_Stocks,
@@ -27097,7 +27093,7 @@ const CustomizeMenu_PREF_NOVA_ENABLED = "nova.enabled";
 // eslint-disable-next-line no-shadow
 
 const THEME_PICKER_ELEMENTS = ["chrome://global/content/elements/moz-visual-picker.mjs", "chrome://global/content/elements/moz-segmented-control.mjs", "chrome://global/content/elements/theme-picker.mjs"];
-const THEME_PICKER_FTL = "locales-preview/theme-picker.ftl";
+const THEME_PICKER_FTL = "toolkit/global/theme-picker.ftl";
 let themePickerElementsLoaded = false;
 
 /**

@@ -582,6 +582,24 @@ class Raptor(
                 },
             ],
             [
+                ["--samply-profile"],
+                {
+                    "action": "store_true",
+                    "dest": "samply_profile",
+                    "default": False,
+                    "help": ("Enable Samply profiling (macOS only)."),
+                },
+            ],
+            [
+                ["--perf-profile"],
+                {
+                    "action": "store_true",
+                    "dest": "perf_profile",
+                    "default": False,
+                    "help": ("Enable perf profiling (Linux only)."),
+                },
+            ],
+            [
                 ["--extra-summary-methods"],
                 {
                     "action": "append",
@@ -1148,6 +1166,10 @@ class Raptor(
             options.extend(["--simpleperf"])
         if self.config.get("etw_profile", False):
             options.extend(["--etw-profile"])
+        if self.config.get("samply_profile", False):
+            options.extend(["--samply-profile"])
+        if self.config.get("perf_profile", False):
+            options.extend(["--perf-profile"])
         if self.config.get("extra_summary_methods"):
             options.extend([
                 f"--extra-summary-methods={method}"

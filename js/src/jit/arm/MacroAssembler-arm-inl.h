@@ -169,6 +169,15 @@ void MacroAssembler::andPtr(Imm32 imm, Register src, Register dest) {
   ma_and(imm, src, dest, scratch);
 }
 
+void MacroAssembler::andPtr(Imm32 imm, const Address& dest) {
+  ScratchRegisterScope scratch(*this);
+  SecondScratchRegisterScope scratch2(*this);
+
+  ma_ldr(dest, scratch, scratch2);
+  ma_and(imm, scratch, scratch2);
+  ma_str(scratch, dest, scratch2);
+}
+
 void MacroAssembler::and64(Imm64 imm, Register64 dest) {
   if (imm.low().value != int32_t(0xFFFFFFFF)) {
     and32(imm.low(), dest.low);

@@ -58,7 +58,7 @@ const BROWSER_NOVA_ENABLED_PREF = "browser.nova.enabled";
 /**
  * @backward-compat { version 155 }
  * The New Tab theme picker depends on the toolkit `theme-picker` custom element,
- * its JSWindowActor pair (bug 2050531), and `locales-preview/theme-picker.ftl` —
+ * its JSWindowActor pair (bug 2050531), and `toolkit/global/theme-picker.ftl` —
  * all of which only exist in Firefox 155+. When newtab train-hops onto an older
  * host these are absent (the element never upgrades, the actor is unregistered,
  * and the ftl resource fails to load), so gate the whole feature off there.

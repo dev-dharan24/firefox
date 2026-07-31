@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.ui.efficiency.pageObjects
 
+import android.util.Log
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeTimeoutException
@@ -92,11 +93,14 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
             ),
         )
 
-        // Use UIAutomator selector to avoid Compose sync hanging when GeckoView is active.
+        // UIAutomator (Compose sync can hang while GeckoView is active) AND the content-description
+        // variant rather than the testTag: with shouldUseExpandedToolbar the counter moves to the bottom
+        // navigation bar, where it carries no tag. NOTE: TabDrawerPage registers this same edge — keep the
+        // two in step until the duplicate is removed.
         NavigationRegistry.register(
             from = pageName,
             to = "TabDrawerPage",
-            steps = listOf(NavigationStep.Click(ToolbarSelectors.TAB_COUNTER_UIAUTOMATOR)),
+            steps = listOf(NavigationStep.Click(ToolbarSelectors.TAB_COUNTER_ANY_LAYOUT)),
         )
     }
 
@@ -120,6 +124,28 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         return this
     }
 
+    /**
+     * Verify page content that the page only produces after some asynchronous work has settled, reloading
+     * between attempts. Needed for the tracking-protection test page, whose "<category> blocked" report is
+     * written once trackers have been processed — a plain [verifyPageContent] can run before that lands and
+     * no amount of waiting on the current document will make it appear.
+     *
+     * Mirrors the legacy BrowserRobot.verifyTrackingProtectionWebContent, which retried each assertion with
+     * a page refresh for the same reason.
+     */
+    fun verifyPageContentWithReload(url: String, text: String, attempts: Int = 3): BrowserPage {
+        for (attempt in 1..attempts) {
+            try {
+                return verifyPageContent(text)
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i("BrowserPage", "verifyPageContentWithReload: '$text' absent on attempt $attempt, reloading")
+                navigateToPage(url, forceNavigation = true)
+            }
+        }
+        return this
+    }
+
     fun verifyHttpsOnlyErrorPage(): BrowserPage {
         return verifyPageContent("Secure site not available")
             .verifyPageContent("Most likely, the website simply does not support HTTPS.")
@@ -139,6 +165,21 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
 
     fun clickPageContentIfPresent(text: String): BrowserPage {
         mozClickIfPresent(BrowserPageSelectors.PAGE_CONTENT(text))
+        return this
+    }
+
+    fun clickSubmitLoginButton(): BrowserPage {
+        mozClick(BrowserPageSelectors.SUBMIT_LOGIN_BUTTON)
+        return this
+    }
+
+    fun verifySaveLoginPromptIsDisplayed(): BrowserPage {
+        mozVerify(BrowserPageSelectors.SAVE_LOGIN_PROMPT)
+        return this
+    }
+
+    fun verifySaveLoginPromptIsNotDisplayed(): BrowserPage {
+        mozVerifyElementAbsent(BrowserPageSelectors.SAVE_LOGIN_PROMPT)
         return this
     }
 
@@ -170,7 +211,61 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         return this
     }
 
+    // --- Address autofill on a web form ---
+
+    /** Focus the web address form's street-address field, which triggers the autofill prompt. */
+    fun clickAddressFormStreetField(): BrowserPage {
+        // Android stylus handwriting pops a "Try out your stylus" dialog when a web text field is
+        // focused, covering the page and suppressing the autofill prompt. Disable it for the run so
+        // the tap behaves like the legacy environment; the dismiss below is a belt-and-suspenders
+        // fallback in case the setting doesn't take effect before the first focus.
+        runCatching { mDevice.executeShellCommand("settings put secure stylus_handwriting_enabled 0") }
+        mozClick(BrowserPageSelectors.ADDRESS_STREET_WEB_FIELD)
+        dismissKnownOverlaysIfPresent()
+        return this
+    }
+
+    /**
+     * Click the "Select address" header of the autofill prompt.
+     *
+     * Mirrors the legacy BrowserRobot.clickSelectAddressButton retry that works around
+     * https://bugzilla.mozilla.org/show_bug.cgi?id=1816869 — the prompt sometimes fails to surface,
+     * so we re-focus other form fields to re-trigger Gecko autofill and retry.
+     */
+    fun clickSelectAddressButton(): BrowserPage {
+        for (i in 1..AUTOFILL_RETRY_COUNT) {
+            // Clear any lingering blocking overlay (e.g. stylus prompt) before checking for the prompt.
+            dismissKnownOverlaysIfPresent()
+            try {
+                mozVerify(BrowserPageSelectors.SELECT_ADDRESS_HEADER, timeout = 3_000)
+                mozClick(BrowserPageSelectors.SELECT_ADDRESS_HEADER)
+                return this
+            } catch (e: AssertionError) {
+                if (i == AUTOFILL_RETRY_COUNT) throw e
+                // bug 1816869: the prompt sometimes fails to surface. Re-focus the street field to
+                // re-trigger Gecko autofill (mozClick auto-dismisses a blocking overlay if one appears).
+                mozClick(BrowserPageSelectors.ADDRESS_STREET_WEB_FIELD)
+            }
+        }
+        return this
+    }
+
+    /** Pick the saved-address suggestion whose row contains [streetAddress]. */
+    fun clickAddressSuggestion(streetAddress: String): BrowserPage {
+        val suggestion = BrowserPageSelectors.ADDRESS_SUGGESTION(streetAddress)
+        mozVerify(suggestion)
+        mozClick(suggestion)
+        return this
+    }
+
+    /** Assert the web street-address field is autofilled with [streetAddress]. */
+    fun verifyAutofilledAddress(streetAddress: String): BrowserPage {
+        mozVerify(BrowserPageSelectors.AUTOFILLED_STREET_ADDRESS(streetAddress), timeout = waitingTime)
+        return this
+    }
+
     private companion object {
         const val HTTPS_ERROR_GO_BACK = "Go Back (Recommended)"
+        const val AUTOFILL_RETRY_COUNT = 3
     }
 }

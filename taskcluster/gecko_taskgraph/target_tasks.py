@@ -955,6 +955,10 @@ def target_tasks_general_perf_testing(full_task_graph, parameters, graph_config)
                 return True
             # Select fenix resource usage tests
             if "fenix" in try_name:
+                # Bug 2058172 - Disable ytp power tests on android due to
+                # intermittent power measurement failures
+                if "-power" in try_name and "youtube-playback" in try_name:
+                    return False
                 if "-power" in try_name:
                     return True
 

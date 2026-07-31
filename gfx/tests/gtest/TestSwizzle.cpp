@@ -17,6 +17,24 @@ using namespace mozilla;
 using namespace mozilla::gfx;
 using namespace mozilla::image;
 
+namespace mozilla::gfx {
+
+// These are implementations of the row methods using SwizzleGeneric.h without
+// any architecture specific specialization. This allows us to test the generics
+// without any of the architecture specific template specializations and instead
+// use only the pure generics. This is useful to test because if a new target
+// doesn't use any specializations for the actual operations, we want to keep it
+// working.
+SwizzleRowFn PremultiplyRowGeneric(SurfaceFormat aSrcFormat,
+                                   SurfaceFormat aDstFormat, SwizzleArch aArch);
+SwizzleRowFn UnpremultiplyRowGeneric(SurfaceFormat aSrcFormat,
+                                     SurfaceFormat aDstFormat,
+                                     SwizzleArch aArch);
+SwizzleRowFn SwizzleRowGeneric(SurfaceFormat aSrcFormat,
+                               SurfaceFormat aDstFormat, SwizzleArch aArch);
+
+}  // namespace mozilla::gfx
+
 enum class SwizzleOp {
   Copy,
   YFlip,
@@ -34,7 +52,7 @@ constexpr int32_t kMaxSweepPixels = 8 * 3;
 // If the arch isn't available on this machine, the swizzle will just not
 // happen, and then we will try the next one.
 constexpr SwizzleArch kSwizzleArchs[] = {
-    SwizzleArch::eAny,  SwizzleArch::eFallback,
+    SwizzleArch::eAny,  SwizzleArch::eFallback, SwizzleArch::eGeneric,
 #ifdef USE_SSE2
     SwizzleArch::eSSE2, SwizzleArch::eSSSE3,    SwizzleArch::eAVX2,
 #endif
@@ -121,6 +139,26 @@ static void GeneratePixel(SwizzleOp aOp, SurfaceFormat aDstFormat, uint8_t aB,
   }
 }
 
+// Reference CMYK -> RGB conversion matching the scalar cmyk_convert_bgra in
+// nsJPEGDecoder: R = C*K/255, G = M*K/255, B = Y*K/255 (truncating), with the
+// channels optionally inverted first. The result is packed via GeneratePixel so
+// the destination byte order is handled consistently.
+static void GenerateCmykPixel(bool aInverted, SurfaceFormat aDstFormat,
+                              uint8_t aC, uint8_t aM, uint8_t aY, uint8_t aK,
+                              uint8_t* aDst) {
+  uint32_t iC = aC, iM = aM, iY = aY, iK = aK;
+  if (aInverted) {
+    iC = 255 - iC;
+    iM = 255 - iM;
+    iY = 255 - iY;
+    iK = 255 - iK;
+  }
+  uint8_t r = iC * iK / 255;
+  uint8_t g = iM * iK / 255;
+  uint8_t b = iY * iK / 255;
+  GeneratePixel(SwizzleOp::Copy, aDstFormat, b, g, r, 0xFF, aDst);
+}
+
 // Generate a BGRA sample with a range of channel values. It can clamp the RGB
 // values to ensure it is normal for unpremultiply.
 static void FillTestBGRA(uint8_t* aDst, int32_t aWidth, bool aClampToAlpha) {
@@ -147,11 +185,11 @@ static SwizzleRowFn RowFnFor(SwizzleOp aOp, SurfaceFormat aSrc,
                              SurfaceFormat aDst, SwizzleArch aArch) {
   switch (aOp) {
     case SwizzleOp::Premultiply:
-      return PremultiplyRow(aSrc, aDst, aArch);
+      return PremultiplyRowGeneric(aSrc, aDst, aArch);
     case SwizzleOp::Unpremultiply:
-      return UnpremultiplyRow(aSrc, aDst, aArch);
+      return UnpremultiplyRowGeneric(aSrc, aDst, aArch);
     case SwizzleOp::Copy:
-      return SwizzleRow(aSrc, aDst, aArch);
+      return SwizzleRowGeneric(aSrc, aDst, aArch);
     default:
       MOZ_ASSERT_UNREACHABLE("Unhandled row SwizzleOp!");
       break;
@@ -344,6 +382,51 @@ static void CheckUnpackRowSweep(SurfaceFormat aDstFormat) {
       func(dst, dst, len);
       EXPECT_TRUE(ArrayEqual(dst, expected))
           << "unpack in place, length " << len;
+    }
+  }
+}
+
+// Verify the *Row methods exported for swizzling CMYK.
+static void CheckCmykRowSweep(SurfaceFormat aSrcFormat) {
+  constexpr int32_t kSize = kMaxSweepPixels * 4;
+  uint8_t src[kSize];
+  uint8_t dst[kSize];
+  uint8_t expected[kSize];
+  // Spread of C/M/Y/K values across the row. The multiplier and addition are
+  // arbitrary values intended to select for values across the spectrum.
+  for (int32_t i = 0; i < kSize; ++i) {
+    src[i] = uint8_t((i * 37 + 11) & 0xFF);
+  }
+  const bool inverted = aSrcFormat == SurfaceFormat::InvertedCMYK;
+
+  for (SwizzleArch arch : kSwizzleArchs) {
+    SCOPED_TRACE(testing::Message()
+                 << "srcFormat=" << int(aSrcFormat) << " arch=" << int(arch));
+
+    SwizzleRowFn func =
+        RowFnFor(SwizzleOp::Copy, aSrcFormat, SurfaceFormat::B8G8R8X8, arch);
+    if (!func) {
+      EXPECT_NE(arch, SwizzleArch::eAny);
+      EXPECT_NE(arch, SwizzleArch::eFallback);
+      continue;
+    }
+
+    memset(expected, 0xCD, sizeof(expected));
+
+    for (int32_t i = 0; i < kMaxSweepPixels; ++i) {
+      GenerateCmykPixel(inverted, SurfaceFormat::B8G8R8X8, src[i * 4 + 0],
+                        src[i * 4 + 1], src[i * 4 + 2], src[i * 4 + 3],
+                        &expected[i * 4]);
+
+      int32_t len = i + 1;
+      memset(dst, 0xCD, sizeof(dst));
+      func(src, dst, len);
+      EXPECT_TRUE(ArrayEqual(dst, expected))
+          << "separate buffers, length " << len;
+
+      memcpy(dst, src, len * 4);
+      func(dst, dst, len);
+      EXPECT_TRUE(ArrayEqual(dst, expected)) << "in place, length " << len;
     }
   }
 }
@@ -882,6 +965,68 @@ TEST(Moz2D, SwizzleRow)
   }
 }
 
+TEST(Moz2D, SwizzleRowCmyk)
+{
+  const uint8_t in_cmyk[10 * 4] = {
+      200, 50,  10,  255,  // K=255: color passes through (R=C, G=M, B=Y)
+      200, 50,  10,  0,    // K=0: fully black
+      255, 255, 255, 255,  // all max -> 255,255,255
+      0,   0,   0,   0,    // all min -> 0,0,0
+      128, 128, 128, 128,  // floor edge: 128*128/255 = 64.25 -> 64
+      255, 0,   0,   255,  // only C -> only R (catches R/B swap)
+      0,   0,   255, 255,  // only Y -> only B (catches R/B swap)
+      2,   2,   2,   128,  // truncation: 2*128/255 = 1.003 -> 1
+      255, 255, 255, 1,    // tiny K: 255*1/255 = 1
+      100, 150, 200, 77,   // arbitrary mid values
+  };
+  uint8_t out[10 * 4];
+
+  // clang-format off
+  const uint8_t check_bgrx[10 * 4] = {
+       10, 50, 200, 255,  0,  0,  0, 255, 255, 255, 255, 255,
+        0,  0,   0, 255, 64, 64, 64, 255,   0,   0, 255, 255,
+      255,  0,   0, 255,  1,  1,  1, 255,   1,   1,   1, 255,
+       60, 45,  30, 255,
+  };
+
+  // InvertedCMYK: each channel is inverted (255 - x) before the conversion.
+  const uint8_t check_inverted_bgrx[10 * 4] = {
+        0,   0,   0, 255, 245, 205,  55, 255, 0,  0,   0, 255,
+      255, 255, 255, 255,  63,  63,  63, 255, 0,  0,   0, 255,
+        0,   0,   0, 255, 126, 126, 126, 255, 0,  0,   0, 255,
+       38, 73,  108, 255,
+  };
+  // clang-format on
+
+  for (SwizzleArch arch : kSwizzleArchs) {
+    SwizzleRowFn func = RowFnFor(SwizzleOp::Copy, SurfaceFormat::CMYK,
+                                 SurfaceFormat::B8G8R8X8, arch);
+    if (func) {
+      func(in_cmyk, out, 10);
+      EXPECT_TRUE(ArrayEqual(out, check_bgrx));
+    } else {
+      EXPECT_NE(arch, SwizzleArch::eAny);
+      EXPECT_NE(arch, SwizzleArch::eFallback);
+    }
+
+    func = RowFnFor(SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                    SurfaceFormat::B8G8R8X8, arch);
+    if (func) {
+      func(in_cmyk, out, 10);
+      EXPECT_TRUE(ArrayEqual(out, check_inverted_bgrx));
+    } else {
+      EXPECT_NE(arch, SwizzleArch::eAny);
+      EXPECT_NE(arch, SwizzleArch::eFallback);
+    }
+  }
+}
+
+TEST(Moz2D, SwizzleCmykRowSweep)
+{
+  CheckCmykRowSweep(SurfaceFormat::CMYK);
+  CheckCmykRowSweep(SurfaceFormat::InvertedCMYK);
+}
+
 TEST(Moz2D, ReorientRow)
 {
   // Input is a 3x4 image.
@@ -1305,6 +1450,13 @@ MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpack_RGB_BGRX_Fallback,
                                       SwizzleArch::eFallback);
                   });
 
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpack_RGB_BGRX_Generic,
+                  [this]() -> bool {
+                    return SwizzleRow(SwizzleOp::Copy, SurfaceFormat::R8G8B8,
+                                      SurfaceFormat::B8G8R8X8,
+                                      SwizzleArch::eGeneric);
+                  });
+
 MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpack_RGB_BGRX_NEON, [this]() -> bool {
   return SwizzleRow(SwizzleOp::Copy, SurfaceFormat::R8G8B8,
                     SurfaceFormat::B8G8R8X8, SwizzleArch::eNEON);
@@ -1325,6 +1477,13 @@ MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_RGBA_BGRX_Fallback,
                     return SwizzleData(SwizzleOp::Copy, SurfaceFormat::R8G8B8A8,
                                        SurfaceFormat::B8G8R8X8,
                                        SwizzleArch::eFallback);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_RGBA_BGRX_Generic,
+                  [this]() -> bool {
+                    return SwizzleRow(SwizzleOp::Copy, SurfaceFormat::R8G8B8A8,
+                                      SurfaceFormat::B8G8R8X8,
+                                      SwizzleArch::eGeneric);
                   });
 
 MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_RGBA_BGRX_NEON, [this]() -> bool {
@@ -1349,11 +1508,53 @@ MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_RGBA_BGRX_AVX2, [this]() -> bool {
                      SurfaceFormat::B8G8R8X8, SwizzleArch::eAVX2);
 });
 
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_InvertedCMYK_BGRX_Fallback,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                        SurfaceFormat::B8G8R8X8, SwizzleArch::eFallback);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_InvertedCMYK_BGRX_Generic,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                        SurfaceFormat::B8G8R8X8, SwizzleArch::eGeneric);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_InvertedCMYK_BGRX_NEON,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                        SurfaceFormat::B8G8R8X8, SwizzleArch::eNEON);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_InvertedCMYK_BGRX_SSE2,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                        SurfaceFormat::B8G8R8X8, SwizzleArch::eSSE2);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Swizzle_InvertedCMYK_BGRX_AVX2,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
+                        SurfaceFormat::B8G8R8X8, SwizzleArch::eAVX2);
+                  });
+
 MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Premultiply_RGBA_BGRA_Fallback,
                   [this]() -> bool {
                     return SwizzleData(
                         SwizzleOp::Premultiply, SurfaceFormat::R8G8B8A8,
                         SurfaceFormat::B8G8R8A8, SwizzleArch::eFallback);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Premultiply_RGBA_BGRA_Generic,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Premultiply, SurfaceFormat::R8G8B8A8,
+                        SurfaceFormat::B8G8R8A8, SwizzleArch::eGeneric);
                   });
 
 MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Premultiply_RGBA_BGRA_NEON,
@@ -1382,6 +1583,13 @@ MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpremultiply_RGBA_BGRA_Fallback,
                     return SwizzleData(
                         SwizzleOp::Unpremultiply, SurfaceFormat::R8G8B8A8,
                         SurfaceFormat::B8G8R8A8, SwizzleArch::eFallback);
+                  });
+
+MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpremultiply_RGBA_BGRA_Generic,
+                  [this]() -> bool {
+                    return SwizzleRow(
+                        SwizzleOp::Unpremultiply, SurfaceFormat::R8G8B8A8,
+                        SurfaceFormat::B8G8R8A8, SwizzleArch::eGeneric);
                   });
 
 MOZ_GTEST_BENCH_F(Moz2D_SwizzleBench, Unpremultiply_RGBA_BGRA_NEON,

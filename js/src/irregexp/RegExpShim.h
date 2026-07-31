@@ -383,6 +383,12 @@ inline uint64_t CountTrailingZeros(uint64_t value) {
   return std::countr_zero(value);
 }
 
+template <typename T>
+inline constexpr unsigned CountLeadingZeros(T value) {
+  static_assert(std::is_unsigned_v<T>);
+  return std::countl_zero(value);
+}
+
 inline constexpr size_t RoundUpToPowerOfTwo32(size_t value) {
   return mozilla::RoundUpPow2(value);
 }

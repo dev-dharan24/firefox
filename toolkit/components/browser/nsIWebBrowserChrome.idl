@@ -87,6 +87,12 @@ interface nsIWebBrowserChrome : nsISupports
     // Whether this is a Document Picture-in-Picture window
     const unsigned long CHROME_DOCUMENT_PIP           = 1 << 22;
 
+    // Prevents the new window from auto-entering native fullscreen on its
+    // initial show. On macOS, a window opened while a fullscreen space is
+    // active is otherwise adopted into its own fullscreen space. Only acted
+    // on by the macOS widget; ignored elsewhere.
+    const unsigned long CHROME_SUPPRESS_INITIAL_FULLSCREEN = 1 << 23;
+
     // Prevents new window animations on MacOS and Windows. Currently
     // ignored for Linux.
     const unsigned long CHROME_SUPPRESS_ANIMATION     = 1 << 24;

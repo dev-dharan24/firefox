@@ -19,6 +19,8 @@ run-if = [
 
 ["test_FeedbackModal.js"]
 
+["test_SmartWindowTelemetry.js"]
+
 ["test_TabManagementService.js"]
 
 ["test_ToolActionLog.js"]

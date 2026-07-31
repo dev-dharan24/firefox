@@ -75,6 +75,8 @@ void MacroAssembler::andPtr(Imm32 imm, Register src, Register dest) {
   MOZ_CRASH();
 }
 
+void MacroAssembler::andPtr(Imm32 imm, const Address& dest) { MOZ_CRASH(); }
+
 void MacroAssembler::and64(Imm64 imm, Register64 dest) { MOZ_CRASH(); }
 
 void MacroAssembler::or64(Imm64 imm, Register64 dest) { MOZ_CRASH(); }

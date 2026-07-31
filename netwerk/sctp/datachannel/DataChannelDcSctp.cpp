@@ -8,7 +8,10 @@
 
 #include "DataChannelLog.h"
 #include "mozilla/Components.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/RandomNum.h"
+#include "mozilla/dom/PMediaTransport.h"
+#include "mozilla/dom/RTCErrorBinding.h"
 #include "transport/runnable_utils.h"
 
 namespace mozilla {
@@ -306,7 +309,13 @@ void DataChannelConnectionDcSctp::OnAborted(ErrorKind aError,
   MOZ_ASSERT(mSTS->IsOnCurrentThread());
   DC_ERROR(("%s: %p %d %s", __func__, this, static_cast<int>(aError),
             std::string(aMessage).c_str()));
-  CloseAll_s();
+  // The SCTP association was aborted; surface this to content as an
+  // "sctp-failure" RTCError on the data channels. dcSCTP exposes only its own
+  // ErrorKind (not a numeric SCTP cause code), so sctpCauseCode is left unset.
+  dom::RTCErrorParams params;
+  params.errorInit().mErrorDetail = dom::RTCErrorDetailType::Sctp_failure;
+  params.message() = nsCString(aMessage.data(), aMessage.length());
+  CloseAll_s(Some(std::move(params)));
 }
 
 void DataChannelConnectionDcSctp::OnConnected() {

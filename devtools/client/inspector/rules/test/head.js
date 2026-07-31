@@ -1689,6 +1689,18 @@ function getCurrentPrefersDark() {
 }
 
 /**
+ * Check whether the current prefers-reduced-motion setting is "reduce".
+ *
+ * @return {Promise} A promise that resolves to a boolean indicating whether the current prefers-reduced-motion setting is "reduce".
+ */
+function getCurrentPrefersReducedMotionReduce() {
+  return SpecialPowers.spawn(gBrowser.selectedBrowser, [], () => {
+    const { matches } = content.matchMedia("(prefers-reduced-motion: reduce)");
+    return matches;
+  });
+}
+
+/**
  * Get the rule view elements for checkRuleViewContent
  *
  * @param {RuleView} view

@@ -48,6 +48,7 @@ impl<'a> RawtestHarness<'a> {
         self.test_blur_cache();
         self.test_capture();
         self.test_zero_height_window();
+        self.test_trim_transient_resources();
         self.test_clear_cache();
     }
 
@@ -170,6 +171,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             img,
             ColorF::WHITE,
+            None,
         );
 
         let mut epoch = Epoch(0);
@@ -198,6 +200,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             img,
             ColorF::WHITE,
+            None,
         );
 
         self.submit_dl(&mut epoch, builder, txn);
@@ -224,6 +227,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             img,
             ColorF::WHITE,
+            None,
         );
 
         self.submit_dl(&mut epoch, builder, txn);
@@ -784,6 +788,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             blob_img.as_image(),
             ColorF::WHITE,
+            None,
         );
 
         let mut epoch = Epoch(0);
@@ -807,6 +812,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             blob_img.as_image(),
             ColorF::WHITE,
+            None,
         );
 
         let mut txn = Transaction::new();
@@ -893,6 +899,7 @@ impl<'a> RawtestHarness<'a> {
                 AlphaType::PremultipliedAlpha,
                 blob_img.as_image(),
                 ColorF::WHITE,
+                None,
             );
             builder.push_image(
                 &info2,
@@ -901,6 +908,7 @@ impl<'a> RawtestHarness<'a> {
                 AlphaType::PremultipliedAlpha,
                 blob_img2.as_image(),
                 ColorF::WHITE,
+                None,
             );
         };
 
@@ -994,6 +1002,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             blob_img.as_image(),
             ColorF::WHITE,
+            None,
         );
 
         let mut epoch = Epoch(0);
@@ -1022,6 +1031,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             blob_img.as_image(),
             ColorF::WHITE,
+            None,
         );
 
         self.submit_dl(&mut epoch, builder, txn);
@@ -1048,6 +1058,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             blob_img.as_image(),
             ColorF::WHITE,
+            None,
         );
 
         self.submit_dl(&mut epoch, builder, txn);
@@ -1246,6 +1257,7 @@ impl<'a> RawtestHarness<'a> {
             AlphaType::PremultipliedAlpha,
             image,
             ColorF::WHITE,
+            None,
         );
 
         let mut txn = Transaction::new();
@@ -1448,6 +1460,139 @@ impl<'a> RawtestHarness<'a> {
 
         test_rounded_rectangle(WorldPoint::new(100., 100.), WorldSize::new(100., 100.), (0, 4));
         test_rounded_rectangle(WorldPoint::new(200., 100.), WorldSize::new(100., 100.), (0, 5));
+    }
+
+    fn test_trim_transient_resources(&mut self) {
+        println!("\ttrim transient resources...");
+        self.wrench.api.flush_scene_builder();
+        self.wrench.render();
+        while self.rx.try_recv().is_ok() {}
+
+        let window_size = self.window.get_inner_size();
+        let sample_size = FramebufferIntSize::new(64, 64);
+        let sample_rect = FramebufferIntRect::from_origin_and_size(
+            point2(0, window_size.height - sample_size.height),
+            sample_size,
+        );
+
+        let root_pipeline_id = self.wrench.root_pipeline_id;
+        let root_space_and_clip = SpaceAndClipInfo::root_scroll(root_pipeline_id);
+        let make_scene = |background: ColorF, shadow_color: ColorF| {
+            let mut builder = DisplayListBuilder::new(root_pipeline_id);
+            builder.begin();
+
+            let background_rect = rect(0.0, 0.0, 400.0, 400.0).to_box2d();
+            let background_info = CommonItemProperties {
+                clip_rect: background_rect,
+                clip_chain_id: root_space_and_clip.clip_chain_id,
+                spatial_id: root_space_and_clip.spatial_id,
+                flags: PrimitiveFlags::default(),
+            };
+            builder.push_rect(&background_info, background_rect, background);
+
+            builder.push_shadow(
+                &root_space_and_clip,
+                Shadow {
+                    offset: LayoutVector2D::new(1.0, 1.0),
+                    blur_radius: 1.0,
+                    color: shadow_color,
+                },
+                true,
+            );
+            let line_rect = rect(110.0, 110.0, 50.0, 2.0).to_box2d();
+            let line_info = CommonItemProperties {
+                clip_rect: line_rect,
+                clip_chain_id: root_space_and_clip.clip_chain_id,
+                spatial_id: root_space_and_clip.spatial_id,
+                flags: PrimitiveFlags::default(),
+            };
+            builder.push_line(
+                &line_info,
+                &line_rect,
+                0.0,
+                LineOrientation::Horizontal,
+                &ColorF::new(0.0, 0.0, 0.0, 1.0),
+                LineStyle::Solid,
+            );
+            builder.pop_all_shadows();
+
+            builder
+        };
+
+        let mut epoch = Epoch(0);
+
+        self.submit_dl(
+            &mut epoch,
+            make_scene(
+                ColorF::new(0.0, 1.0, 0.0, 1.0),
+                ColorF::new(0.0, 0.0, 1.0, 1.0),
+            ),
+            Transaction::new(),
+        );
+        let expected = self.render_and_get_pixels(sample_rect);
+
+        self.submit_dl(
+            &mut epoch,
+            make_scene(
+                ColorF::new(1.0, 0.0, 0.0, 1.0),
+                ColorF::new(1.0, 0.0, 1.0, 1.0),
+            ),
+            Transaction::new(),
+        );
+        let stale = self.render_and_get_pixels(sample_rect);
+        assert_ne!(expected, stale);
+
+        // Queue a replacement frame, but leave its PublishDocument in the
+        // renderer's result queue so the following trim must discard it.
+        self.submit_dl(
+            &mut epoch,
+            make_scene(
+                ColorF::new(0.0, 1.0, 0.0, 1.0),
+                ColorF::new(1.0, 1.0, 0.0, 1.0),
+            ),
+            Transaction::new(),
+        );
+        assert_eq!(
+            self.rx.recv().unwrap(),
+            NotifierEvent::WakeUp {
+                composite_needed: true,
+            }
+        );
+
+        self.wrench.renderer.trim_transient_resources(true);
+
+        // Match WebRenderBridgeParent::ScheduleForcedGenerateFrame(): Resume
+        // sends invalidation and GenerateFrame as separate fast transactions.
+        let mut invalidate = Transaction::new();
+        invalidate.invalidate_rendered_frame(RenderReasons::TESTING);
+        self.wrench
+            .api
+            .send_transaction(self.wrench.document_id, invalidate);
+
+        let mut forced_frame = Transaction::new();
+        forced_frame.generate_frame(0, true, false, RenderReasons::TESTING);
+        self.wrench
+            .api
+            .send_transaction(self.wrench.document_id, forced_frame);
+
+        assert_eq!(
+            self.rx.recv().unwrap(),
+            NotifierEvent::WakeUp {
+                composite_needed: false,
+            }
+        );
+        assert_eq!(
+            self.rx.recv().unwrap(),
+            NotifierEvent::WakeUp {
+                composite_needed: true,
+            }
+        );
+
+        // This is the first renderer update since the queued frame, trim and
+        // forced frame. It must end up with the post-trim PublishDocument.
+        self.wrench.render();
+        let actual = self.wrench.renderer.read_pixels_rgba8(sample_rect);
+        self.compare_pixels(expected, actual, sample_rect.size());
     }
 
     fn test_clear_cache(&mut self) {

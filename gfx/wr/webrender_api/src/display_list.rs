@@ -1268,6 +1268,7 @@ impl DisplayListBuilder {
         alpha_type: di::AlphaType,
         key: ImageKey,
         color: ColorF,
+        sub_rect: Option<DeviceIntRect>,
     ) {
         let (common, offset) = self.normalize_common(common);
         let item = di::DisplayItem::Image(di::ImageDisplayItem {
@@ -1277,6 +1278,7 @@ impl DisplayListBuilder {
             image_rendering,
             alpha_type,
             color,
+            sub_rect,
         });
 
         self.push_item(&item);
@@ -1525,6 +1527,24 @@ impl DisplayListBuilder {
             .translate(offset)
             .inflate(spread_amount, spread_amount);
         let spatial_id = common.spatial_id;
+
+        // A box-shadow's shape is a plain rounded rect, so its radii take the
+        // css-backgrounds-3 5.5 overlap reduction. Spread shrinks the rect by
+        // twice what it takes off the radii, so a negative spread routinely
+        // leaves radii that no longer fit and must be scaled back.
+        //
+        // Do it here, at the producer. The rounded-rect clips these desugar to
+        // are otherwise indistinguishable from the ones `background-clip`
+        // produces, and those must *not* be reduced: they trace the inner
+        // border edge, which css-backgrounds-3 4.4 defines as concentric with
+        // the outer edge (bug 1830603). Chrome draws the same distinction.
+        let normalized = |rect: &LayoutRect, radii: di::BorderRadius| {
+            let mut radii = radii;
+            crate::key_types::ensure_no_corner_overlap(&mut radii, rect.size());
+            radii
+        };
+        let border_radius = normalized(&box_bounds, border_radius);
+        let shadow_radius = normalized(&shadow_rect, shadow_radius);
 
         let mut clips: Vec<di::ClipId> = Vec::with_capacity(2);
         let (final_prim_rect, clip_radius) = match clip_mode {

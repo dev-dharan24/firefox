@@ -13117,10 +13117,8 @@ AttachDecision InlinableNativeIRGenerator::tryAttachStub() {
     case InlinableNative::IntrinsicGuardToIteratorRange:
 #endif
     case InlinableNative::IntrinsicGuardToAsyncIteratorHelper:
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
     case InlinableNative::IntrinsicGuardToAsyncDisposableStack:
     case InlinableNative::IntrinsicGuardToDisposableStack:
-#endif
       return tryAttachGuardToClass(native);
     case InlinableNative::IntrinsicSubstringKernel:
       return tryAttachSubstringKernel();

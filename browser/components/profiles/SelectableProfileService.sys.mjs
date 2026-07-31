@@ -29,7 +29,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   EveryWindow: "resource:///modules/EveryWindow.sys.mjs",
   ExperimentAPI: "resource://nimbus/ExperimentAPI.sys.mjs",
   MigrationUtils: "resource:///modules/MigrationUtils.sys.mjs",
-  NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   TelemetryUtils: "resource://gre/modules/TelemetryUtils.sys.mjs",
@@ -379,7 +378,6 @@ class SelectableProfileServiceClass extends EventEmitter {
   constructor() {
     super();
 
-    this.onNimbusUpdate = this.onNimbusUpdate.bind(this);
     this.themeObserver = this.themeObserver.bind(this);
     this.matchMediaObserver = this.matchMediaObserver.bind(this);
     this.prefObserver = (subject, topic, prefName) =>
@@ -524,12 +522,6 @@ class SelectableProfileServiceClass extends EventEmitter {
     await this.#attemptFlushProfileService();
   }
 
-  onNimbusUpdate() {
-    if (lazy.NimbusFeatures.selectableProfiles.getVariable("enabled")) {
-      Services.prefs.setBoolPref(PROFILES_PREF_NAME, true);
-    }
-  }
-
   /**
    * At startup, store the nsToolkitProfile for the group.
    * Get the groupDBPath from the nsToolkitProfile, and connect to it.
@@ -552,8 +544,6 @@ class SelectableProfileServiceClass extends EventEmitter {
     if (this.#initialized) {
       return;
     }
-
-    lazy.NimbusFeatures.selectableProfiles.onUpdate(this.onNimbusUpdate);
 
     this.#profileService = ProfilesDatastoreService.toolkitProfileService;
 
@@ -707,8 +697,6 @@ class SelectableProfileServiceClass extends EventEmitter {
       this.themeObserver,
       "lightweight-theme-styling-update"
     );
-
-    lazy.NimbusFeatures.selectableProfiles.offUpdate(this.onNimbusUpdate);
 
     this.#currentProfile = null;
     this.#badge = null;
@@ -1430,34 +1418,30 @@ class SelectableProfileServiceClass extends EventEmitter {
   async addSelectableProfilePrefs(profileDirPath) {
     const sharedPrefs = await this.getAllDBPrefs();
 
-    const filteredPrefs = sharedPrefs.filter(
-      pref =>
-        !SelectableProfileServiceClass.ignoredSharedPrefs.includes(pref.name)
+    let prefsToAdd = new Map(
+      sharedPrefs
+        .filter(
+          pref =>
+            !SelectableProfileServiceClass.ignoredSharedPrefs.includes(
+              pref.name
+            )
+        )
+        .map(({ name, value }) => [name, value])
     );
-
-    const prefsToAdd = [];
-    for (let pref of filteredPrefs) {
-      prefsToAdd.push(
-        `user_pref("${pref.name}", ${
-          pref.type === "string" ? `"${pref.value}"` : `${pref.value}`
-        });`
-      );
-    }
 
     // Preferences that must be set for selectable profiles.
-    prefsToAdd.push(`user_pref("browser.profiles.enabled", true);`);
-    prefsToAdd.push(`user_pref("browser.profiles.created", true);`);
-    prefsToAdd.push(
-      `user_pref("toolkit.profiles.storeID", "${this.storeID}");`
-    );
-    prefsToAdd.push(
-      `user_pref("${DAU_GROUPID_PREF_NAME}", "${await this.getDBPref(DAU_GROUPID_PREF_NAME)}");`
-    );
+    prefsToAdd.set("browser.profiles.enabled", true);
+    prefsToAdd.set("browser.profiles.created", true);
+    prefsToAdd.set("toolkit.profiles.storeID", this.storeID);
 
     const LINEBREAK = AppConstants.platform === "win" ? "\r\n" : "\n";
     await IOUtils.writeUTF8(
       PathUtils.join(profileDirPath, "prefs.js"),
-      prefsToAdd.join(LINEBREAK) + LINEBREAK,
+      Array.from(
+        prefsToAdd,
+        ([name, value]) =>
+          `user_pref(${JSON.stringify(name)}, ${typeof value === "string" ? JSON.stringify(value) : value});`
+      ).join(LINEBREAK) + LINEBREAK,
       { mode: "appendOrCreate" }
     );
   }

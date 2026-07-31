@@ -11,12 +11,13 @@ use crate::clip::{ClipChainInstance, ClipIntern};
 use crate::command_buffer::CommandBufferIndex;
 use crate::pattern::image::ImagePattern;
 use crate::quad::{QuadDescriptor, QuadTransformState};
+use crate::visibility::PrimitiveDrawIndex;
 use crate::scene_building::{IsVisible};
 use crate::frame_builder::{FrameBuildingContext, FrameBuildingState, PictureContext};
 use crate::intern::{DataStore, Handle as InternHandle, InternDebug, Internable};
 use crate::internal_types::LayoutPrimitiveInfo;
 use crate::prim_store::{
-    EdgeMask, InternablePrimitive, PrimKey, PrimTemplate, PrimTemplateCommonData, PrimitiveInstanceIndex, PrimitiveKind, PrimitiveScratchBuffer, PrimitiveStore
+    EdgeMask, InternablePrimitive, PrimKey, PrimTemplate, PrimTemplateCommonData, PrimitiveKind, PrimitiveScratchBuffer, PrimitiveStore
 };
 use crate::render_target::RenderTargetKind;
 use crate::render_task_graph::RenderTaskId;
@@ -91,6 +92,7 @@ pub struct ImageData {
     pub color: ColorF,
     pub image_rendering: ImageRendering,
     pub alpha_type: AlphaType,
+    pub sub_rect: Option<DeviceIntRect>,
 }
 
 impl From<Image> for ImageData {
@@ -102,6 +104,7 @@ impl From<Image> for ImageData {
             tile_spacing: image.tile_spacing.into(),
             image_rendering: image.image_rendering,
             alpha_type: image.alpha_type,
+            sub_rect: image.sub_rect,
         }
     }
 }
@@ -111,7 +114,7 @@ pub fn prepare_image_quads(
     common_data: &PrimTemplateCommonData,
     image_data: &ImageData,
     clip_chain: &ClipChainInstance,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     quad_transform: &mut QuadTransformState,
     frame_context: &FrameBuildingContext,
     pic_context: &PictureContext,
@@ -202,6 +205,43 @@ pub fn prepare_image_quads(
                 }
             }
 
+            // Restrict sampling to the requested sub-rect of the image, so that
+            // filtering at the edges of a sprite-sheet cell cannot pull in the
+            // neighbouring cells.
+            //
+            // `add_sub_rect` narrows the one rect the shader uses for both the
+            // uv mapping and the sample bounds, so the pattern has to be
+            // situated on the sub-rect's destination rather than on the whole
+            // image, or the sub-rect would be stretched over the primitive.
+            // Coverage is unaffected: the sub-rect is rounded out by the
+            // caller, so its destination contains the visible area and the
+            // clip below still bounds the quad. This is the same trick that
+            // `prepare_repeatable_quad` uses to bake a stretch size into the
+            // local rect.
+            let mut local_rect = prim_rect;
+            let mut stretch_size = stretch_size;
+            if let Some(sub_rect) = image_data.sub_rect {
+                src_task_id = frame_state.rg_builder.add_sub_rect(src_task_id, &sub_rect);
+
+                // Where the whole image lands, which is what the sub-rect is
+                // relative to.
+                let image_dest = LayoutRect::from_origin_and_size(prim_rect.min, stretch_size);
+                let sx = image_dest.width() / size.width as f32;
+                let sy = image_dest.height() / size.height as f32;
+
+                local_rect = LayoutRect {
+                    min: point2(
+                        image_dest.min.x + sub_rect.min.x as f32 * sx,
+                        image_dest.min.y + sub_rect.min.y as f32 * sy,
+                    ),
+                    max: point2(
+                        image_dest.min.x + sub_rect.max.x as f32 * sx,
+                        image_dest.min.y + sub_rect.max.y as f32 * sy,
+                    ),
+                };
+                stretch_size = local_rect.size();
+            }
+
             let image_pattern = ImagePattern {
                 src_task_id,
                 src_is_opaque,
@@ -213,14 +253,14 @@ pub fn prepare_image_quads(
             quad::prepare_repeatable_quad(
                 &image_pattern,
                 &QuadDescriptor {
-                    local_rect: prim_rect,
+                    local_rect,
                     local_clip_rect: tight_clip_rect,
                     aligned_aa_edges: common_data.aligned_aa_edges,
                     transformed_aa_edges: common_data.transformed_aa_edges,
                 },
                 stretch_size,
                 image_data.tile_spacing,
-                prim_instance_index,
+                draw_index,
                 &None,
                 clip_chain,
                 quad_transform,
@@ -238,7 +278,7 @@ pub fn prepare_image_quads(
             // thing.
             let active_rect = image_properties.visible_rect;
             let visible_rect = compute_conservative_visible_rect(
-                &scratch.frame.draws[prim_instance_index.0 as usize].clip_chain,
+                &scratch.frame.draw(draw_index).clip_chain,
                 frame_state.current_dirty_region().combined,
                 frame_state.current_dirty_region().visibility_spatial_node,
                 quad_transform.prim_spatial_node_index(),
@@ -302,7 +342,7 @@ pub fn prepare_image_quads(
                             aligned_aa_edges,
                             transformed_aa_edges,
                         },
-                        prim_instance_index,
+                        draw_index,
                         &None,
                         clip_chain,
                         quad_transform,
@@ -605,9 +645,9 @@ fn test_struct_sizes() {
     //     test expectations and move on.
     // (b) You made a structure larger. This is not necessarily a problem, but should only
     //     be done with care, and after checking if talos performance regresses badly.
-    assert_eq!(mem::size_of::<Image>(), 36, "Image size changed");
-    assert_eq!(mem::size_of::<ImageTemplate>(), 52, "ImageTemplate size changed");
-    assert_eq!(mem::size_of::<ImageKey>(), 40, "ImageKey size changed");
+    assert_eq!(mem::size_of::<Image>(), 56, "Image size changed");
+    assert_eq!(mem::size_of::<ImageTemplate>(), 72, "ImageTemplate size changed");
+    assert_eq!(mem::size_of::<ImageKey>(), 60, "ImageKey size changed");
     assert_eq!(mem::size_of::<YuvImage>(), 32, "YuvImage size changed");
     assert_eq!(mem::size_of::<YuvImageTemplate>(), 72, "YuvImageTemplate size changed");
     assert_eq!(mem::size_of::<YuvImageKey>(), 36, "YuvImageKey size changed");

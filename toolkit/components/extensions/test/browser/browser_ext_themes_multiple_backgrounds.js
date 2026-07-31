@@ -115,7 +115,7 @@ add_task(async function test_support_backgrounds_position() {
     "The backgroundPosition should use the default value."
   );
 
-  await extension.unload();
+  await waitForThemeRestyle(() => extension.unload());
 
   Assert.ok(!docEl.hasAttribute("lwtheme"), "LWT attribute should not be set");
   bgImageCS = window.getComputedStyle(bgImageElement);

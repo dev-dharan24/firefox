@@ -52,19 +52,22 @@ add_task(async function () {
 
   async function promiseLoadURL() {
     return new Promise(resolve => {
-      sandbox.stub(gURLBar, "_loadURL").callsFake(function () {
-        sandbox.restore();
-        // The last arguments are optional and apply only to some cases, so we
-        // could not use deepEqual with them.
-        resolve(Array.from(arguments).slice(0, 3));
-      });
+      sandbox
+        .stub(gURLBar.controller, "loadURL")
+        .callsFake(({ url, where }) => {
+          sandbox.restore();
+          // The remaining options are optional and apply only to some cases, so
+          // we could not use deepEqual with them.
+          resolve([url, where]);
+          return {};
+        });
     });
   }
 
   // Run the string through a normal search where the user types the string
-  // and confirms the heuristic result, store the arguments to _loadURL, then
-  // confirm the same string without a view and without an input event, and
-  // compare the arguments.
+  // and confirms the heuristic result, store the load arguments, then confirm
+  // the same string without a view and without an input event, and compare the
+  // arguments.
   for (let value of TEST_STRINGS) {
     info(`Input the value normally and Enter. Value: ${value}`);
     let promise = promiseLoadURL();
@@ -113,19 +116,20 @@ add_task(async function no_heuristic_test() {
 
   async function promiseLoadURL() {
     return new Promise(resolve => {
-      sinon.stub(gURLBar, "_loadURL").callsFake(function () {
-        gURLBar._loadURL.restore();
-        // The last arguments are optional and apply only to some cases, so we
-        // could not use deepEqual with them.
-        resolve(Array.from(arguments).slice(0, 3));
+      sinon.stub(gURLBar.controller, "loadURL").callsFake(({ url, where }) => {
+        gURLBar.controller.loadURL.restore();
+        // The remaining options are optional and apply only to some cases, so
+        // we could not use deepEqual with them.
+        resolve([url, where]);
+        return {};
       });
     });
   }
 
   // Run the string through a normal search where the user types the string
-  // and confirms the heuristic result, store the arguments to _loadURL, then
-  // confirm the same string without a view and without an input event, and
-  // compare the arguments.
+  // and confirms the heuristic result, store the load arguments, then confirm
+  // the same string without a view and without an input event, and compare the
+  // arguments.
   for (let value of TEST_STRINGS) {
     // To properly testing the original value we must be out of search mode.
     if (gURLBar.searchMode) {
@@ -134,9 +138,9 @@ add_task(async function no_heuristic_test() {
     let promise = promiseLoadURL();
     gURLBar.value = value;
     EventUtils.synthesizeKey("KEY_Enter");
-    // The first argument to _loadURL should always be a valid url, so this
-    // should never throw. Awaiting it also lets the message path round-trip
-    // the fallback before we check the stub below.
+    // The loaded url should always be a valid url, so this should never throw.
+    // Awaiting it also lets the message path round-trip the fallback before we
+    // check the stub below.
     new URL((await promise)[0]);
     Assert.ok(stub.called, "invoked getHeuristicResult");
   }

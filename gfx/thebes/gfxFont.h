@@ -923,11 +923,14 @@ class gfxShapedText {
     uint8_t CanBreakBefore() const {
       return (mValue & FLAGS_CAN_BREAK_BEFORE) >> FLAGS_CAN_BREAK_SHIFT;
     }
-    // Returns FLAGS_CAN_BREAK_BEFORE if the setting changed, 0 otherwise
+    // Returns any break-before flags that were modifed; 0 if nothing changed.
     uint32_t SetCanBreakBefore(uint8_t aCanBreakBefore) {
       MOZ_ASSERT(aCanBreakBefore <= 3, "Bogus break-flags value!");
-      uint32_t breakMask = (uint32_t(aCanBreakBefore) << FLAGS_CAN_BREAK_SHIFT);
-      uint32_t toggle = breakMask ^ (mValue & FLAGS_CAN_BREAK_BEFORE);
+      // Shift the input value to the relevant bit positions.
+      uint32_t breakMask = uint32_t(aCanBreakBefore) << FLAGS_CAN_BREAK_SHIFT;
+      // Determine which bits in the break field are changing (if any).
+      uint32_t toggle = (breakMask ^ mValue) & FLAGS_CAN_BREAK_BEFORE;
+      // Update the value, and return the bits that changed.
       mValue ^= toggle;
       return toggle;
     }
@@ -1093,12 +1096,13 @@ class gfxShapedText {
   // NOTE that this must not be called for a character offset that does
   // not have any DetailedGlyph records; callers must have verified that
   // GetCharacterGlyphs()[aCharIndex].GetGlyphCount() is greater than zero.
-  DetailedGlyph* GetDetailedGlyphs(uint32_t aCharIndex) const {
-    NS_ASSERTION(GetCharacterGlyphs() && HasDetailedGlyphs() &&
-                     !GetCharacterGlyphs()[aCharIndex].IsSimpleGlyph() &&
-                     GetCharacterGlyphs()[aCharIndex].GetGlyphCount() > 0,
-                 "invalid use of GetDetailedGlyphs; check the caller!");
-    return mDetailedGlyphs->Get(aCharIndex);
+  DetailedGlyph* GetDetailedGlyphs(uint32_t aCharIndex, uint32_t aCount) const {
+    MOZ_ASSERT(GetCharacterGlyphs() && HasDetailedGlyphs() &&
+                   !GetCharacterGlyphs()[aCharIndex].IsSimpleGlyph() &&
+                   GetCharacterGlyphs()[aCharIndex].GetGlyphCount() == aCount &&
+                   aCount > 0,
+               "invalid use of GetDetailedGlyphs; check the caller!");
+    return mDetailedGlyphs->Get(aCharIndex, aCount);
   }
 
   void ApplyTrackingToClusters(gfxFloat aTrackingAdjustment, uint32_t aOffset,
@@ -1206,9 +1210,8 @@ class gfxShapedText {
     // mCharacterGlyphs[aOffset].GetGlyphCount() is greater than zero
     // before calling this, otherwise the assertions here will fire (in a
     // debug build), and we'll probably crash.
-    DetailedGlyph* Get(uint32_t aOffset) {
+    DetailedGlyph* Get(uint32_t aOffset, uint32_t aCount) {
       NS_ASSERTION(mOffsetToIndex.Length() > 0, "no detailed glyph records!");
-      DetailedGlyph* details = mDetails.Elements();
       // check common cases (fwd iteration, initial entry, etc) first
       if (mLastUsed < mOffsetToIndex.Length() - 1 &&
           aOffset == mOffsetToIndex[mLastUsed + 1].mOffset) {
@@ -1225,7 +1228,11 @@ class gfxShapedText {
       }
       NS_ASSERTION(mLastUsed != nsTArray<DGRec>::NoIndex,
                    "detailed glyph record missing!");
-      return details + mOffsetToIndex[mLastUsed].mIndex;
+      uint32_t index = mOffsetToIndex[mLastUsed].mIndex;
+      // Ensure that |aCount| records are available, starting at |index|.
+      MOZ_RELEASE_ASSERT(index < mDetails.Length() &&
+                         aCount <= mDetails.Length() - index);
+      return mDetails.Elements() + index;
     }
 
     DetailedGlyph* Allocate(uint32_t aOffset, uint32_t aCount) {

@@ -187,6 +187,23 @@ export class UrlbarParentControllerProxy {
     });
   }
 
+  /**
+   * Runs the address bar's single-word keyword URI fixup DNS check parent-side.
+   * The counterpart to the controller's `checkKeywordURIFixup()`.
+   *
+   * @param {string} searchString
+   *   The string being searched.
+   * @param {?number} browserId
+   *   The browser the search loads into, or null for the selected browser.
+   */
+  checkKeywordURIFixup(searchString, browserId) {
+    this.#actor.sendAsyncMessage("CheckKeywordURIFixup", {
+      instanceId: this.#instanceId,
+      searchString,
+      browserId,
+    });
+  }
+
   // Named to match the controller property the child controller forwards to.
   get _lastQueryContextWrapper() {
     return this.#lastQueryContextWrapper;
@@ -416,6 +433,27 @@ export class UrlbarParentControllerProxy {
     this.#actor.sendAsyncMessage("MarkEngineAsUsed", {
       instanceId: this.#instanceId,
       engineId,
+    });
+  }
+
+  /** @type {UrlbarParentController["openSERP"]} */
+  openSERP(engineId, searchTerms, where, inBackground) {
+    this.#actor.sendAsyncMessage("OpenSERP", {
+      instanceId: this.#instanceId,
+      engineId,
+      searchTerms,
+      where,
+      inBackground,
+    });
+  }
+
+  /** @type {UrlbarParentController["openSearchForm"]} */
+  openSearchForm(engineId, where, inBackground) {
+    this.#actor.sendAsyncMessage("OpenSearchForm", {
+      instanceId: this.#instanceId,
+      engineId,
+      where,
+      inBackground,
     });
   }
 }

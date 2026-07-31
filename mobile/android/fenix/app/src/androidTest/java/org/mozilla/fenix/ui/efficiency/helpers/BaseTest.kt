@@ -22,6 +22,7 @@ import org.junit.rules.TestRule
 import org.junit.runners.model.Statement
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.helpers.AppAndSystemHelper.deleteBookmarksStorage
+import org.mozilla.fenix.helpers.AppAndSystemHelper.deletePinnedSitesStorage
 import org.mozilla.fenix.helpers.FenixTestRule
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
 import org.mozilla.fenix.helpers.IdlingResourceHelper.unregisterAllIdlingResources
@@ -58,6 +59,7 @@ abstract class BaseTest(
     private val isPageLoadTranslationsPromptEnabled: Boolean = false,
     private val isPocketEnabled: Boolean = true,
     private val isRecentlyVisitedFeatureEnabled: Boolean = true,
+    private val shouldUseExpandedToolbar: Boolean = false,
 ) {
 
     // Default launch built from the constructor args (back-compat for every existing subclass).
@@ -66,6 +68,7 @@ abstract class BaseTest(
         isPageLoadTranslationsPromptEnabled = isPageLoadTranslationsPromptEnabled,
         isPocketEnabled = isPocketEnabled,
         isRecentlyVisitedFeatureEnabled = isRecentlyVisitedFeatureEnabled,
+        shouldUseExpandedToolbar = shouldUseExpandedToolbar,
     )
 
     /** Override to vary the launch per run/case (e.g. the reachability shard uses the case's config). */
@@ -98,14 +101,28 @@ abstract class BaseTest(
                             isPageLoadTranslationsPromptEnabled = cfg.isPageLoadTranslationsPromptEnabled,
                             isPocketEnabled = cfg.isPocketEnabled,
                             isRecentlyVisitedFeatureEnabled = cfg.isRecentlyVisitedFeatureEnabled,
+                            shouldUseExpandedToolbar = cfg.shouldUseExpandedToolbar,
                         ),
                     ) { it.activity }
                     try {
                         Log.i("BaseTest", "RetryTestRule: Started try #${attempt + 1}.")
                         runBlocking {
                             deleteBookmarksStorage()
+                            deletePinnedSitesStorage()
                             withContext(Dispatchers.IO) {
                                 appContext.components.core.sessionStorage.clear()
+                                // Clear saved autofill addresses so every attempt starts from a clean
+                                // screen. A leftover address (e.g. from a failed first attempt) changes
+                                // the Autofill settings layout and can push "Add address" off-screen,
+                                // turning a one-off failure into a retry that fails differently.
+                                // Best-effort: a storage error must not fail the attempt on its own, but
+                                // it is logged — a silent failure here looks identical to a state leak.
+                                runCatching {
+                                    val autofill = appContext.components.core.autofillStorage
+                                    autofill.getAllAddresses().forEach { autofill.deleteAddress(it.guid) }
+                                }.onFailure {
+                                    Log.i("BaseTest", "RetryTestRule: autofill clear failed: ${it.message}")
+                                }
                             }
                         }
                         appContext.components.useCases.tabsUseCases.removeAllTabs()

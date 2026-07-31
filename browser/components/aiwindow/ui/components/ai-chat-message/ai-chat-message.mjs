@@ -8,6 +8,7 @@ import {
   parseMarkdown,
   CHAT_WRAPPER_ELEMENTS,
 } from "chrome://browser/content/aiwindow/modules/ChatMarkdownParser.mjs";
+import { dispatchClientError } from "chrome://browser/content/aiwindow/modules/ClientErrorTelemetry.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/ai-chat-card.mjs";
 // eslint-disable-next-line import/no-unassigned-import
@@ -636,9 +637,14 @@ export class AIChatMessage extends MozLitElement {
    * @param {Element} element the element in which to insert the parsed markdown.
    */
   #parseMarkdown(markdown, element) {
-    element.setHTML(parseMarkdown(markdown), {
-      sanitizer: AIChatMessage.#chatMessageSanitizer,
-    });
+    try {
+      element.setHTML(parseMarkdown(markdown), {
+        sanitizer: AIChatMessage.#chatMessageSanitizer,
+      });
+    } catch (error) {
+      dispatchClientError(this, error, "markdown");
+      throw error;
+    }
     // Pass messageId to table elements for copy functionality.
     if (this.messageId) {
       for (const table of element.querySelectorAll("ai-chat-table")) {

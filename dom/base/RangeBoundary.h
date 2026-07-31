@@ -956,7 +956,7 @@ class RangeBoundaryBase {
     }
 
     MOZ_ASSERT(mOffset.isSome());
-    return *mOffset <= GetContainer()->Length();
+    return *mOffset <= ComputeLength(mParent, mTreeKind);
   }
 
   bool IsStartOfContainer() const {

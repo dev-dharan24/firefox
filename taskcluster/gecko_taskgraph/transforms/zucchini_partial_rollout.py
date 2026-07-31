@@ -16,6 +16,7 @@ partials_transforms = TransformSequence()
 # If holding in beta, we'll need to uplift a patch to remove the release entry.
 # TODO: update taskcluster/docs/partials.rst once we are fully rolled out
 LEGACY_PARTIALS_PROJECTS = {
+    "mozilla-beta",
     "mozilla-release",
     "mozilla-esr115",
     "mozilla-esr140",

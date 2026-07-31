@@ -41,6 +41,9 @@ support-files = [
   "good/module_4.mjs",
   "good/module_7.mjs",
   "circular_dependency.mjs",
+  "memory_cached_module.mjs",
+  "memory_cached_module.mjs^headers^",
+  "memory_cached_module_mapped.mjs",
 ]
 
 ["test_bug_1820594.html"]
@@ -56,6 +59,8 @@ support-files = [
 ["test_dynamic_importMap_load_completes.html"]
 
 ["test_dynamic_importMap_with_external_script.html"]
+
+["test_importMap_after_memory_cached_module.html"]
 
 ["test_importMap_with_external_script.html"]
 

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::mem;
 #[cfg(target_os = "linux")]
 use std::os::fd::{FromRawFd, IntoRawFd, OwnedFd, RawFd};
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -1430,20 +1430,15 @@ pub extern "C" fn wgpu_vkimage_get_dma_buf_info(handle: &VkImageHandle) -> DMABu
     }
 }
 
-#[cfg(target_os = "macos")]
-pub struct MetalSharedEventHandle(
-    objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLSharedEvent>>,
-);
-#[cfg(not(target_os = "macos"))]
-pub struct MetalSharedEventHandle;
-
+/// The caller assumes responsibility for one reference to the returned shared
+/// event, and must release it when no longer required.
 #[no_mangle]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 pub extern "C" fn wgpu_server_get_device_fence_metal_shared_event(
     global: &Global,
     device_id: id::DeviceId,
-) -> *mut MetalSharedEventHandle {
+) -> *mut c_void {
     #[cfg(target_os = "macos")]
     {
         use objc2::Message as _;
@@ -1459,35 +1454,10 @@ pub extern "C" fn wgpu_server_get_device_fence_metal_shared_event(
                 return ptr::null_mut();
             }
         };
-        return Box::into_raw(Box::new(MetalSharedEventHandle(shared_event)));
+        return objc2::rc::Retained::into_raw(shared_event).cast();
     }
 
     ptr::null_mut()
-}
-
-#[no_mangle]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-pub extern "C" fn wgpu_server_metal_shared_event_signaled_value(
-    shared_event: &mut MetalSharedEventHandle,
-) -> u64 {
-    #[cfg(target_os = "macos")]
-    {
-        use objc2_metal::MTLSharedEvent as _;
-        return shared_event.0.signaledValue();
-    }
-
-    u64::MAX
-}
-
-#[no_mangle]
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-pub extern "C" fn wgpu_server_delete_metal_shared_event(shared_event: *mut MetalSharedEventHandle) {
-    #[cfg(target_os = "macos")]
-    {
-        let _ = unsafe { Box::from_raw(shared_event) };
-    }
 }
 
 extern "C" {

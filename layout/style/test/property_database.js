@@ -6619,7 +6619,7 @@ var gCSSProperties = {
       "margin-bottom",
       "margin-left",
     ],
-    initial_values: ["0", "0px 0 0em", "0% 0px 0em 0pt"],
+    initial_values: ["0", "0px 0 0em"],
     other_values: [
       "3px 0",
       "2em 4px 2pt",
@@ -7288,12 +7288,7 @@ var gCSSProperties = {
       "padding-bottom",
       "padding-left",
     ],
-    initial_values: [
-      "0",
-      "0px 0 0em",
-      "0% 0px 0em 0pt",
-      "calc(0px) calc(0em) calc(-2px) calc(-1%)",
-    ],
+    initial_values: ["0", "0px 0 0em"],
     other_values: ["3px 0", "2em 4px 2pt", "1em 2em 3px 4px"],
     invalid_values: ["1px calc(nonsense)", "1px red", "-1px"],
     unbalanced_values: ["1px calc("],
@@ -12098,20 +12093,6 @@ var gCSSProperties = {
 // Get the computed value for a property.  For shorthands, return the
 // computed values of all the subproperties, delimited by " ; ".
 function get_computed_value(cs, property) {
-  var info = gCSSProperties[property];
-  if (
-    info.type == CSS_TYPE_TRUE_SHORTHAND ||
-    info.type == CSS_TYPE_LEGACY_SHORTHAND ||
-    (info.type == CSS_TYPE_SHORTHAND_AND_LONGHAND &&
-      (property == "text-decoration" || property == "mask"))
-  ) {
-    var results = [];
-    for (var idx in info.subproperties) {
-      var subprop = info.subproperties[idx];
-      results.push(get_computed_value(cs, subprop));
-    }
-    return results.join(" ; ");
-  }
   return cs.getPropertyValue(property);
 }
 

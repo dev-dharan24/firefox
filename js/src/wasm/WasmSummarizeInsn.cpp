@@ -622,19 +622,19 @@ SummarizeResult SummarizeTrapInstruction(const InstructionBytes& insn) {
                              length);
     }
 
-    // It looks like this was used at some point but is no longer.
     // PRE_SSE_F3 OP_2BYTE_ESCAPE OP2_MOVDQ_VdqWdq
     // PRE_SSE_F3 OP_2BYTE_ESCAPE OP2_MOVDQ_WdqVdq
     // F3 0F 6F = MOVDQU src=mem128/xmm, dst=xmm
     // F3 0F 7F = MOVDQU src=xmm, dst=mem128/xmm
-    // if (hasAllOf(prefixes, PfxF3) && insn.get(delta+0) == 0x0F &&
-    //     (insn.get(delta+1) == 0x6F || insn.get(delta+1) == 0x7F) &&
-    //     ModRMisM(insn.get(delta+2)) && hasOnly(prefixes, PfxF3)) {
-    //   uint32_t length = delta + 2 + AddressModeLength(insn, delta + 2);
-    //   return SummarizeResult(insn.get(delta+1) == 0x6F
-    //                          ? TrapMachineInsn::Load128
-    //                          : TrapMachineInsn::Store128, length);
-    // }
+    if (hasAllOf(prefixes, PfxF3) && insn.get(delta + 0) == 0x0F &&
+        (insn.get(delta + 1) == 0x6F || insn.get(delta + 1) == 0x7F) &&
+        ModRMisM(insn.get(delta + 2)) && hasOnly(prefixes, PfxF3)) {
+      uint32_t length = delta + 2 + AddressModeLength(insn, delta + 2);
+      return SummarizeResult(insn.get(delta + 1) == 0x6F
+                                 ? TrapMachineInsn::Load128
+                                 : TrapMachineInsn::Store128,
+                             length);
+    }
 
     // PRE_SSE_66 OP_2BYTE_ESCAPE ESCAPE_3A OP3_PINSRB_VdqEvIb
     // 66 0F 3A 20 /r ib = PINSRB $imm8, src=mem8/ireg8, dst=xmm128.  I'd guess

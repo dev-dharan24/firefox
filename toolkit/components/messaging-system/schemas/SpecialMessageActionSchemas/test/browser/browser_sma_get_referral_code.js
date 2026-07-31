@@ -3,10 +3,6 @@
 
 "use strict";
 
-const { Referrals } = ChromeUtils.importESModule(
-  "resource:///modules/referrals/Referrals.sys.mjs"
-);
-
 const REFERRALS_PREF = "browser.referrals.enabled";
 
 add_task(async function test_GET_REFERRAL_CODE() {

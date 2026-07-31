@@ -292,6 +292,15 @@ void MacroAssembler::PushFrameDescriptorForJitCall(FrameType type,
   framePushed_ += sizeof(uintptr_t);
 }
 
+void MacroAssembler::branchIfNotActivationEntryFrame(Register scratch,
+                                                     Label* notEntryFrame) {
+  load32(Address(FramePointer, CommonFrameLayout::offsetOfDescriptor()),
+         scratch);
+  and32(Imm32(FrameDescriptor::TypeMask), scratch);
+  branch32(Assembler::NotEqual, scratch, Imm32(uint32_t(FrameType::CppToJSJit)),
+           notEntryFrame);
+}
+
 void MacroAssembler::loadNumActualArgs(Register framePtr, Register dest) {
   loadPtr(Address(framePtr, JitFrameLayout::offsetOfDescriptor()), dest);
   rshift32(Imm32(FrameDescriptor::NumActualArgsShift), dest);

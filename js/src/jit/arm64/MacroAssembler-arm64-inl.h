@@ -170,6 +170,15 @@ void MacroAssembler::andPtr(Imm32 imm, Register src, Register dest) {
   And(ARMRegister(dest, 64), ARMRegister(src, 64), Operand(imm.value));
 }
 
+void MacroAssembler::andPtr(Imm32 imm, const Address& dest) {
+  vixl::UseScratchRegisterScope temps(this);
+  const ARMRegister scratch64 = temps.AcquireX();
+  MOZ_ASSERT(scratch64.asUnsized() != dest.base);
+  loadPtr(dest, scratch64.asUnsized());
+  And(scratch64, scratch64, Operand(imm.value));
+  storePtr(scratch64.asUnsized(), dest);
+}
+
 void MacroAssembler::and64(Imm64 imm, Register64 dest) {
   And(ARMRegister(dest.reg, 64), ARMRegister(dest.reg, 64), Operand(imm.value));
 }

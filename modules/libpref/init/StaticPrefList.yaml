@@ -263,11 +263,6 @@
   value: false
   mirror: always
 
-- name: accessibility.ARIAElementReflection.enabled
-  type: bool
-  value: true
-  mirror: always
-
 # Whether to enable automatic details relationships for
 # anchor positioned content.
 - name: accessibility.anchorPositionedAsDetails.enabled
@@ -4235,6 +4230,16 @@
   value: false
   mirror: always
 
+# Is support for PerformanceResourceTiming/PerformanceNavigationTiming's
+# deliveryType enabled? Independent of dom.speculation_rules.enabled: this
+# only implements the "navigational-prefetch" value, not "cache" (bug
+# 1914120), so it must stay off even once speculation rules ships, until
+# "cache" support lands too.
+- name: dom.performance.deliverytype.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Whether the interactionId will be computed and returned by performance observer*
 - name: dom.performance.event_timing.enable_interactionid
   type: RelaxedAtomicBool
@@ -4939,6 +4944,52 @@
   value: true
   mirror: always
 
+# Maximum time (ms) to wait for an in-flight prefetch to complete before
+# falling back to a normal navigation fetch. Used by the
+# "wait for a matching prefetch record" algorithm:
+# https://wicg.github.io/nav-speculation/prefetch.html#wait-for-a-matching-prefetch-record
+# Matches Chromium's practical default. Lower in tests to avoid timeouts.
+- name: dom.speculation_rules.wait_timeout_ms
+  type: RelaxedAtomicUint32
+  value: 2000
+  mirror: always
+
+# Maximum number of prefetch records (ongoing + completed) allowed per
+# document. Enforced in SpeculationRulesManager::StartPrefetch; excess
+# candidates are silently dropped (best-effort per spec). Lower in tests
+# to verify cap behaviour without creating 20 actual fetches.
+- name: dom.speculation_rules.max_records_per_document
+  type: RelaxedAtomicUint32
+  value: 20
+  mirror: always
+
+# Maximum response body bytes allowed per prefetch record before the fetch
+# is cancelled with NS_ERROR_FILE_TOO_BIG. Enforced in
+# PrefetchRecordParent::OnDataAvailable. Set lower in tests to verify cap
+# behaviour without downloading large files.
+- name: dom.speculation_rules.max_body_bytes
+  type: RelaxedAtomicUint32
+  value: 5242880
+  mirror: always
+
+# Time-to-live (ms) for a completed prefetch record, measured from the
+# moment the response is fully received. Implements the 5-minute expiry
+# from the "complete a prefetch record" algorithm:
+# https://wicg.github.io/nav-speculation/prefetch.html#prefetch-record-complete
+# Set lower in tests to verify expiry without waiting 5 minutes.
+- name: dom.speculation_rules.record_expiry_ms
+  type: RelaxedAtomicUint32
+  value: 300000
+  mirror: always
+
+# When true, cross-origin prefetch URLs are rejected at StartPrefetch.
+# Keeps M1 same-origin only; set false in tests to exercise cross-origin
+# code paths without requiring Private Prefetch Proxy (PPP) support.
+- name: dom.speculation_rules.same_origin_only
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
+
 - name: dom.securecontext.allowlist_onions
   type: bool
   value: false
@@ -5296,7 +5347,7 @@
 # https://html.spec.whatwg.org/#speculation-rules
 - name: dom.speculation_rules.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 - name: dom.storage.enabled
@@ -5316,7 +5367,7 @@
 
 - name: dom.workers.throttling.enabled
   type: bool
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: @IS_NIGHTLY_BUILD@
   mirror: once
 
 - name: dom.workers.serialized-sab-access
@@ -5789,14 +5840,6 @@
 - name: dom.vr.autoactivate.enabled
   type: RelaxedAtomicBool
   value: false
-  mirror: always
-
-# Minimum number of milliseconds that the browser will wait before
-# attempting to poll again for connected VR controllers.  The browser
-# will not attempt to poll for VR controllers until it needs to use them.
-- name: dom.vr.controller.enumerate.interval
-  type: RelaxedAtomicInt32
-  value: 1000
   mirror: always
 
 # The threshold value of trigger inputs for VR controllers.
@@ -8164,6 +8207,14 @@
   value: false
   mirror: once
 
+# Experimental paused-window memory trimming. 0 disables trimming, 1 releases
+# inactive WebRender render targets, and 2 also releases transient upload
+# buffers when a renderer is paused.
+- name: gfx.webrender.trim-paused-renderers.mode
+  type: RelaxedAtomicUint32
+  value: 2
+  mirror: always
+
 - name: gfx.webrender.enable-angle
   type: bool
 #if defined(XP_WIN)
@@ -8357,6 +8408,13 @@
 # When true, missing stacking context snapshots will render as an opaque
 # pink image.
 - name: gfx.webrender.debug.missing-snapshot-pink
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# When true, the pixels of color render targets are initialized with an
+# opaque pink color, to help spot areas that are not otherwise painted.
+- name: gfx.webrender.debug.color-target-init
   type: RelaxedAtomicBool
   value: false
   mirror: always
@@ -9750,6 +9808,13 @@
   value: false
   mirror: always
   set_spidermonkey_pref: always
+
+  # Experimental support for RegExp Buffer Boundaries in JavaScript.
+- name: javascript.options.experimental.regexp_buffer_boundaries
+  type: bool
+  value: false
+  mirror: always
+  set_spidermonkey_pref: startup
 #endif  // NIGHTLY_BUILD
 
   # Capture stack traces for OOM
@@ -9773,15 +9838,6 @@
   value: true
   mirror: always
   set_spidermonkey_pref: startup
-
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-  # Experimental support for Explicit Resource Management in JavaScript.
--   name: javascript.options.experimental.explicit_resource_management
-    type: bool
-    value: true
-    mirror: always
-    set_spidermonkey_pref: always
-#endif  // ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 
   # Experimental support for source phase imports in JavaScript.
 - name: javascript.options.experimental.source_phase_imports
@@ -15325,6 +15381,15 @@
   value: true
 #endif
 
+# When a protocol would be launched externally without a prompt (i.e. the
+# network.protocol-handler.external.<scheme> pref is set), require transient
+# user activation. Without activation we fall back to the external protocol
+# prompt instead of launching silently. See bug 299116.
+- name: network.protocol-handler.prompt-without-user-activation
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
+
 # Whether we can send OnDataAvailable to content process directly.
 - name: network.send_ODA_to_content_directly
   type: RelaxedAtomicBool
@@ -18448,6 +18513,13 @@
   value: false
   mirror: always
 
+# Don't enable this! Temporary rollout pref to always allow unsafe
+# Services.scriptloader.loadSubScript() uses.
+- name: security.allow_unsafe_subscript_loads
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
 # Pref to block mixed scripts (fonts, plugin content, scripts, stylesheets,
 # iframes, websockets, XHR).
 - name: security.mixed_content.block_active_content
@@ -18818,7 +18890,7 @@
 # Whether or not to enable the test trust anchor list when verifying PDF signatures
 - name: security.pdf_signature_verification.enable_test_trust_anchors
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
   rust: true
 

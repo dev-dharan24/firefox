@@ -116,6 +116,9 @@
 @media -moz-pref("browser.nova.enabled") {
   [class*="identity-color-"] {
     --identity-fill-tint: color-mix(in srgb, var(--identity-fill-color) 15%, transparent);
+    /* Inset around the container icon inside its tinted circle. Rounded up to
+       the nearest half-pixel so the icon stays centered at both 1x and 2x. */
+    --identity-icon-inset: round(up, var(--space-xsmall), 0.5px);
   }
 }
 
@@ -237,7 +240,7 @@
      15% tinted background. */
   .subviewbutton[usercontextid] > .toolbarbutton-icon {
     box-sizing: content-box;
-    padding: var(--space-xsmall);
+    padding: var(--identity-icon-inset);
     border-radius: var(--border-radius-circle);
     background-color: var(--identity-fill-tint);
     background-origin: content-box;
@@ -257,7 +260,7 @@
     > .menu-icon {
       width: var(--icon-size-large);
       height: var(--icon-size-large);
-      padding: var(--space-xsmall);
+      padding: var(--identity-icon-inset);
       border-radius: var(--border-radius-circle);
       background-color: var(--identity-fill-tint);
     }

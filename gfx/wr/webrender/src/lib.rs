@@ -121,8 +121,6 @@ extern crate malloc_size_of_derive;
 #[macro_use]
 extern crate serde;
 #[macro_use]
-extern crate tracy_rs;
-#[macro_use]
 extern crate derive_more;
 extern crate malloc_size_of;
 extern crate svg_fmt;
@@ -180,6 +178,8 @@ mod scene_builder_thread;
 mod scene_building;
 mod screen_capture;
 mod segment;
+#[cfg(test)]
+mod shutdown_test;
 mod spatial_node;
 mod surface;
 mod texture_pack;

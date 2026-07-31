@@ -5191,6 +5191,19 @@ int XREMain::XRE_mainStartup(bool* aExitFlag,
       if (!disableWaylandProxy && XRE_IsParentProcess() && waylandEnabled) {
         auto* proxyLog = getenv("WAYLAND_PROXY_LOG");
         WaylandProxy::SetVerbose(proxyLog && *proxyLog);
+
+#    ifdef NIGHTLY_BUILD
+        bool captureProtocolErrors = true;
+#    else
+        bool captureProtocolErrors = false;
+#    endif
+        // MOZ_WAYLAND_PROTOCOL_ERROR_DETAILS=0 turns capture off on Nightly;
+        // any other non-empty value turns it on elsewhere.
+        if (auto* errorDetails = getenv("MOZ_WAYLAND_PROTOCOL_ERROR_DETAILS")) {
+          captureProtocolErrors = *errorDetails && *errorDetails != '0';
+        }
+        WaylandProxy::SetCaptureProtocolErrors(captureProtocolErrors);
+
         WaylandProxy::SetThreadStartCallback(
             [] { PROFILER_REGISTER_THREAD("WaylandProxy"); });
         WaylandProxy::SetThreadStopCallback(

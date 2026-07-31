@@ -116,9 +116,9 @@ use crate::internal_types::{FastHashMap, PlaneSplitter, Filter};
 use crate::internal_types::{PlaneSplitterIndex, PlaneSplitAnchor, TextureSource};
 use crate::frame_builder::{FrameBuildingContext, FrameBuildingState, PictureState, PictureContext};
 use plane_split::{Clipper, Polygon};
-use crate::prim_store::{PictureIndex, PrimitiveInstance, PrimitiveInstanceIndex, PrimitiveKind};
+use crate::prim_store::{PictureIndex, PrimitiveInstance, PrimitiveKind};
 use crate::prim_store::storage::Index as StorageIndex;
-use crate::visibility::PrimitiveDrawHeader;
+use crate::visibility::{PrimitiveDrawHeader, PrimitiveDrawIndex};
 use crate::prim_store::{PrimitiveScratchBuffer, ClipTaskIndex, ClipMaskKind};
 use crate::prim_store::storage;
 use crate::print_tree::PrintTreePrinter;
@@ -726,7 +726,7 @@ impl PictureInstance {
             return None;
         }
 
-        profile_scope!("take_context");
+        tracy_rs::profile_scope!("take_context");
 
         let surface_index = match self.raster_config {
             Some(ref raster_config) => raster_config.surface_index,
@@ -933,7 +933,7 @@ impl PictureInstance {
             // Add the child prims to the relevant command buffers
             let mut cmd_buffer_targets = Vec::new();
             for child in list {
-                let draw = &scratch.frame.draws[child.anchor.instance_index.0 as usize];
+                let draw = scratch.frame.draw(child.anchor.draw_index);
                 if frame_state.surface_builder.get_cmd_buffer_targets_for_prim(
                     draw,
                     &mut cmd_buffer_targets,
@@ -955,7 +955,7 @@ impl PictureInstance {
                     );
 
                     let prim_cmd = PrimitiveCommand::split_composite(
-                        storage::Index::from_u32(child.anchor.instance_index.0),
+                        child.anchor.draw_index,
                         child.gpu_address,
                         transform_id,
                         src_task_id,
@@ -2306,19 +2306,17 @@ fn compute_subpixel_mode(
 
 pub fn prepare_picture_clips(
     pic: &PictureInstance,
-    prim_instance_index: PrimitiveInstanceIndex,
     clip_chain: &ClipChainInstance,
     frame_context: &FrameBuildingContext,
     frame_state: &mut FrameBuildingState,
     pic_scratch: &mut PictureScratch,
     clip_mask_instances: &mut Vec<ClipMaskKind>,
-    draws: &mut [PrimitiveDrawHeader],
     prim_spatial_node_index: SpatialNodeIndex,
     data_stores: &DataStores,
     use_quads: bool,
     composite_target_clip_range: &mut Option<ClipNodeRange>,
     pic_context: &PictureContext,
-) {
+) -> Option<ClipTaskIndex> {
     // TODO(gw): Much of the code in this branch could be moved in to a common
     //           function as we move more primitives to the new clip-mask paths.
 
@@ -2449,7 +2447,7 @@ pub fn prepare_picture_clips(
                 &coverage_rect,
                 frame_context.spatial_tree,
             ) else {
-                return;
+                return None;
             };
 
             let empty_task = EmptyTask {
@@ -2496,19 +2494,25 @@ pub fn prepare_picture_clips(
 
             let clip_task_index = ClipTaskIndex(clip_mask_instances.len() as _);
             clip_mask_instances.push(ClipMaskKind::Mask(clip_task_id));
-            draws[prim_instance_index.0 as usize].clip_task_index = clip_task_index;
             frame_state.surface_builder.add_child_render_task(
                 clip_task_id,
                 frame_state.rg_builder,
             );
+
+            return Some(clip_task_index);
         }
     }
+
+    None
 }
 
+/// Returns the clip-task index produced for this picture, if any. The caller
+/// records it on the draw header; this function only holds a shared reference to
+/// the header, and `pic_scratch` borrows the frame scratch for its whole body.
 pub fn prepare_picture_primitive(
     pic: &PictureInstance,
     raster_config: &RasterConfig,
-    prim_instance_index: PrimitiveInstanceIndex,
+    draw_index: PrimitiveDrawIndex,
     prim_spatial_node_index: SpatialNodeIndex,
     _clip_chain: &ClipChainInstance,
     frame_context: &FrameBuildingContext,
@@ -2521,7 +2525,7 @@ pub fn prepare_picture_primitive(
     plane_split_anchor: PlaneSplitAnchor,
     quad_transform: &mut QuadTransformState,
     targets: &[CommandBufferIndex],
-) {
+) -> Option<ClipTaskIndex> {
     let pic_scratch = &mut scratch.frame.pictures[pic_scratch_handle];
 
     // Write the composite-mode gpu blocks first: the filter eligibility
@@ -2553,16 +2557,16 @@ pub fn prepare_picture_primitive(
     // renders a screen-space alpha mask task.
     let mut composite_target_clip_range: Option<ClipNodeRange> = None;
 
+    let mut clip_task_index = None;
+
     if prim_info.clip_chain.needs_mask {
-        prepare_picture_clips(
+        clip_task_index = prepare_picture_clips(
             pic,
-            prim_instance_index,
             &prim_info.clip_chain,
             frame_context,
             frame_state,
             pic_scratch,
             &mut scratch.frame.clip_mask_instances,
-            &mut scratch.frame.draws,
             prim_spatial_node_index,
             data_stores,
             use_quads,
@@ -2593,17 +2597,17 @@ pub fn prepare_picture_primitive(
         );
 
         // The PrimitiveCommand is pushed by PictureInstance::restore_context.
-        return;
+        return clip_task_index;
     }
 
     if !use_quads {
-        return;
+        return clip_task_index;
     }
 
     // Detached snapshot pictures are not composited.
     let detached = pic.snapshot.map_or(false, |s| s.detached);
     if detached {
-        return;
+        return clip_task_index;
     }
 
     let pic_task_id = pic_scratch
@@ -2750,7 +2754,7 @@ pub fn prepare_picture_primitive(
                     aligned_aa_edges: EdgeMask::empty(),
                     transformed_aa_edges: EdgeMask::all(),
                 },
-                prim_instance_index,
+                draw_index,
                 &None,
                 &composite_clip_chain,
                 transform,
@@ -2821,7 +2825,7 @@ pub fn prepare_picture_primitive(
             aligned_aa_edges: EdgeMask::empty(),
             transformed_aa_edges: EdgeMask::all(),
         },
-        prim_instance_index,
+        draw_index,
         &None,
         &composite_clip_chain,
         transform,
@@ -2833,6 +2837,7 @@ pub fn prepare_picture_primitive(
         scratch,
     );
 
+    clip_task_index
 }
 
 #[test]

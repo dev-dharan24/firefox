@@ -28,7 +28,11 @@
    * Tracked by https://bugzilla.mozilla.org/show_bug.cgi?id=2015371
    */
   &[uidensity="compact"] {
-    --urlbar-min-height: max(26px, 1.4em);
+    --urlbar-min-height: max(28px, 1.4em);
+
+    @media not -moz-pref("browser.nova.enabled") {
+      --urlbar-min-height: max(26px, 1.4em);
+    }
   }
 
   &[uidensity="touch"] {

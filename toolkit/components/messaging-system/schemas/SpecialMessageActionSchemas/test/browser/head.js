@@ -11,11 +11,12 @@ const { JsonSchema } = ChromeUtils.importESModule(
 );
 
 ChromeUtils.defineESModuleGetters(this, {
-  SpecialMessageActions:
-    "resource://messaging-system/lib/SpecialMessageActions.sys.mjs",
+  ASRouterTargeting: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
   MessagingSystemAllowlists:
     "resource://messaging-system/lib/MessagingSystemAllowlists.sys.mjs",
-  ASRouterTargeting: "resource:///modules/asrouter/ASRouterTargeting.sys.mjs",
+  Referrals: "resource:///modules/referrals/Referrals.sys.mjs",
+  SpecialMessageActions:
+    "resource://messaging-system/lib/SpecialMessageActions.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(this, "fetchSMASchema", async () => {

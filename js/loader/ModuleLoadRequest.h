@@ -72,6 +72,11 @@ class ModuleLoadRequest final : public ScriptLoadRequest {
   void ModuleErrored();
   void LoadFailed();
 
+  // Tells the load context that this request stopped waiting on an in-progress
+  // fetch of the same URL. Must be called whenever that happens, whether the
+  // fetch resolved or was canceled.
+  void NotifyModuleWaitFinished();
+
   ModuleLoadRequest* GetRootModule() {
     if (!mRootModule) {
       return this;

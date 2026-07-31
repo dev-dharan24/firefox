@@ -209,7 +209,13 @@ def lint(paths, config, fix=None, **lintargs):
         sections: ListStr = [k for k in manifest.keys() if k != DEFAULT_SECTION]
         sorted_sections: ListStr = sort_paths(sections)
         if sections != sorted_sections:
-            state.warning("The manifest sections are not in alphabetical order.")
+            i = next(idx for idx, s in enumerate(sections) if s != sorted_sections[idx])
+            misplaced = sorted_sections[i]
+            state.set_section(misplaced)
+            state.warning(
+                "The manifest sections are not in alphabetical order; "
+                f"[{misplaced}] should come before [{sections[i]}]."
+            )
         m = section_rx.findall(state.manifest_str())
         if len(m) > 0:
             for section_match in m:

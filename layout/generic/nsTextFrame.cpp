@@ -9984,7 +9984,7 @@ void nsTextFrame::AddInlineMinISizeForFlow(gfxContext* aRenderingContext,
           wordAdvance += g->GetSimpleAdvance();
         } else if (!hasSpacing) {
           if (uint32_t count = g->GetGlyphCount()) {
-            const auto* details = textRun->GetDetailedGlyphs(g - glyphs);
+            const auto* details = textRun->GetDetailedGlyphs(g - glyphs, count);
             while (count--) {
               wordAdvance += details->mAdvance;
               ++details;
@@ -10035,7 +10035,7 @@ void nsTextFrame::AddInlineMinISizeForFlow(gfxContext* aRenderingContext,
         wordAdvance = 0;
         if (!preformattedNewline && !preformattedTab && !hasSpacing) {
           if (uint32_t count = g->GetGlyphCount()) {
-            const auto* details = textRun->GetDetailedGlyphs(g - glyphs);
+            const auto* details = textRun->GetDetailedGlyphs(g - glyphs, count);
             while (count--) {
               wordAdvance += details->mAdvance;
               ++details;
@@ -10303,7 +10303,7 @@ void nsTextFrame::AddInlinePrefISizeForFlow(gfxContext* aRenderingContext,
           // We don't check g->ApplyLetterSpacingBetweenDetailedGlyphs() here
           // because canUseSimpleAdvance depends on there being no spacing to
           // consider.
-          const auto* details = textRun->GetDetailedGlyphs(g - glyphs);
+          const auto* details = textRun->GetDetailedGlyphs(g - glyphs, count);
           while (count--) {
             runAdvance += details->mAdvance;
             ++details;

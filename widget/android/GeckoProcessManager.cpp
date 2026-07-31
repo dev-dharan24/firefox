@@ -16,6 +16,20 @@ namespace mozilla {
   ConnectionManager::Init();
 }
 
+// static
+void GeckoProcessManager::GetEditableParent(jni::Object::Param aEditableChild,
+                                            int64_t aContentId,
+                                            int64_t aTabId) {
+  nsCOMPtr<nsIWidget> widget = GetWidget(aContentId, aTabId);
+  if (RefPtr<nsWindow> window = nsWindow::From(widget)) {
+    java::GeckoProcessManager::SetEditableChildParent(
+        aEditableChild, window->GetEditableParent());
+    return;
+  }
+
+  NS_WARNING("GeckoProcessManager::GetEditableParent FAILED");
+}
+
 NS_IMPL_ISUPPORTS(GeckoProcessManager::ConnectionManager, nsIObserver)
 
 NS_IMETHODIMP GeckoProcessManager::ConnectionManager::Observe(

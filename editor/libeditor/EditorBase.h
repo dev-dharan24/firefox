@@ -216,6 +216,13 @@ class EditorBase : public nsIEditor,
   }
 
   /**
+   * Get frame selection from SelectionRef(), but returns null
+   * for canvas-based EditContext, where we don't want to touch
+   * the DOM selection (since it may be in accessible content.)
+   */
+  nsFrameSelection* GetEditableFrameSelection() const;
+
+  /**
    * @return Ancestor limiter of normal selection
    */
   [[nodiscard]] nsIContent* GetSelectionAncestorLimiter() const {

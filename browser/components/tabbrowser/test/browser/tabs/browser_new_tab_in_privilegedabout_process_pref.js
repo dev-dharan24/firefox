@@ -19,6 +19,8 @@ const TEST_HTTP = "http://example.org/";
 add_setup(async function () {
   await SpecialPowers.pushPrefEnv({
     set: [
+      // Without this, goBack() below is intermittently a silent no-op, bug 1934364.
+      ["browser.navigation.requireUserInteraction", false],
       ["browser.newtab.preload", false],
       ["browser.tabs.remote.separatePrivilegedContentProcess", true],
       ["dom.ipc.processCount.privilegedabout", 1],

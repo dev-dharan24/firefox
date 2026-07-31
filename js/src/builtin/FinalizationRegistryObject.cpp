@@ -631,8 +631,8 @@ FinalizationQueueObject* FinalizationQueueObject::create(
     JSContext* cx, HandleObject cleanupCallback) {
   MOZ_ASSERT(cleanupCallback);
 
-  Rooted<UniquePtr<FinalizationRecordVector>> recordsToBeCleanedUp(
-      cx, cx->make_unique<FinalizationRecordVector>(cx->zone()));
+  Rooted<UniquePtr<QueuedRecordVector>> recordsToBeCleanedUp(
+      cx, cx->make_unique<QueuedRecordVector>());
   if (!recordsToBeCleanedUp) {
     return nullptr;
   }
@@ -683,7 +683,7 @@ FinalizationQueueObject* FinalizationQueueObject::create(
 void FinalizationQueueObject::trace(JSTracer* trc, JSObject* obj) {
   auto queue = &obj->as<FinalizationQueueObject>();
 
-  if (FinalizationRecordVector* records = queue->recordsToBeCleanedUp()) {
+  if (QueuedRecordVector* records = queue->recordsToBeCleanedUp()) {
     records->trace(trc);
   }
 }
@@ -707,7 +707,7 @@ void FinalizationQueueObject::setHasRegistry(bool newValue) {
 
 void FinalizationQueueObject::clear() {
   MOZ_ASSERT(!hasRegistry());
-  if (FinalizationRecordVector* records = recordsToBeCleanedUp()) {
+  if (QueuedRecordVector* records = recordsToBeCleanedUp()) {
     records->clear();
   }
 }
@@ -733,17 +733,17 @@ JSObject* FinalizationQueueObject::getIncumbentGlobalRepresentative() const {
 }
 
 bool FinalizationQueueObject::hasRecordsToCleanUp() const {
-  FinalizationRecordVector* records = recordsToBeCleanedUp();
+  QueuedRecordVector* records = recordsToBeCleanedUp();
   return records && !records->empty();
 }
 
-FinalizationRecordVector* FinalizationQueueObject::recordsToBeCleanedUp()
-    const {
+FinalizationQueueObject::QueuedRecordVector*
+FinalizationQueueObject::recordsToBeCleanedUp() const {
   Value value = getReservedSlotTyped(RECORDS_TO_BE_CLEANED_UP_SLOT);
   if (value.isUndefined()) {
     return nullptr;
   }
-  return static_cast<FinalizationRecordVector*>(value.toPrivate());
+  return static_cast<QueuedRecordVector*>(value.toPrivate());
 }
 
 bool FinalizationQueueObject::isQueuedForCleanup() const {
@@ -817,7 +817,7 @@ bool FinalizationQueueObject::cleanupQueuedRecords(
   //    b. Remove cell from finalizationRegistry.[[Cells]].
   //    c. Perform ? Call(callback, undefined, « cell.[[HeldValue]] »).
 
-  FinalizationRecordVector* records = queue->recordsToBeCleanedUp();
+  QueuedRecordVector* records = queue->recordsToBeCleanedUp();
   MOZ_ASSERT_IF(!queue->hasRegistry(), records->empty());
 
   RootedValue heldValue(cx);

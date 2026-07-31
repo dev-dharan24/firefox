@@ -46,6 +46,8 @@ skip-if = [
 
 ["browser_audiosession_state_transitions.js"]
 
+["browser_audiosession_telemetry.js"]
+
 ["browser_audiosessiontype_compute.js"]
 
 ["browser_audiosessiontype_iframe.js"]

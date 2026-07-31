@@ -162,7 +162,7 @@ export class ContextIdComponent extends ContextIdComponentInterface {
         FfiConverterBoolean.checkType(runningInTestAutomation);
         FfiConverterTypeContextIdCallback.checkType(callback);
         const result = UniFFIScaffolding.callSync(
-            50, // uniffi_context_id_fn_constructor_contextidcomponent_new
+            51, // uniffi_context_id_fn_constructor_contextidcomponent_new
             FfiConverterString.lower(initContextId),
             FfiConverterInt64.lower(creationTimestampS),
             FfiConverterBoolean.lower(runningInTestAutomation),
@@ -181,7 +181,7 @@ export class ContextIdComponent extends ContextIdComponentInterface {
     async forceRotation() {
        
         const result = await UniFFIScaffolding.callAsyncWrapper(
-            51, // uniffi_context_id_fn_method_contextidcomponent_force_rotation
+            52, // uniffi_context_id_fn_method_contextidcomponent_force_rotation
             FfiConverterTypeContextIDComponent.lowerReceiver(this),
         )
         return handleRustResult(
@@ -201,7 +201,7 @@ export class ContextIdComponent extends ContextIdComponentInterface {
        
         FfiConverterUInt8.checkType(rotationDaysInS);
         const result = await UniFFIScaffolding.callAsyncWrapper(
-            52, // uniffi_context_id_fn_method_contextidcomponent_request
+            53, // uniffi_context_id_fn_method_contextidcomponent_request
             FfiConverterTypeContextIDComponent.lowerReceiver(this),
             FfiConverterUInt8.lower(rotationDaysInS),
         )
@@ -219,7 +219,7 @@ export class ContextIdComponent extends ContextIdComponentInterface {
     async unsetCallback() {
        
         const result = await UniFFIScaffolding.callAsyncWrapper(
-            53, // uniffi_context_id_fn_method_contextidcomponent_unset_callback
+            54, // uniffi_context_id_fn_method_contextidcomponent_unset_callback
             FfiConverterTypeContextIDComponent.lowerReceiver(this),
         )
         return handleRustResult(

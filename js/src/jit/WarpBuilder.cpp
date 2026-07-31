@@ -22,9 +22,7 @@
 #include "vm/Interpreter.h"
 #include "vm/Opcodes.h"
 #include "vm/TypeofEqOperand.h"  // TypeofEqOperand
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
-#  include "vm/UsingHint.h"
-#endif
+#include "vm/UsingHint.h"
 
 #include "gc/ObjectKind-inl.h"
 #include "vm/BytecodeIterator-inl.h"
@@ -1169,7 +1167,6 @@ bool WarpBuilder::build_StrictConstantNe(BytecodeLocation loc) {
   return buildStrictConstantEqOp(loc, JSOp::StrictNe);
 }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 bool WarpBuilder::build_AddDisposable(BytecodeLocation loc) {
   MOZ_ASSERT(usesEnvironmentChain());
 
@@ -1194,7 +1191,6 @@ bool WarpBuilder::build_TakeDisposeCapability(BytecodeLocation loc) {
   current->push(ins);
   return resumeAfter(ins, loc);
 }
-#endif
 
 // Returns true iff the MTest added for |op| has a true-target corresponding
 // with the join point in the bytecode.
@@ -2431,7 +2427,7 @@ bool WarpBuilder::build_FinalYieldRval(BytecodeLocation loc) {
   };
 
   // Close the generator
-  setSlotNull(AbstractGeneratorObject::calleeSlot());
+  setSlotNull(AbstractGeneratorObject::calleeOrModuleSlot());
   setSlotNull(AbstractGeneratorObject::envChainSlot());
   setSlotNull(AbstractGeneratorObject::argsObjectSlot());
   setSlotNull(AbstractGeneratorObject::stackStorageSlot());
@@ -2485,6 +2481,10 @@ bool WarpBuilder::build_CheckResumeKind(BytecodeLocation loc) {
 }
 
 bool WarpBuilder::build_CanSkipAwait(BytecodeLocation loc) {
+  // LCanSkipAwait's frame descriptor check is not correct for inlined
+  // functions.
+  MOZ_ASSERT(!inlineCallInfo());
+
   MDefinition* val = current->pop();
 
   MCanSkipAwait* canSkip = MCanSkipAwait::New(alloc(), val);
@@ -3284,11 +3284,9 @@ bool WarpBuilder::build_ExceptionAndStack(BytecodeLocation) {
   MOZ_CRASH("Unreachable because we skip catch-blocks");
 }
 
-#ifdef ENABLE_EXPLICIT_RESOURCE_MANAGEMENT
 bool WarpBuilder::build_CreateSuppressedError(BytecodeLocation) {
   MOZ_CRASH("Unreachable because we skip catch-blocks");
 }
-#endif
 
 bool WarpBuilder::build_AsyncReject(BytecodeLocation) {
   MOZ_CRASH("Unreachable because we skip catch-blocks");

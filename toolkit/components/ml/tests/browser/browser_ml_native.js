@@ -16,7 +16,6 @@ const LLAMA_SMOKE_OPTIONS = {
   modelId: "Mozilla/test-llama",
   modelFile: "TinyStories-656K.Q8_0.gguf",
   modelRevision: "main",
-  kvCacheDtype: "q8_0",
   numContext: 256,
 };
 
@@ -134,7 +133,6 @@ async function llama_crash() {
       modelId: "Mozilla/test-llama",
       taskName: "text-classification",
       modelFile: "crash-me.gguf",
-      kvCacheDtype: "q8_0",
       modelRevision: "main",
       backend: "llama.cpp",
       logLevel: "Debug",
@@ -147,6 +145,7 @@ async function llama_crash() {
       },
     ];
     info("Calling runWithGenerator");
+    let sawCrash = false;
     try {
       for await (const val of engine.runWithGenerator({
         prompt,
@@ -154,7 +153,8 @@ async function llama_crash() {
         info(val.text);
       }
     } catch (err) {
-      Assert.ok(true, `failed with error ${err.message}`);
+      sawCrash = true;
+      info(`failed with error ${err.message}`);
 
       let [subject, data] = await contentShutdown;
 
@@ -188,6 +188,7 @@ async function llama_crash() {
         info(`cleaning up ${subject} ${data}`);
       }
     }
+    Assert.ok(sawCrash, "the crash model must crash the serving process");
   } finally {
     await EngineProcess.destroyMLEngine();
     await cleanup();
@@ -211,7 +212,6 @@ async function llama_works({
       taskName: "text-classification",
       modelId: "Mozilla/test-llama",
       modelFile: "TinyStories-656K.Q8_0.gguf",
-      kvCacheDtype: "q8_0",
       modelRevision: "main",
       backend: "llama.cpp",
       logLevel: "Debug",
@@ -316,7 +316,6 @@ async function llama_fails_with_wrong_samplers() {
       taskName: "text-classification",
       modelId: "Mozilla/test-llama",
       modelFile: "TinyStories-656K.Q8_0.gguf",
-      kvCacheDtype: "q8_0",
       modelRevision: "main",
       backend: "llama.cpp",
       logLevel: "Debug",
@@ -385,7 +384,6 @@ add_task(async function test_ml_smoke_test_llama_sequential_runs() {
       taskName: "text-generation",
       modelId: "Mozilla/test-llama",
       modelFile: "TinyStories-656K.Q8_0.gguf",
-      kvCacheDtype: "q8_0",
       modelRevision: "main",
       backend: "llama.cpp",
       numContext: 128,
@@ -415,7 +413,6 @@ add_task(async function test_ml_smoke_test_llama_overlap_guard() {
       taskName: "text-generation",
       modelId: "Mozilla/test-llama",
       modelFile: "TinyStories-656K.Q8_0.gguf",
-      kvCacheDtype: "q8_0",
       modelRevision: "main",
       backend: "llama.cpp",
       numContext: 128,

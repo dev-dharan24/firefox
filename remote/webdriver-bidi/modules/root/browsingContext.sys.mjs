@@ -583,7 +583,7 @@ class BrowsingContextModule extends RootBiDiModule {
     );
 
     const context = this._getNavigable(contextId, {
-      supportsPrivilegedScope: true,
+      skipPrivilegeCheck: true,
     });
     lazy.assert.topLevel(
       context,
@@ -1403,6 +1403,8 @@ class BrowsingContextModule extends RootBiDiModule {
         id: context.id,
       },
       retryOnAbort: true,
+      // Reading the base URL is safe and must work while navigating a privileged page.
+      skipPrivilegeCheck: true,
     });
 
     let targetURI;
@@ -2918,7 +2920,12 @@ class BrowsingContextModule extends RootBiDiModule {
       "_awaitVisibilityState",
       browsingContext.id,
       { value: expectedState, timeout },
-      { retryOnAbort: true }
+      {
+        retryOnAbort: true,
+        // Awaiting the visibility state is safe and can target a context
+        // (e.g. a previously selected tab) regardless of its privilege level.
+        skipPrivilegeCheck: true,
+      }
     );
   }
 
@@ -3030,7 +3037,12 @@ class BrowsingContextModule extends RootBiDiModule {
           height: targetHeight,
           width: targetWidth,
         },
-        { retryOnAbort: true }
+        {
+          retryOnAbort: true,
+          // Awaiting the resized viewport dimensions is safe
+          // regardless of the context's privilege level.
+          skipPrivilegeCheck: true,
+        }
       );
     }
   }

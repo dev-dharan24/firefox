@@ -174,6 +174,7 @@ pub struct FfiPrefetchCandidate {
     tags: ThinVec<nsCString>,
     eagerness: Eagerness,
     referrer_policy: ReferrerPolicy,
+    no_vary_search_hint: nsCString,
 }
 
 impl From<&PrefetchCandidate> for FfiPrefetchCandidate {
@@ -194,6 +195,14 @@ impl From<&PrefetchCandidate> for FfiPrefetchCandidate {
                 .collect(),
             eagerness: value.eagerness,
             referrer_policy: value.referrer_policy,
+            no_vary_search_hint: match &value.no_vary_search_hint {
+                UrlSearchVariance::String(s) => s.into(),
+                UrlSearchVariance::Default => {
+                    let mut s = nsCString::new();
+                    s.set_is_void(true);
+                    s
+                }
+            },
         }
     }
 }

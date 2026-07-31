@@ -141,19 +141,34 @@ class GeckoEngine(
         }
 
         override fun onToggleActionPopup(extension: WebExtension, action: Action): EngineSession? {
+            val isPrivate = webExtensionDelegate?.isInPrivateBrowsing() ?: false
+            if (isPrivate && !extension.isAllowedInPrivateBrowsing()) {
+                return null
+            }
             return webExtensionDelegate?.onToggleActionPopup(
                 extension,
                 GeckoEngineSession(
                     runtime = runtime,
+                    privateMode = isPrivate,
                     defaultSettings = defaultSettings,
                 ),
                 action,
+                isPrivate,
             )
         }
     }
     private val webExtensionTabHandler = object : TabHandler {
-        override fun onNewTab(webExtension: WebExtension, engineSession: EngineSession, active: Boolean, url: String) {
-            webExtensionDelegate?.onNewTab(webExtension, engineSession, active, url)
+        override fun isInPrivateBrowsing(): Boolean =
+            webExtensionDelegate?.isInPrivateBrowsing() ?: false
+
+        override fun onNewTab(
+            webExtension: WebExtension,
+            engineSession: EngineSession,
+            active: Boolean,
+            url: String,
+            isPrivate: Boolean,
+        ) {
+            webExtensionDelegate?.onNewTab(webExtension, engineSession, active, url, isPrivate)
         }
 
         override fun onOpenOptionsPage(extension: WebExtension) {

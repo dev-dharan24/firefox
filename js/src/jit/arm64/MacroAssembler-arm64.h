@@ -619,6 +619,13 @@ class MacroAssemblerCompat : public vixl::MacroAssembler {
     Fcmp(scratch64, fsrc64);
     B(fail, Assembler::NotEqual);
 
+    // Fcvtzs saturates, and INT64_MAX isn't representable as a double, so Scvtf
+    // rounds it back up to exactly 2^63 and the round-trip check above can't
+    // tell a saturated result apart from an exact one.  The negative direction
+    // needs no such check because INT64_MIN is exactly representable.
+    Cmn(dest64, 1);  // Overflow iff dest64 == INT64_MAX.
+    B(fail, Assembler::Overflow);
+
     if (negativeZeroCheck) {
       Label nonzero;
       Cbnz(dest64, &nonzero);

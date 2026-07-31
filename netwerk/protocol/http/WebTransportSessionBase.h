@@ -32,8 +32,10 @@ class WebTransportSessionBase {
   virtual nsresult ExportKeyingMaterial(const nsTArray<uint8_t>& aLabel,
                                         const nsTArray<uint8_t>& aContext,
                                         nsTArray<uint8_t>& aKeyingMaterial) = 0;
-  virtual void SendDatagram(nsTArray<uint8_t>&& aData,
-                            uint64_t aTrackingId) = 0;
+  virtual void GetNegotiatedProtocol(nsACString& aProtocol) = 0;
+  virtual void SendDatagram(nsTArray<uint8_t>&& aData, uint64_t aTrackingId,
+                            uint64_t aSendGroupId, int64_t aSendOrder) = 0;
+  virtual nsresult RegisterSendGroup(uint64_t aGroupId) = 0;
   virtual void CreateOutgoingBidirectionalStream(
       std::function<void(Result<RefPtr<WebTransportStreamBase>, nsresult>&&)>&&
           aCallback) = 0;

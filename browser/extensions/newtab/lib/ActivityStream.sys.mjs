@@ -1519,6 +1519,14 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "widgets.clocks.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the clock widget",
+      value: false,
+    },
+  ],
+  [
     "widgets.privacy.enabled",
     {
       title: "Enables the privacy widget",

@@ -29,6 +29,7 @@
         "value": {
           "light": "{color.gray.70}",
           "dark": "{border.color.interactive.@base}",
+          "prefersContrast": "{border.color.interactive.@base}",
           "forcedColors": "{border.color.interactive.@base}"
         }
       },

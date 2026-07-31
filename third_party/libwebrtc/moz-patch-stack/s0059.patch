@@ -166,7 +166,7 @@ index 05d8d9b7be..f4c5db5697 100644
  }
  
 diff --git a/video/rtp_video_stream_receiver2.cc b/video/rtp_video_stream_receiver2.cc
-index 5948ce1b9a..1230609b34 100644
+index 75fc4fda46..ff730fa780 100644
 --- a/video/rtp_video_stream_receiver2.cc
 +++ b/video/rtp_video_stream_receiver2.cc
 @@ -88,6 +88,7 @@
@@ -177,9 +177,9 @@ index 5948ce1b9a..1230609b34 100644
  #include "system_wrappers/include/ntp_time.h"
  #include "video/buffered_frame_decryptor.h"
  
-@@ -1375,6 +1376,9 @@ void RtpVideoStreamReceiver2::FrameDecoded(int64_t picture_id) {
+@@ -1378,6 +1379,9 @@ void RtpVideoStreamReceiver2::FrameDecoded(int64_t picture_id) {
                          packet_infos_.upper_bound(unwrapped_rtp_seq_num));
-     uint32_t num_packets_cleared = packet_buffer_.ClearTo(seq_num);
+     uint32_t num_packets_cleared = packet_buffer_.ClearTo(unwrapped_rtp_seq_num);
      if (num_packets_cleared > 0) {
 +      TRACE_EVENT2("webrtc",
 +                   "RtpVideoStreamReceiver2::FrameDecoded Cleared Old Packets",

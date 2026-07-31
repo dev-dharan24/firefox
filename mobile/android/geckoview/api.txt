@@ -1360,6 +1360,7 @@ package org.mozilla.geckoview {
     method @AnyThread public void reload(int);
     method @AnyThread public void restoreState(@NonNull GeckoSession.SessionState);
     method @HandlerThread @NonNull public GeckoResult<InputStream> saveAsPdf();
+    method @HandlerThread @NonNull public GeckoResult<Void> sendGleanBrokenSiteReport(@Nullable JSONObject, @Nullable String, @NonNull String, @NonNull String, @NonNull Boolean, @NonNull Boolean);
     method @HandlerThread @NonNull public GeckoResult<Void> sendMoreWebCompatInfo(@NonNull JSONObject);
     method @AnyThread public void setActive(boolean);
     method @UiThread public void setAutofillDelegate(@Nullable Autofill.Delegate);
@@ -2390,6 +2391,7 @@ package org.mozilla.geckoview {
     method public boolean isActive();
     method public void muteAudio(boolean);
     method public void nextTrack();
+    method public void notifySystemAudioFocusChange(int);
     method public void pause();
     method public void play();
     method public void previousTrack();
@@ -2398,6 +2400,9 @@ package org.mozilla.geckoview {
     method public void seekTo(double, boolean);
     method public void skipAd();
     method public void stop();
+    field public static final int SYSTEM_AUDIO_FOCUS_GAIN = 0;
+    field public static final int SYSTEM_AUDIO_FOCUS_PERMANENT_LOSS = 2;
+    field public static final int SYSTEM_AUDIO_FOCUS_TRANSIENT_LOSS = 1;
   }
 
   @UiThread public static interface MediaSession.Delegate {
@@ -2454,6 +2459,9 @@ package org.mozilla.geckoview {
     field public final double duration;
     field public final double playbackRate;
     field public final double position;
+  }
+
+  @Retention(value=RetentionPolicy.SOURCE) public static interface MediaSession.SystemAudioFocusChange {
   }
 
   public class OrientationController {

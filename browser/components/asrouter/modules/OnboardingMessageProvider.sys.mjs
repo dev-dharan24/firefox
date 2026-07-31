@@ -333,7 +333,7 @@ const BASE_MESSAGES = () => [
       id: "openURL",
       patterns: ["https://accounts.firefox.com/?*service=smartwindow*"],
     },
-    targeting: `localeLanguageCode == 'en' && region in ['CA', 'US'] && !('termsofuse.bypassNotification'|preferenceValue) && ('termsofuse.acceptedVersion'|preferenceValue < 4) && ('browser.smartwindow.enabled'|preferenceValue)`,
+    targeting: `!('termsofuse.bypassNotification'|preferenceValue) && ('termsofuse.acceptedVersion'|preferenceValue < 4) && ('browser.smartwindow.enabled'|preferenceValue)`,
     content: {
       template: "multistage",
       id: "AI_WINDOW_TOU_EXISTING_USERS_MODAL",

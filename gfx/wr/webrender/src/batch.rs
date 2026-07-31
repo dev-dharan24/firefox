@@ -785,7 +785,7 @@ impl BatchBuilder {
                 draw_index
             }
             PrimitiveCommand::SplitComposite { draw_index, polygons_address, transform_id, src_task_id, local_rect } => {
-                let prim_info = &ctx.scratch.frame.draws[draw_index.0 as usize];
+                let prim_info = ctx.scratch.frame.draw(*draw_index);
 
                 let (clip_task_address, clip_mask_texture_id) = ctx.get_prim_clip_task_and_texture(
                     prim_info.clip_task_index,
@@ -834,7 +834,7 @@ impl BatchBuilder {
                 draw_index
             }
             PrimitiveCommand::Quad { pattern, pattern_input, draw_index, gpu_buffer_address, quad_flags, edge_flags, transform_id, src_color_task_ids, blend_mode } => {
-                let prim_info = &ctx.scratch.frame.draws[draw_index.0 as usize];
+                let prim_info = ctx.scratch.frame.draw(*draw_index);
                 let bounding_rect = &prim_info.clip_chain.pic_coverage_rect;
                 let render_task_address = self.batcher.render_task_address;
 
@@ -915,7 +915,7 @@ impl BatchBuilder {
             }
         };
 
-        let vis_flags = match ctx.scratch.frame.draws[draw_index.0 as usize].state {
+        let vis_flags = match ctx.scratch.frame.draw(*draw_index).state {
             DrawState::Culled => {
                 return;
             }
@@ -946,7 +946,7 @@ impl BatchBuilder {
             ctx.spatial_tree,
         );
 
-        let prim_info = &ctx.scratch.frame.draws[draw_index.0 as usize];
+        let prim_info = ctx.scratch.frame.draw(*draw_index);
         let bounding_rect = &prim_info.clip_chain.pic_coverage_rect;
 
         let z_id = z_generator.next();
@@ -962,7 +962,9 @@ impl BatchBuilder {
                 "The primitive's bounding box is specified in a different coordinate system from the current batch!");
         }
 
-        let prim_instance = &prim_instances[draw_index.0 as usize];
+        // A draw index is not a primitive instance index; the header carries the
+        // back-reference.
+        let prim_instance = &prim_instances[prim_info.prim_instance_index.0 as usize];
 
         match prim_instance.kind {
             PrimitiveKind::TextRun { data_handle, .. } => {

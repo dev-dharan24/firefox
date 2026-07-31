@@ -103,17 +103,20 @@ tasks:
                   path: /builds/worker/archive
                   type: directory
     macosx64-firefox:
-        worker-type: t-osx-1015-r8
+        worker-type: t-osx-1500-m-vms
         description: Creates or updates conditioned profiles on macOS
         run-on-projects: ['mozilla-central']
         treeherder:
             symbol: condprof(firefox)
-            platform: macosx1015-64-qr/opt
+            platform: macosx1500-aarch64-vms/opt
         index:
             product: firefox
             job-name: condprof-macosx64
         dependencies:
             build: build-macosx64-shippable/opt
+        scenarios:
+            - settled
+            - full
         fetches:
             build:
                 - artifact: target.condprof.tests.tar.zst

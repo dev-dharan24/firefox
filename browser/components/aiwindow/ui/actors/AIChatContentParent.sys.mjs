@@ -119,6 +119,10 @@ export class AIChatContentParent extends JSWindowActorParent {
         );
         break;
 
+      case "AIChatContent:ClientError":
+        this.#handleClientError(data);
+        break;
+
       default:
         console.warn(`AIChatContentParent received unknown message: ${name}`);
         break;
@@ -332,6 +336,18 @@ export class AIChatContentParent extends JSWindowActorParent {
       return !!favicon;
     } catch (e) {
       return false;
+    }
+  }
+
+  #handleClientError(detail) {
+    try {
+      const aiWindow = this.#getAIWindowElement();
+      lazy.SmartWindowTelemetry.recordClientErrorDetail(
+        detail,
+        aiWindow?.getClientErrorContext?.()
+      );
+    } catch (e) {
+      console.warn("Could not record client error from AI Window chat", e);
     }
   }
 }

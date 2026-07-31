@@ -1845,12 +1845,6 @@ class JSScript : public js::BaseScript {
     return immutableScriptData()->code();
   }
 
-  bool hasForceInterpreterOp() const {
-    // JSOp::ForceInterpreter, if present, must be the first op.
-    MOZ_ASSERT(length() >= 1);
-    return JSOp(*code()) == JSOp::ForceInterpreter;
-  }
-
   js::AllBytecodesIterable allLocations() {
     return js::AllBytecodesIterable(this);
   }

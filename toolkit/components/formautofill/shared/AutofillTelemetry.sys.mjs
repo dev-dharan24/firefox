@@ -364,9 +364,43 @@ class CreditCardTelemetry extends AutofillTelemetryBase {
   }
 }
 
+class PassportTelemetry extends AutofillTelemetryBase {
+  EVENT_CATEGORY = "passport";
+  EVENT_OBJECT_FORM_INTERACTION = "PassportForm";
+
+  // Mapping of field name used in formautofill code to the field name
+  // used in the telemetry.
+  SUPPORTED_FIELDS = {
+    "passport-name": "name",
+    "passport-given-name": "given_name",
+    "passport-additional-name": "additional_name",
+    "passport-family-name": "family_name",
+    "passport-country": "country",
+    "passport-number": "number",
+    "passport-issue-date-day": "issue_date_day",
+    "passport-issue-date-month": "issue_date_month",
+    "passport-issue-date-year": "issue_date_year",
+    "passport-issue-date": "issue_date",
+    "passport-expiry-date-day": "expiry_date_day",
+    "passport-expiry-date-month": "expiry_date_month",
+    "passport-expiry-date-year": "expiry_date_year",
+    "passport-expiry-date": "expiry_date",
+  };
+
+  recordFormEvent(method, flowId, aExtra) {
+    // Don't modify the passed-in aExtra as it's reused.
+    const extra = Object.assign({ value: flowId }, aExtra);
+    const eventMethod = method.replace(/(_[a-z])/g, c => c[1].toUpperCase());
+    Glean.passport[eventMethod + this.EVENT_OBJECT_FORM_INTERACTION]?.record(
+      extra
+    );
+  }
+}
+
 export class AutofillTelemetry {
   static #creditCardTelemetry = new CreditCardTelemetry();
   static #addressTelemetry = new AddressTelemetry();
+  static #passportTelemetry = new PassportTelemetry();
 
   // Maps an AutofillDataType's id to its telemetry instance, or null for a type
   // with no telemetry schema (callers no-op on null). The Glean metric
@@ -378,6 +412,8 @@ export class AutofillTelemetry {
         return this.#addressTelemetry;
       case AutofillDataTypes.CREDIT_CARD:
         return this.#creditCardTelemetry;
+      case AutofillDataTypes.PASSPORT:
+        return this.#passportTelemetry;
     }
     return null;
   }

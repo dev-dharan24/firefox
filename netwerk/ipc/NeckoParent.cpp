@@ -37,6 +37,7 @@
 #include "mozilla/dom/BrowserParent.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/MaybeDiscarded.h"
+#include "mozilla/dom/WindowGlobalParent.h"
 #include "mozilla/dom/network/TCPServerSocketParent.h"
 #include "mozilla/dom/network/TCPSocketParent.h"
 #include "mozilla/dom/network/UDPSocketParent.h"
@@ -339,6 +340,22 @@ PWebSocketEventListenerParent* NeckoParent::AllocPWebSocketEventListenerParent(
   RefPtr<WebSocketEventListenerParent> c =
       new WebSocketEventListenerParent(aInnerWindowID);
   return c.forget().take();
+}
+
+mozilla::ipc::IPCResult NeckoParent::RecvPWebSocketEventListenerConstructor(
+    PWebSocketEventListenerParent* aActor, const uint64_t& aInnerWindowID) {
+  RefPtr<dom::WindowGlobalParent> wgp =
+      dom::WindowGlobalParent::GetByInnerWindowId(aInnerWindowID);
+  if (wgp && wgp->GetContentParent() == ContentParent::Cast(Manager())) {
+    return IPC_OK();
+  }
+
+  if (wgp) {
+    return IPC_FAIL(this, "Invalid aInnerWindowID");
+  }
+
+  (void)PWebSocketEventListenerParent::Send__delete__(aActor);
+  return IPC_OK();
 }
 
 bool NeckoParent::DeallocPWebSocketEventListenerParent(

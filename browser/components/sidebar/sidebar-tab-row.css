@@ -120,7 +120,7 @@
      15% tinted background. */
   @media -moz-pref("browser.nova.enabled") {
     box-sizing: content-box;
-    padding: var(--space-xsmall);
+    padding: var(--identity-icon-inset);
     border-radius: var(--border-radius-circle);
     background-color: var(--identity-fill-tint);
     background-origin: content-box;

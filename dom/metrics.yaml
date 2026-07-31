@@ -300,7 +300,9 @@ perf:
         unit: integer
       domain:
         description: |
-          ETLD+1 domain of website visited.
+          ETLD+1 domain of website visited. For a small allowlist of
+          well-known public domains, the full hostname is recorded instead
+          (e.g. docs.google.com, mail.google.com, support.microsoft.com).
         type: string
       is_first_daily_load:
         description: |

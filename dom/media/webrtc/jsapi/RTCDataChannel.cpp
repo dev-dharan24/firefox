@@ -7,6 +7,7 @@
 #include "DataChannel.h"
 #include "DataChannelLog.h"
 #include "RTCDataChannelDeclarations.h"
+#include "RTCError.h"
 #include "base/basictypes.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/EventListenerManager.h"
@@ -15,6 +16,9 @@
 #include "mozilla/dom/File.h"
 #include "mozilla/dom/MessageEvent.h"
 #include "mozilla/dom/MessageEventBinding.h"
+#include "mozilla/dom/PMediaTransport.h"
+#include "mozilla/dom/RTCErrorEvent.h"
+#include "mozilla/dom/RTCErrorEventBinding.h"
 #include "mozilla/dom/RTCStatsReportBinding.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/ToJSValue.h"
@@ -540,7 +544,7 @@ void RTCDataChannel::AnnounceOpen() {
   }
 }
 
-void RTCDataChannel::AnnounceClosed() {
+void RTCDataChannel::AnnounceClosed(Maybe<RTCErrorParams> aError) {
   MOZ_ASSERT(mEventTarget->IsOnCurrentThread());
   // Let channel be the RTCDataChannel object whose
   // underlying data transport was closed. If
@@ -561,11 +565,21 @@ void RTCDataChannel::AnnounceClosed() {
   // to the RTCDataChannel, which in our case is
   // handled by a self ref in nsDOMDataChannel.
 
-  // If the transport was closed with an error,
-  // fire an event named error using the
-  // RTCErrorEvent interface with its errorDetail
-  // attribute set to "sctp-failure" at channel.
-  // Note: We don't support this yet.
+  // If the transport was closed with an error, fire an event named error using
+  // the RTCErrorEvent interface with its errorDetail attribute set to
+  // "sctp-failure" at channel.
+  // Note: It it easy to plumb the sctpCauseCode and error message through with
+  // RTCErrorParams, so DataChannelConnection also sets errorDetail to
+  // "sctp-failure" when the RTCErrorParams is first created.
+  if (aError) {
+    RTCErrorEventInit init;
+    init.mError = MakeRefPtr<RTCError>(std::move(aError->errorInit()),
+                                       nsCString(std::move(aError->message())));
+    RefPtr<RTCErrorEvent> event =
+        RTCErrorEvent::Constructor(this, u"error"_ns, std::move(init));
+    event->SetTrusted(true);
+    DispatchEvent(*event, IgnoreErrors());
+  }
 
   // Fire an event named close at channel.
   OnSimpleEvent(u"close"_ns);

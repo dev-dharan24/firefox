@@ -141,9 +141,12 @@ add_task(async function test_filter_passwords_while_editing() {
   await checkAllLoginsRendered(megalist);
 
   info("Filter password using search input");
-  const searchInput = megalist.querySelector(".search");
-  searchInput.value = TEST_LOGIN_2.username;
-  searchInput.dispatchEvent(new Event("input"));
+  const searchInput = megalist.querySelector("moz-input-search");
+  searchInput.dispatchEvent(
+    new CustomEvent("MozInputSearch:search", {
+      detail: { query: TEST_LOGIN_2.username },
+    })
+  );
   await checkSearchResults(1, megalist);
 
   info("Ensure editing login with a filter works");
@@ -211,9 +214,12 @@ add_task(async function test_filter_passwords_and_update_login() {
   await checkAllLoginsRendered(megalist);
 
   info("Filter password using search input");
-  const searchInput = megalist.querySelector(".search");
-  searchInput.value = TEST_LOGIN_3.username;
-  searchInput.dispatchEvent(new Event("input"));
+  const searchInput = megalist.querySelector("moz-input-search");
+  searchInput.dispatchEvent(
+    new CustomEvent("MozInputSearch:search", {
+      detail: { query: TEST_LOGIN_3.username },
+    })
+  );
   await checkSearchResults(1, megalist);
 
   info("Ensure editing login with a filter works");
@@ -280,9 +286,12 @@ add_task(async function test_filter_passwords_with_urls() {
   await LoginTestUtils.addLogin(newLogin);
   await checkAllLoginsRendered(megalist);
 
-  const searchInput = megalist.querySelector(".search");
-  searchInput.value = newLogin.origin;
-  searchInput.dispatchEvent(new Event("input"));
+  const searchInput = megalist.querySelector("moz-input-search");
+  searchInput.dispatchEvent(
+    new CustomEvent("MozInputSearch:search", {
+      detail: { query: newLogin.origin },
+    })
+  );
   await checkSearchResults(1, megalist);
   ok(true, "Password filtered using full URL.");
 

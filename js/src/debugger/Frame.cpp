@@ -386,7 +386,7 @@ bool DebuggerFrame::setGeneratorInfo(JSContext* cx,
   //
   // 2) The generator's script's observer count must be bumped.
 
-  RootedScript script(cx, genObj->callee().nonLazyScript());
+  RootedScript script(cx, genObj->script());
   Rooted<UniquePtr<GeneratorInfo>> info(
       cx, cx->make_unique<GeneratorInfo>(genObj, script));
   if (!info) {
@@ -504,8 +504,10 @@ bool DebuggerFrame::getCallee(JSContext* cx, Handle<DebuggerFrame*> frame,
     }
   } else {
     MOZ_ASSERT(frame->isSuspendedGeneratorFrame());
-
-    callee = &frame->generatorInfo()->unwrappedGenerator().callee();
+    AbstractGeneratorObject& gen = frame->generatorInfo()->unwrappedGenerator();
+    if (!gen.isModuleGenerator()) {
+      callee = &gen.callee();
+    }
   }
 
   return frame->owner()->wrapNullableDebuggeeObject(cx, callee, result);

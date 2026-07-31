@@ -41,6 +41,7 @@ from mozbuild.frontend.data import (
     WasmSources,
 )
 from mozbuild.frontend.emitter import TreeMetadataEmitter
+from mozbuild.frontend.l10n_manifest import L10nManifestContext
 from mozbuild.frontend.reader import (
     BuildReader,
     BuildReaderError,
@@ -87,7 +88,9 @@ class TestEmitterBasic(unittest.TestCase):
 
         filtered = []
         for obj in objs:
-            if filter_common and isinstance(obj, DirectoryTraversal):
+            if filter_common and isinstance(
+                obj, (DirectoryTraversal, L10nManifestContext)
+            ):
                 continue
 
             filtered.append(obj)
@@ -1723,7 +1726,7 @@ class TestEmitterBasic(unittest.TestCase):
         """Test that a RustLibrary Cargo.toml has a permitted crate-type."""
         reader = self.reader("rust-library-invalid-crate-type")
         with self.assertRaisesRegex(
-            SandboxValidationError, "crate-type.* is not permitted"
+            SandboxValidationError, "crate-type.* must include 'staticlib'"
         ):
             self.read_topsrcdir(reader)
 

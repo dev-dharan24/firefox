@@ -11,6 +11,7 @@ UNIFIED_SOURCES += [
     "TestBSPTree.cpp",
     "TestBufferRotation.cpp",
     "TestConfigManager.cpp",
+    "TestConvolutionFilter.cpp",
     "TestCoord.cpp",
     "TestCopyPlane.cpp",
     "TestFontFallback.cpp",
@@ -28,6 +29,10 @@ UNIFIED_SOURCES += [
     "TestTreeTraversal.cpp",
     "TestVsync.cpp",
     "TestYUVtoRGB32.cpp",
+]
+
+SOURCES += [
+    "SwizzleGeneric.cpp",
 ]
 
 if CONFIG["OS_TARGET"] != "Android":
@@ -77,6 +82,7 @@ LOCAL_INCLUDES += [
     "/gfx/qcms",
     "/gfx/thebes",
     "/layout/base",
+    "/third_party/xsimd/include",
 ]
 
 FINAL_LIBRARY = "xul-gtest"

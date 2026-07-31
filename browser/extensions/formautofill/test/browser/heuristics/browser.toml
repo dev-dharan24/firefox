@@ -52,16 +52,10 @@ support-files = [
 ["browser_parse_tel_fields.js"]
 
 ["browser_passport_fields.js"]
-skip-if = [
-  "true", # Bug 2056496: enables passports, which opens the Application Services autofill store and crashes at LateWriteChecks on shutdown until the store's shutdown() lands
-]
 
 ["browser_section_validation_address.js"]
 
 ["browser_section_validation_passport.js"]
-skip-if = [
-  "true", # Bug 2056496: enables passports, which opens the Application Services autofill store and crashes at LateWriteChecks on shutdown until the store's shutdown() lands
-]
 
 ["browser_sections_by_name.js"]
 

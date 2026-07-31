@@ -40,6 +40,7 @@ test-manifest-toml:
         - '**/labels.toml'
         - '**/pyproject.toml'
         - '**/python.toml'
+        - '**/review-context.toml'
         - '**/rustfmt.toml'
         - '**/tests/manifest.toml'
         - '**/uniffi.toml'

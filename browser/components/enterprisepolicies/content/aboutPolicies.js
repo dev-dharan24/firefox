@@ -439,28 +439,27 @@ window.onload = function () {
 
   // Event delegation on #categories-nav element
   let menu = document.getElementById("categories-nav");
-  menu.addEventListener("change-view", e => show(e.target));
+  menu.addEventListener("change-view", e => onChangeView(e.target));
 
-  if (location.hash) {
-    let sectionButton = document.getElementById(
-      "category-" + location.hash.substring(1)
-    );
-    if (sectionButton) {
-      sectionButton.click();
-    }
-  }
-
-  window.addEventListener("hashchange", function () {
+  function onHashChange() {
     if (location.hash) {
       let sectionButton = document.getElementById(
         "category-" + location.hash.substring(1)
       );
-      sectionButton.click();
+      if (sectionButton) {
+        sectionButton.activate();
+      }
     }
+  }
+
+  window.addEventListener("hashchange", function () {
+    onHashChange();
   });
+
+  onHashChange();
 };
 
-function show(button) {
+function onChangeView(button) {
   let current_tab = document.querySelector(".active");
   let category = button.getAttribute("id").substring("category-".length);
   let content = document.getElementById(category);

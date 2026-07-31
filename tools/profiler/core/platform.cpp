@@ -5994,10 +5994,8 @@ void profiler_start_from_signal() {
   // write any data that we gather anyway.
   if (XRE_IsParentProcess()) {
     // Start the profiler here directly, as we're on a background thread.
-    // set of preferences, configuration of them is TODO, see Bug 1866007
-    // Enabling the JS feature leaks an 8-byte object during testing, but is too
-    // useful to disable. See Bug 1904897, Bug 1699681, and browser.toml for
-    // more details.
+    // We use a default set of preferences, configuring them is TODO, see
+    // Bug 1913297.
     uint32_t features = ProfilerFeature::JS | ProfilerFeature::StackWalk;
     // as we often don't know what threads we'll care about, tell the
     // profiler to profile all threads.

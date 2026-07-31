@@ -410,6 +410,14 @@ class DocumentLoadListener : public nsIInterfaceRequestor,
   // is being performed in. For toplevel loads, this will return `nullptr`.
   dom::WindowGlobalParent* GetParentWindowContext() const;
 
+  // Checks for a completed speculation rules prefetch record matching aURI.
+  // If found, copies the prefetch's cookies into the destination partition
+  // and marks the navigation timing as activated from a prefetch.
+  // Only called for document (navigational) loads.
+  // Spec:
+  // https://wicg.github.io/nav-speculation/prefetch.html#create-navigation-params-from-a-prefetch-record
+  void TryActivateFromPrefetch(nsIURI* aURI);
+
   void AddURIVisit(nsIChannel* aChannel, uint32_t aLoadFlags);
   bool HasCrossOriginOpenerPolicyMismatch() const;
   void ApplyPendingFunctions(nsIParentChannel* aChannel) const;

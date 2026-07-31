@@ -2,24 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/**
- * LOCALIZATION NOTE:
- * This component contains several strings that need to be localized.
- * When implementing Fluent localization, add these strings to the FTL file:
- *
- * monitor-schedule-daily = Daily at { $time } · on-device
- * monitor-schedule-weekly = Weekly { $weekday } at { $time } · on-device
- * monitor-schedule-other = { $scheduleType } · on-device
- * monitor-status-active = Active
- * monitor-status-paused = Paused
- * monitor-status-watching = Watching
- * monitor-untitled = Untitled Monitor
- * monitor-checked-time = checked { $time }
- * monitor-list-empty = No monitors created yet.
- * monitor-list-count = Monitors ({ $count })
- * monitor-flag-triggered = Triggered
- */
-
 import { html, repeat } from "chrome://global/content/vendor/lit.all.mjs";
 import { MozLitElement } from "chrome://global/content/lit-utils.mjs";
 // eslint-disable-next-line import/no-unassigned-import
@@ -46,36 +28,11 @@ export class MonitorsDisplay extends MozLitElement {
     this.weekdays = [];
   }
 
-  buildCadenceString(schedule) {
-    if (!schedule) {
-      return "";
-    }
-
-    const { type, hour, minute, weekday } = schedule;
-    const time = `${(hour ?? 0).toString().padStart(2, "0")}:${(minute ?? 0)
-      .toString()
-      .padStart(2, "0")}`;
-
-    switch (type) {
-      case this.scheduleTypes.DAILY:
-        return `Daily at ${time} · on-device`;
-
-      case this.scheduleTypes.WEEKLY: {
-        const day = this.weekdays.find(w => w.value === weekday)?.label ?? "";
-        return `Weekly ${day} at ${time} · on-device`;
-      }
-
-      default:
-        // Fallback for unknown schedule types
-        console.warn(`Unknown schedule type: ${type}`);
-        return `${type} · on-device`;
-    }
-  }
-
   buildMonitorStatus(monitor) {
+    // Return the status with kind, let agent-monitor-item handle the localization
     const monitorStatus = monitor.enabled
-      ? { label: "Watching", kind: "watching" }
-      : { label: "Paused", kind: "paused" };
+      ? { kind: "watching" }
+      : { kind: "paused" };
 
     return monitorStatus;
   }
@@ -110,8 +67,6 @@ export class MonitorsDisplay extends MozLitElement {
    * @returns {object} Transformed agent object for agent-monitor-item
    */
   transformMonitorToAgent(monitor) {
-    // Format the cadence string based on schedule
-    const cadence = this.buildCadenceString(monitor.schedule);
     const monitorStatus = this.buildMonitorStatus(monitor);
     // Transform history to match agent-monitor-item format
     const transformedHistory = this.buildHistoryItem(monitor.history);
@@ -123,12 +78,12 @@ export class MonitorsDisplay extends MozLitElement {
       watchUrls: monitor.watchUrls || [],
       condition: monitor.monitorPrompt || "",
       status: monitorStatus,
-      cadence,
       value: monitor.currentValue || "",
       valueMeta: monitor.lastRunTime
         ? `checked ${new Date(monitor.lastRunTime).toLocaleTimeString()}`
         : "",
       history: transformedHistory,
+      // Pass the schedule data directly - agent-monitor-item will format it using FTL strings
       schedule: monitor.schedule
         ? {
             frequency: monitor.schedule.type,
@@ -151,8 +106,12 @@ export class MonitorsDisplay extends MozLitElement {
       />
 
       <div class="monitors-section">
-        <!-- TODO: Localize - Use Fluent ID "monitor-list-count" -->
-        <h3>Monitors</h3>
+        <p data-l10n-id="ai-task-page-description"></p>
+
+        <h3
+          data-l10n-id="ai-tasks-alerts-count"
+          data-l10n-args=${JSON.stringify({ count: this.monitors.length })}
+        ></h3>
         ${this.monitors.length
           ? html`
               <div class="monitors-list">
@@ -168,8 +127,10 @@ export class MonitorsDisplay extends MozLitElement {
                 )}
               </div>
             `
-          : html`<!-- TODO: Localize - Use Fluent ID "monitor-list-empty" -->
-              <p class="no-monitors">No monitors created yet.</p>`}
+          : html` <p
+              class="no-monitors"
+              data-l10n-id="ai-task-page-no-alerts"
+            ></p>`}
       </div>
     `;
   }

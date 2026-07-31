@@ -82,9 +82,6 @@ skip-if = [
 
 ["browser_fullscreen_toplevel_warning.js"]
 support-files = ["fullscreen.html"]
-skip-if = [
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && opt && a11y_checks && swgl && nova", # Bug 2057924
-]
 
 ["browser_fullscreen_ui_state.js"]
 skip-if = [

@@ -586,11 +586,7 @@ Result<EditActionResult, nsresult> HTMLEditor::HandleDeleteSelection(
         rangeArray.GetFirstRangeEndPoint<EditorDOMPoint>();
     MOZ_ASSERT(deletionStart.GetContainer() == text);
     MOZ_ASSERT(deletionEnd.GetContainer() == text);
-    RefPtr<nsFrameSelection> frameSelection =
-        SelectionRef().GetFrameSelection();
-    if (NS_WARN_IF(!frameSelection)) {
-      return Err(NS_ERROR_FAILURE);
-    }
+    RefPtr<nsFrameSelection> frameSelection = GetEditableFrameSelection();
     AutoCaretBidiLevelManager bidiLevelManager(*this, aDirectionAndAmount,
                                                *editContext);
     editContext->UpdateTextAndFireEvent(deletionStart.Offset(),
@@ -609,7 +605,8 @@ Result<EditActionResult, nsresult> HTMLEditor::HandleDeleteSelection(
     // However, we don't want to do this if the textupdate handler
     // changed the text next to the caret, since then this may not be a simple
     // deletion.
-    if (!editContext->WasTextNextToCaretChangedByTextUpdateHandler()) {
+    if (frameSelection &&
+        !editContext->WasTextNextToCaretChangedByTextUpdateHandler()) {
       bidiLevelManager.MaybeUpdateCaretBidiLevel(*this);
       frameSelection->SetHint(DirectionIsBackspace(aDirectionAndAmount)
                                   ? CaretAssociationHint::Before

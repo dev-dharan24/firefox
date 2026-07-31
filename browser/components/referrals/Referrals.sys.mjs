@@ -60,8 +60,12 @@ class ReferralsClass {
     if (!this.isEnabled) {
       return;
     }
-    this.getReferralCode();
-    window.openTrustedLinkIn("about:referrals", "tab");
+    let referralCode = this.getReferralCode();
+    let aboutPageURL = new URL(`about:referrals`);
+
+    aboutPageURL.searchParams.set("ref_key", referralCode);
+
+    window.openTrustedLinkIn(aboutPageURL.toString(), "tab");
   }
 
   /**

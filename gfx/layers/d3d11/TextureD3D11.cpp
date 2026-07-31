@@ -524,6 +524,8 @@ D3D11TextureData* D3D11TextureData::Create(IntSize aSize, SurfaceFormat aFormat,
     case gfx::SurfaceFormat::HSV:
     case gfx::SurfaceFormat::Lab:
     case gfx::SurfaceFormat::Depth:
+    case gfx::SurfaceFormat::CMYK:
+    case gfx::SurfaceFormat::InvertedCMYK:
     case gfx::SurfaceFormat::UNKNOWN:
       // Per advice from Sotaro, these formats are not supported for video.
       gfxCriticalNoteOnce
@@ -1038,6 +1040,13 @@ already_AddRefed<gfx::DataSourceSurface> DXGITextureHostD3D11::GetAsSurface(
   D3D11_TEXTURE2D_DESC textureDesc = {0};
   d3dTexture->GetDesc(&textureDesc);
 
+  if (textureDesc.Format != SurfaceFormatToDXGIFormat(mFormat)) {
+    gfxCriticalNoteOnce << "Declared format does not match texture format: "
+                        << static_cast<int>(mFormat) << " "
+                        << static_cast<int>(textureDesc.Format);
+    return nullptr;
+  }
+
   RefPtr<ID3D11DeviceContext> context;
   d3d11Device->GetImmediateContext(getter_AddRefs(context));
 
@@ -1325,6 +1334,8 @@ void DXGITextureHostD3D11::PushDisplayItems(
     case gfx::SurfaceFormat::HSV:
     case gfx::SurfaceFormat::Lab:
     case gfx::SurfaceFormat::Depth:
+    case gfx::SurfaceFormat::CMYK:
+    case gfx::SurfaceFormat::InvertedCMYK:
     case gfx::SurfaceFormat::UNKNOWN: {
       // Per advice from Sotaro, these formats are not supported for video.
       MOZ_ASSERT_UNREACHABLE("unexpected to be called");
