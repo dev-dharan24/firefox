@@ -784,7 +784,7 @@ impl BatchBuilder {
             PrimitiveCommand::Simple { draw_index } => {
                 draw_index
             }
-            PrimitiveCommand::SplitComposite { draw_index, polygons_address, transform_id, src_task_id, local_rect } => {
+            PrimitiveCommand::SplitComposite { draw_index, polygons_address, transform_id, src_task_id, pattern_rect } => {
                 let prim_info = ctx.scratch.frame.draw(*draw_index);
 
                 let (clip_task_address, clip_mask_texture_id) = ctx.get_prim_clip_task_and_texture(
@@ -798,8 +798,8 @@ impl BatchBuilder {
                 let z_id = z_generator.next();
 
                 let prim_header = PrimitiveHeader {
-                    local_rect: *local_rect,
-                    local_clip_rect: prim_info.clip_chain.local_clip_rect,
+                    pattern_rect: *pattern_rect,
+                    bounds: prim_info.clip_chain.local_clip_rect,
                     specific_prim_address: GpuBufferAddress::INVALID.as_int(),
                     transform_id: *transform_id,
                     z: z_id,
@@ -982,8 +982,13 @@ impl BatchBuilder {
                 // local-raster mode's raster -> local mapping) and the mode flag
                 // (0 = device, 1 = local raster).
                 let prim_header = PrimitiveHeader {
-                    local_rect: run_scratch.local_rect,
-                    local_clip_rect: prim_info.clip_chain.local_clip_rect,
+                    // A text run's prim rect situates the glyphs but does not
+                    // bound them: the shader only reads `pattern_rect.min` as
+                    // the run anchor, and glyph ink routinely extends past the
+                    // authored rect. Do not fold the prim rect into `bounds` -
+                    // that would start clipping glyphs by it.
+                    pattern_rect: run_scratch.pattern_rect,
+                    bounds: prim_info.clip_chain.local_clip_rect,
                     transform_id,
                     z: z_id,
                     render_task_address: self.batcher.render_task_address,
@@ -1019,6 +1024,18 @@ impl BatchBuilder {
                         debug_assert_ne!(texture_id, TextureSource::Invalid);
 
                         let subpx_dir = subpx_dir.limit_by(glyph_format);
+
+                        // A glyph that rasterized from a bitmap strike ignored the
+                        // sub-pixel offset its key asked for and landed on the device
+                        // grid, so its pen rounds to nearest rather than flooring with
+                        // the sub-pixel bias (bug 2056856). Only known once the glyph is
+                        // rasterized, which is why it is resolved here rather than in
+                        // `request_resources`. Batches are keyed by glyph format, so this
+                        // is uniform across the batch.
+                        let is_bitmap_strike = matches!(
+                            glyph_format,
+                            GlyphFormat::Bitmap | GlyphFormat::ColorBitmap
+                        );
 
                         let textures = BatchTextures::prim_textured(
                             texture_id,
@@ -1071,28 +1088,31 @@ impl BatchBuilder {
                         // branch's `raster_text_offset` then reduces to the reference-frame
                         // device snap that `request_resources` applies.
                         let tight_bounding_rect = {
-                            let snap_bias = match subpx_dir {
-                                SubpixelDirection::None => DeviceVector2D::new(0.5, 0.5),
-                                SubpixelDirection::Horizontal => DeviceVector2D::new(0.125, 0.5),
-                                SubpixelDirection::Vertical => DeviceVector2D::new(0.5, 0.125),
+                            let snap_bias = if is_bitmap_strike {
+                                DeviceVector2D::new(0.5, 0.5)
+                            } else {
+                                match subpx_dir {
+                                    SubpixelDirection::None => DeviceVector2D::new(0.5, 0.5),
+                                    SubpixelDirection::Horizontal => DeviceVector2D::new(0.125, 0.5),
+                                    SubpixelDirection::Vertical => DeviceVector2D::new(0.5, 0.125),
+                                }
                             };
                             let text_offset = LayoutVector2D::zero();
 
                             let pic_bounding_rect = if run_scratch.used_font.flags.contains(FontInstanceFlags::TRANSFORM_GLYPHS) {
                                 let mut device_bounding_rect = DeviceRect::default();
 
+                                // TODO: this code assumes that there is no raster to device scale.
                                 let glyph_transform = ctx.spatial_tree.get_relative_transform(
                                     prim_spatial_node_index,
                                     root_spatial_node_index,
-                                ).into_transform()
-                                    .with_destination::<WorldPixel>()
-                                    .then(&euclid::Transform3D::from_scale(ctx.global_device_pixel_scale));
+                                ).into_transform().with_destination::<DevicePixel>();
 
                                 let glyph_translation = DeviceVector2D::new(glyph_transform.m41, glyph_transform.m42);
 
                                 let mut use_tight_bounding_rect = true;
                                 for glyph in glyphs {
-                                    let glyph_offset = prim_data.glyphs[glyph.index_in_text_run as usize].point + prim_header.local_rect.min.to_vector();
+                                    let glyph_offset = prim_data.glyphs[glyph.index_in_text_run as usize].point + prim_header.pattern_rect.min.to_vector();
 
                                     let transformed_offset = match glyph_transform.transform_point2d(glyph_offset) {
                                         Some(transformed_offset) => transformed_offset,
@@ -1134,10 +1154,10 @@ impl BatchBuilder {
                             } else {
                                 let mut local_bounding_rect = LayoutRect::default();
 
-                                let glyph_raster_scale = run_scratch.raster_scale * ctx.global_device_pixel_scale.get();
+                                let glyph_raster_scale = run_scratch.raster_scale;
 
                                 for glyph in glyphs {
-                                    let glyph_offset = prim_data.glyphs[glyph.index_in_text_run as usize].point + prim_header.local_rect.min.to_vector();
+                                    let glyph_offset = prim_data.glyphs[glyph.index_in_text_run as usize].point + prim_header.pattern_rect.min.to_vector();
                                     let glyph_scale = LayoutToDeviceScale::new(glyph_raster_scale / glyph.scale);
                                     let raster_glyph_offset = (glyph_offset * LayoutToDeviceScale::new(glyph_raster_scale) + snap_bias).floor() / glyph.scale;
                                     let local_glyph_rect = LayoutRect::from_origin_and_size(
@@ -1189,6 +1209,7 @@ impl BatchBuilder {
                                 glyph.subpx_offset_x,
                                 glyph.subpx_offset_y,
                                 glyph.is_packed_glyph,
+                                is_bitmap_strike,
                             ));
                         }
                     },

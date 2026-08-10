@@ -13,6 +13,7 @@ import {
   resolveWidgetOrder,
   resolveWidgetHasSidebar,
   resolveCrosswordEndpoint,
+  resolvePrivacyBlankChance,
   PREF_WIDGETS_ORDER,
 } from "common/WidgetsRegistry.mjs";
 
@@ -515,5 +516,53 @@ describe("resolveCrosswordEndpoint", () => {
     expect(
       resolveCrosswordEndpoint({ "widgets.crossword.endpoint": prefEndpoint })
     ).toBe(prefEndpoint);
+  });
+});
+
+describe("resolvePrivacyBlankChance", () => {
+  it("parses the string pref as a 0-1 fraction", () => {
+    expect(
+      resolvePrivacyBlankChance({ "widgets.privacy.blankChance": "0.25" })
+    ).toBe(0.25);
+  });
+
+  it("defaults to 0.4 when unset, without warning", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    expect(resolvePrivacyBlankChance({})).toBe(0.4);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("warns and defaults to 0.4 for a present-but-unparseable value", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
+      resolvePrivacyBlankChance({ "widgets.privacy.blankChance": "abc" })
+    ).toBe(0.4);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("treats a parsed 0 as valid (blanks off), not as the default", () => {
+    expect(
+      resolvePrivacyBlankChance({ "widgets.privacy.blankChance": "0" })
+    ).toBe(0);
+  });
+
+  it("warns and falls back to 0.4 for an out-of-range value (e.g. 40)", () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    expect(
+      resolvePrivacyBlankChance({ "widgets.privacy.blankChance": "40" })
+    ).toBe(0.4);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("prefers a valid trainhopConfig number over the pref", () => {
+    expect(
+      resolvePrivacyBlankChance({
+        "widgets.privacy.blankChance": "0.9",
+        trainhopConfig: { widgets: { privacyBlankChance: 0.1 } },
+      })
+    ).toBe(0.1);
   });
 });

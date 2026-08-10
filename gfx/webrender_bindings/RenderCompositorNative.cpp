@@ -567,28 +567,8 @@ void RenderCompositorNativeOGL::DoFlush() {
     // with the next transaction.
     // https://groups.google.com/g/angleproject/c/6UeZshVzt28/m/pRCjGEfmEwAJ
     if (egl->IsExtensionSupported(
-            gl::EGLExtension::ANGLE_metal_commands_scheduled_sync)) {
-      EGLSync sync = egl->fCreateSync(
-          LOCAL_EGL_SYNC_METAL_COMMANDS_SCHEDULED_ANGLE, nullptr);
-      if (!sync) {
-        gfxCriticalNote
-            << "Creating EGL_SYNC_METAL_COMMANDS_SCHEDULED sync failed";
-        mGL->fFinish();
-        return;
-      }
-
-      // No need to manually flush or set EGL_SYNC_FLUSH_COMMANDS_BIT.
-      // Creating a EGL_SYNC_METAL_COMMANDS_SCHEDULED sync automatically
-      // flushes for us.
-      const EGLint result = egl->fClientWaitSync(sync, 0, LOCAL_EGL_FOREVER);
-      egl->fDestroySync(sync);
-      if (result != LOCAL_EGL_CONDITION_SATISFIED) {
-        gfxCriticalNote
-            << "Waiting for EGL_SYNC_METAL_COMMANDS_SCHEDULED sync failed";
-        mGL->fFinish();
-        return;
-      }
-      return;
+            gl::EGLExtension::ANGLE_wait_until_work_scheduled)) {
+      egl->fWaitUntilWorkScheduledANGLE();
     }
   }
   mGL->fFlush();

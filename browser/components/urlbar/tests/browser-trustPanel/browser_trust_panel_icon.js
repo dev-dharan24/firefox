@@ -16,7 +16,7 @@ ChromeUtils.defineESModuleGetters(this, {
 });
 
 const TRACKING_PAGE =
-  // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+  // eslint-disable-next-line sdl/no-insecure-url
   "http://tracking.example.org/browser/browser/base/content/test/protectionsUI/trackingPage.html";
 
 const TEST_BREACH = {
@@ -60,6 +60,14 @@ add_setup(async function setup() {
   await new Promise(r => setTimeout(r, 500));
 
   registerCleanupFunction(async () => {
+    // The trust icon lives in the (chrome) urlbar, so its animations can outlive
+    // the tab that triggered them. Let them finish so vsync is disabled before
+    // the harness's end-of-file teardown check.
+    await Promise.all(
+      trustIconContainer()
+        .getAnimations({ subtree: true })
+        .map(anim => anim.finished.catch(() => {}))
+    );
     await PlacesUtils.history.clear();
     Services.prefs.clearUserPref("browser.urlbar.trackerCountShown");
     await db.clear();
@@ -410,10 +418,13 @@ add_task(async function test_tracker_count_cache_cleared_on_navigation() {
     "has-blocked-trackers should be absent after navigating to a clean page"
   );
 
-  Assert.equal(
-    document.getElementById("trust-icon-tracker-count-shortform").textContent,
-    "0",
-    "Shortform count is 0 after navigating to a clean page"
+  // The count text updates once the scanning hold resolves (it's hidden behind
+  // the scanning shield until then), so wait for it rather than reading eagerly.
+  await TestUtils.waitForCondition(
+    () =>
+      document.getElementById("trust-icon-tracker-count-shortform")
+        .textContent === "0",
+    "Shortform count becomes 0 after navigating to a clean page"
   );
 
   await BrowserTestUtils.removeTab(tab);
@@ -519,6 +530,243 @@ add_task(async function test_tracker_count_hidden_when_pref_disabled() {
   }
 });
 
+add_task(async function test_scanning_shield_at_navigation_start() {
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+
+  await waitForTrustIconClass("secure", "Waiting for secure icon");
+
+  // Simulate navigation start: the icon must drop to the neutral scanning
+  // shield immediately and must NOT keep showing the secure check-mark before
+  // the blocker check has run.
+  gTrustPanelHandler.resetIconForNavigation();
+
+  Assert.ok(
+    trustIconContainer().classList.contains("scanning"),
+    "Icon shows the scanning shield at navigation start"
+  );
+  Assert.ok(
+    !trustIconContainer().classList.contains("secure"),
+    "Icon does not show the secure check-mark before the blocker check"
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_scanning_resolves_to_secure() {
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+
+  await waitForTrustIconClass(
+    "secure",
+    "Scanning resolves to secure once the blocker check completes"
+  );
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Scanning shield is not left showing after the blocker check"
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_reset_icon_same_vs_cross_host() {
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+
+  await waitForTrustIconClass("secure", "Waiting for resolved secure icon");
+
+  // A navigation to a subdomain of the same site (different host, same base
+  // domain) preserves the resolved icon: no re-scan.
+  gTrustPanelHandler.resetIconForNavigation(
+    Services.io.newURI("https://www.example.com/other")
+  );
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Same-site navigation (subdomain) preserves the icon, no re-scan"
+  );
+  Assert.ok(
+    trustIconContainer().classList.contains("secure"),
+    "Same-site navigation keeps the resolved secure state"
+  );
+
+  // A navigation to a different site (different base domain) drops back to
+  // the scanning shield.
+  gTrustPanelHandler.resetIconForNavigation(
+    Services.io.newURI("https://example.org/")
+  );
+  Assert.ok(
+    trustIconContainer().classList.contains("scanning"),
+    "Cross-site navigation drops to the scanning shield"
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_same_site_navigation_preserves_state() {
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+
+  await waitForTrustIconClass("secure", "Initial page resolves to secure");
+
+  // Navigate within the same site; the icon must stay resolved (no scanning,
+  // no re-animation) rather than re-scanning.
+  const loaded = BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+  BrowserTestUtils.startLoadingURIString(
+    tab.linkedBrowser,
+    "https://example.com/?same-site"
+  );
+  await loaded;
+
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Same-site navigation does not re-enter the scanning state"
+  );
+  Assert.ok(
+    trustIconContainer().classList.contains("secure"),
+    "Same-site navigation preserves the resolved secure icon"
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+});
+
+add_task(
+  async function test_same_site_navigation_preserves_count_and_highlight() {
+    await PlacesUtils.history.clear();
+
+    const tab = await BrowserTestUtils.openNewForegroundTab({
+      gBrowser,
+      opening: TRACKING_PAGE,
+      waitForLoad: true,
+    });
+
+    await SpecialPowers.spawn(tab.linkedBrowser, [], () => {
+      // See trackingAPI.js - this postMessage causes it to inject an iframe with
+      // one of the blocked tracking hosts:
+      content.postMessage("cryptomining", "*");
+    });
+
+    await waitForTrustIconClass(
+      "has-blocked-trackers",
+      "Waiting for has-blocked-trackers after a cryptominer is blocked"
+    );
+    Assert.equal(
+      document.getElementById("trust-icon-tracker-count-shortform").textContent,
+      "1",
+      "Count shows 1 before the same-site navigation"
+    );
+
+    // Navigate within the same site (same host, new query). The new page blocks
+    // no tracker, so its recomputed count starts at 0 -- but the highlight pill
+    // and its count must be preserved rather than flickering off / dropping to
+    // 0 between pages of the same site.
+    const loaded = BrowserTestUtils.browserLoaded(tab.linkedBrowser);
+    BrowserTestUtils.startLoadingURIString(
+      tab.linkedBrowser,
+      TRACKING_PAGE + "?same-site"
+    );
+    await loaded;
+
+    await waitForTrustIconClass(
+      "same-site-nav",
+      "Same-site navigation marks the icon so the reveal stays suppressed"
+    );
+    Assert.ok(
+      trustIconContainer().classList.contains("has-blocked-trackers"),
+      "Highlight pill is preserved across a same-site navigation"
+    );
+    Assert.ok(
+      !trustIconContainer().classList.contains("first-visit"),
+      "Same-site navigation is not treated as a first visit"
+    );
+    Assert.equal(
+      document.getElementById("trust-icon-tracker-count-shortform").textContent,
+      "1",
+      "Count is preserved (not dropped to 0) across the same-site navigation"
+    );
+
+    await BrowserTestUtils.removeTab(tab);
+  }
+);
+
+add_task(async function test_scanning_does_not_mask_breach() {
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.org",
+    waitForLoad: true,
+  });
+
+  // A breached page is a definitive state and must show through, rather than
+  // being replaced by the scanning shield.
+  await waitForTrustIconClass("breached", "Waiting for breached class");
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Breach shows through instead of the scanning shield"
+  );
+
+  // Let the breach pulse animation finish before teardown, otherwise it can
+  // leave the compositor's vsync enabled when the test file ends.
+  await Promise.all(
+    trustIconContainer()
+      .getAnimations({ subtree: true })
+      .map(anim => anim.finished.catch(() => {}))
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+});
+
+add_task(async function test_no_scanning_when_feature_disabled() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.urlbar.trackerCount.enabled", false]],
+  });
+  await PlacesUtils.history.clear();
+
+  const tab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+
+  await waitForTrustIconClass("secure", "Waiting for secure icon");
+
+  // With the tracker feature off there is no behavior change: navigation
+  // start leaves the secure icon untouched.
+  gTrustPanelHandler.resetIconForNavigation();
+
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Scanning shield does not appear when the tracker feature is disabled"
+  );
+  Assert.ok(
+    trustIconContainer().classList.contains("secure"),
+    "Secure icon is unchanged when the tracker feature is disabled"
+  );
+
+  await BrowserTestUtils.removeTab(tab);
+  await SpecialPowers.popPrefEnv();
+});
+
 add_task(async function test_no_first_visit_class_on_return_visit() {
   await PlacesUtils.history.clear();
   Services.prefs.setBoolPref("browser.urlbar.trackerCountShown", true);
@@ -526,7 +774,7 @@ add_task(async function test_no_first_visit_class_on_return_visit() {
   // Add a visit to the tracking host from more than 20 seconds ago so that
   // #markFirstVisit treats this as a return visit.
   await PlacesTestUtils.addVisits({
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     uri: "http://tracking.example.org/",
     visitDate: new Date(Date.now() - 60 * 1000),
   });
@@ -567,7 +815,7 @@ add_task(
     // Add a visit older than 20 seconds so #markFirstVisit would treat this as a
     // return visit based on history alone.
     await PlacesTestUtils.addVisits({
-      // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+      // eslint-disable-next-line sdl/no-insecure-url
       uri: "http://tracking.example.org/",
       visitDate: new Date(Date.now() - 60 * 1000),
     });
@@ -603,3 +851,36 @@ add_task(
     }
   }
 );
+
+add_task(async function test_tab_switch_preserves_resolved_secure_icon() {
+  await PlacesUtils.history.clear();
+
+  const noTrackerTab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "https://example.com",
+    waitForLoad: true,
+  });
+  await waitForTrustIconClass("secure", "No-tracker tab resolves to secure");
+
+  const otherTab = await BrowserTestUtils.openNewForegroundTab({
+    gBrowser,
+    opening: "about:blank",
+    waitForLoad: true,
+  });
+
+  // Returning must keep the check-mark, not re-enter scanning. Assert
+  // synchronously: scanning self-resolves in seconds, so a polled wait would
+  // miss the flash of the shield the user actually sees.
+  await BrowserTestUtils.switchTab(gBrowser, noTrackerTab);
+  Assert.ok(
+    trustIconContainer().classList.contains("secure"),
+    "Tab switch preserves the check-mark"
+  );
+  Assert.ok(
+    !trustIconContainer().classList.contains("scanning"),
+    "Tab switch does not drop to the scanning shield"
+  );
+
+  await BrowserTestUtils.removeTab(otherTab);
+  await BrowserTestUtils.removeTab(noTrackerTab);
+});

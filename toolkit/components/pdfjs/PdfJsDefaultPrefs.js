@@ -40,6 +40,7 @@ pref("pdfjs.enableHighlightFloatingButton", false);
 pref("pdfjs.enableMerge", false);
 pref("pdfjs.enableNewAltTextWhenAddingImage", true);
 pref("pdfjs.enableNewBadge", true);
+pref("pdfjs.enableNova", true);
 pref("pdfjs.enableOptimizedPartialRendering", false);
 pref("pdfjs.enablePermissions", false);
 pref("pdfjs.enablePrintAutoRotate", true);

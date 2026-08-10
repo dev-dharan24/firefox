@@ -513,27 +513,20 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
 
     switch (details.selType) {
       case RESULT_MENU_COMMANDS.DISMISS: {
-        await lazy.PlacesUtils.history
-          .remove(result.payload.url)
-          .catch(console.error);
+        await UrlbarUtils.dismissAutofill(result.payload.url, {
+          removeFromHistory: true,
+        });
         didRemove = true;
         break;
       }
       case RESULT_MENU_COMMANDS.DISMISS_AUTOFILL: {
-        let blockUntilMs =
-          Date.now() +
-          lazy.UrlbarPrefs.get("autoFill.dismissalBlockDurationMs");
-        await UrlbarUtils.blockAutofill(result.payload.url, blockUntilMs).catch(
-          console.error
-        );
+        await UrlbarUtils.dismissAutofill(result.payload.url);
         didRemove = true;
         break;
       }
     }
 
     if (didRemove) {
-      UrlbarUtils.clearAutofillBackspaceEntryForUrl(result.payload.url);
-
       // Upon removing the autofill, we should do another search.
       controller.input.setValue(queryContext.searchString);
       controller.input.startQuery({
@@ -556,7 +549,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
       result.autofill.type === "adaptive_origin" ||
       result.autofill.type === "origin"
     ) {
-      let isOrigin = UrlbarUtils.isOriginUrl(result.payload.url);
+      let isOrigin = lazy.UrlbarShared.isOriginUrl(result.payload.url);
       let resultArray = [];
 
       if (!isPrivate) {
@@ -971,7 +964,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
         adaptiveHistoryInput = row.getResultByName("input");
         fixedURL = row.getResultByName("url_fixed");
         finalCompleteValue = row.getResultByName("url");
-        autofilledType = UrlbarUtils.isOriginUrl(finalCompleteValue)
+        autofilledType = lazy.UrlbarShared.isOriginUrl(finalCompleteValue)
           ? "adaptive_origin"
           : "adaptive_url";
         break;
@@ -1199,7 +1192,7 @@ export class UrlbarProviderAutofill extends UrlbarProvider {
    *   The fallback origin result, or null if no fallback is appropriate.
    */
   async _getFallbackOriginResult(conn, autofillUrl) {
-    if (UrlbarUtils.isOriginUrl(autofillUrl)) {
+    if (lazy.UrlbarShared.isOriginUrl(autofillUrl)) {
       return null;
     }
 

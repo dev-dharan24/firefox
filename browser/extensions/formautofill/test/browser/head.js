@@ -926,7 +926,8 @@ async function clickDoorhangerButton(buttonType, index = 0) {
     info("expecting notification popup show up");
     await dropdownPromise;
 
-    button = notification.querySelectorAll("menuitem")[index];
+    // Only look in the dropmarker popup; some doorhangers have other menus too.
+    button = notification.menupopup.querySelectorAll("menuitem")[index];
     if (notification.menupopup.isNativeMenu) {
       notification.menupopup.activateItem(button);
     } else {
@@ -962,6 +963,10 @@ async function clickAddressDoorhangerButton(buttonType, subType) {
     await clickDoorhangerButton(buttonType);
     return;
   }
+
+  // The doorhanger's strings are applied asynchronously. An untranslated label
+  // has an empty rect, so the synthesized click would land on its container.
+  await notification.ownerDocument.l10n.translateFragment(notification);
 
   EventUtils.synthesizeMouseAtCenter(button, {});
 }

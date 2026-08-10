@@ -1538,6 +1538,107 @@ add_atomic_task(async function test_historyResults_rehydrates_pool() {
   );
 });
 
+function makeCitations() {
+  return [
+    { url: "https://example.com/1", title: "Source 1", hasFavicon: true },
+    { url: "https://example.com/2", title: "Source 2" },
+  ];
+}
+
+function makeStrippedCitations() {
+  return [
+    { url: "https://example.com/1", title: "Source 1" },
+    { url: "https://example.com/2", title: "Source 2" },
+  ];
+}
+
+add_atomic_task(async function test_citations_insert_roundTrip() {
+  const conversation = new ChatConversation({});
+  conversation.title = "citations INSERT";
+  conversation.addUserMessage("Search the web", "https://example.com/", 0);
+  conversation.addAssistantMessage("text", "Here is what I found:");
+
+  const assistant = conversation.messages.at(-1);
+  assistant.citations = makeCitations();
+
+  await gChatStore.updateConversation(conversation);
+  const reloaded = await gChatStore.findConversationById(conversation.id);
+  const reloadedAssistant = reloaded.messages.find(m => m.id === assistant.id);
+
+  Assert.ok(
+    reloadedAssistant,
+    "Reloaded conversation contains the assistant message"
+  );
+  Assert.deepEqual(
+    reloadedAssistant.citations,
+    makeStrippedCitations(),
+    "citations roundTrip through the INSERT path without resolved assets"
+  );
+});
+
+add_atomic_task(async function test_citations_update_roundTrip() {
+  const conversation = new ChatConversation({});
+  conversation.addUserMessage("Search the web", "https://example.com/", 0);
+  conversation.addAssistantMessage("text", "Searching...");
+
+  const assistant = conversation.messages.at(-1);
+  await gChatStore.updateConversation(conversation);
+
+  assistant.citations = makeCitations();
+  await gChatStore.updateConversation(conversation);
+
+  const reloaded = await gChatStore.findConversationById(conversation.id);
+  const reloadedAssistant = reloaded.messages.find(m => m.id === assistant.id);
+
+  Assert.deepEqual(
+    reloadedAssistant.citations,
+    makeStrippedCitations(),
+    "citations snapshot persisted through the ON CONFLICT UPDATE branch"
+  );
+});
+
+add_atomic_task(async function test_citations_empty_roundTrip() {
+  const conversation = new ChatConversation({});
+  conversation.addUserMessage("Just a message", "https://example.com/", 0);
+  conversation.addAssistantMessage("text", "Just a reply");
+
+  const assistantId = conversation.messages.at(-1).id;
+  await gChatStore.updateConversation(conversation);
+  const reloaded = await gChatStore.findConversationById(conversation.id);
+
+  Assert.deepEqual(
+    reloaded.messages.find(m => m.id === assistantId).citations,
+    [],
+    "Messages without citations reload as an empty array"
+  );
+});
+
+add_atomic_task(async function test_citations_rehydrates_pool() {
+  const conversation = new ChatConversation({});
+  conversation.addUserMessage("Search the web", "https://example.com/", 0);
+  conversation.addAssistantMessage("text", "Here is what I found:");
+
+  const assistant = conversation.messages.at(-1);
+  assistant.citations = makeCitations();
+  await gChatStore.updateConversation(conversation);
+
+  const reloaded = await gChatStore.findConversationById(conversation.id);
+
+  // The snapshot only covers URLs read this turn
+  Assert.deepEqual(
+    reloaded.getCitationsSnapshot(),
+    [],
+    "A reloaded conversation has no pending citations of its own"
+  );
+
+  reloaded.addCitations([{ url: "https://example.com/1" }]);
+  Assert.deepEqual(
+    reloaded.getCitationsSnapshot(),
+    [{ url: "https://example.com/1", title: "Source 1" }],
+    "The pool rehydrated from message snapshots, so the title carries forward"
+  );
+});
+
 add_atomic_task(
   async function test_updateLLMTelemetryRecord_creates_unprocessed_row() {
     const conversation = new ChatConversation({});

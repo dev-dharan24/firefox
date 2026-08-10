@@ -1682,7 +1682,7 @@ bool js::SyncDisposalClosure(JSContext* cx, unsigned argc, JS::Value* vp) {
   }
 
   // Step 1.b.ii.1.f. Return promiseCapability.[[Promise]].
-  args.rval().set(JS::ObjectValue(*promiseCapability));
+  args.rval().setObject(*promiseCapability);
   return true;
 }
 
@@ -1764,7 +1764,7 @@ bool js::AddDisposableResourceToCapability(JSContext* cx,
     }
     asyncWrapper->initExtendedSlot(uint8_t(SyncDisposalClosureSlots::Method),
                                    method);
-    disposeMethod.set(JS::ObjectValue(*asyncWrapper));
+    disposeMethod.setObject(*asyncWrapper);
   } else {
     disposeMethod.set(method);
   }
@@ -4314,9 +4314,15 @@ bool MOZ_NEVER_INLINE JS_HAZ_JSNATIVE_CALLER js::Interpret(JSContext* cx,
     }
 
     CASE(AfterYield) {
-      // AbstractGeneratorObject::resume takes care of setting the frame's
-      // debuggee flag.
+      // InterpreterFrame::initCallFrame (or initExecuteFrame for module
+      // frames) takes care of setting the frame's debuggee flag.
       MOZ_ASSERT_IF(REGS.fp()->script()->isDebuggee(), REGS.fp()->isDebuggee());
+
+#ifdef DEBUG
+      // The generator must be marked as running.
+      auto& genObj = REGS.sp[-2].toObject().as<AbstractGeneratorObject>();
+      MOZ_ASSERT(genObj.isRunning());
+#endif
 
       // Clear the isResumingGenerator flag so the frame is treated as an
       // ordinary running frame from now on.

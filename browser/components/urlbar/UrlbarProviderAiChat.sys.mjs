@@ -184,14 +184,25 @@ export class UrlbarProviderAiChat extends UrlbarProvider {
     /** @type {AISmartBarParent} */
     let actor;
     if (queryContext.sapName == "urlbar") {
-      let browser = await this.#getSidebarBrowser(win);
-      if (win.closed) {
-        return;
+      let selectedBrowser = win.gBrowser?.selectedBrowser;
+      if (
+        selectedBrowser &&
+        lazy.AIWindow.isAIWindowNewTabPage(selectedBrowser.currentURI)
+      ) {
+        actor =
+          selectedBrowser.browsingContext?.currentWindowGlobal?.getActor(
+            "AISmartBar"
+          );
+      } else {
+        let browser = await this.#getSidebarBrowser(win);
+        if (win.closed) {
+          return;
+        }
+        actor =
+          browser.browsingContext?.currentWindowGlobal?.getActor("AISmartBar");
       }
-      actor =
-        browser.browsingContext?.currentWindowGlobal.getActor("AISmartBar");
     } else {
-      actor = win.browsingContext?.currentWindowGlobal.getActor("AISmartBar");
+      actor = win.browsingContext?.currentWindowGlobal?.getActor("AISmartBar");
     }
     if (!actor) {
       this.logger.error("AISmartBar actor not found");

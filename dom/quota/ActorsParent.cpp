@@ -2434,16 +2434,13 @@ void QuotaManager::RecordShutdownStep(const Maybe<Client::Type> aClientType,
     mQuotaManagerShutdownSteps.Append(stepString + "\n"_ns);
   }
 
-#ifdef DEBUG
-  // XXX Probably this isn't the mechanism that should be used here.
+  if (QM_LOG_TEST()) {
+    const nsAutoCString clientTypeString =
+        aClientType ? Client::TypeToText(*aClientType)
+                    : nsAutoCString("quota manager"_ns);
 
-  NS_DebugBreak(
-      NS_DEBUG_WARNING,
-      nsAutoCString(aClientType ? Client::TypeToText(*aClientType)
-                                : "quota manager"_ns + " shutdown step"_ns)
-          .get(),
-      stepString.get(), __FILE__, __LINE__);
-#endif
+    QM_LOG(("%s shutdown step: %s", clientTypeString.get(), stepString.get()));
+  }
 }
 
 void QuotaManager::Shutdown() {
@@ -8219,8 +8216,12 @@ std::pair<uint64_t, uint64_t> QuotaManager::GetUsageAndLimitForEstimate(
             RefPtr<OriginInfo> originInfo =
                 groupInfo->LockedGetOriginInfo(aOriginMetadata.mOrigin);
 
+            // A persisted origin is exempt from group-limit eviction and is
+            // bound by the global temporary storage limit instead, so it
+            // reports its own origin usage against that limit.
             if (originInfo && originInfo->LockedPersisted()) {
-              return std::pair(mTemporaryStorageUsage, mTemporaryStorageLimit);
+              return std::pair(originInfo->LockedUsage(),
+                               mTemporaryStorageLimit);
             }
           }
 

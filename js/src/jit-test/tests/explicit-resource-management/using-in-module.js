@@ -8,7 +8,7 @@ using x = {
 }
 `);
 
-moduleLink(m);
+moduleLoadAndLink(m);
 moduleEvaluate(m);
 
 assertEq(globalThis.called, true);

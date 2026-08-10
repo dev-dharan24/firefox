@@ -26,26 +26,16 @@ class DurationObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto YEARS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(0);
-  static constexpr auto MONTHS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(1);
-  static constexpr auto WEEKS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(2);
-  static constexpr auto DAYS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(3);
-  static constexpr auto HOURS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(4);
-  static constexpr auto MINUTES_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(5);
-  static constexpr auto SECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(6);
-  static constexpr auto MILLISECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(7);
-  static constexpr auto MICROSECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(8);
-  static constexpr auto NANOSECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(9);
+  JS_DEFINE_TYPED_SLOT(0, YEARS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(1, MONTHS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(2, WEEKS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(3, DAYS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(4, HOURS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(5, MINUTES_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(6, SECONDS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(7, MILLISECONDS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(8, MICROSECONDS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(9, NANOSECONDS_SLOT, Double, Int32);
   static constexpr uint32_t SLOT_COUNT = 10;
 
   double years() const { return getFixedSlotTyped(YEARS_SLOT).toNumber(); }

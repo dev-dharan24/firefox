@@ -106,6 +106,27 @@ add_task(async function testClustering() {
   }
 });
 
+add_task(async function testAgglomerativeClustering() {
+  for (const test_id of CLUSTERING_TEST_IDS) {
+    const rawEmbeddings = await fetchFile(
+      HOST_PREFIX,
+      `${test_id}_embeddings.tsv`
+    );
+    const embeddings = parseTsvEmbeddings(rawEmbeddings);
+    const rawLabels = await fetchFile(HOST_PREFIX, `${test_id}_labels.tsv`);
+    const labels = parseTsvStructured(rawLabels);
+    const score = await getGroupScore(
+      CLUSTER_METHODS.AGGLOMERATIVE,
+      null,
+      labels,
+      embeddings,
+      1
+    );
+    info(`AGGLOMERATIVE Rand score for ${test_id}: ${score}`);
+    Assert.greater(score, 0.5, `HAC clustering ok for dataset ${test_id}`);
+  }
+});
+
 add_task(function testGroupCohesion() {
   const mk = embeddings =>
     new ClusterRepresentation({

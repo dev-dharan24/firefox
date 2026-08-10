@@ -11,7 +11,7 @@ namespace js {
 
 class BooleanObject : public NativeObject {
   /* Stores this Boolean object's [[PrimitiveValue]]. */
-  static constexpr auto PRIMITIVE_VALUE_SLOT = TypedSlot<ValueType::Boolean>(0);
+  JS_DEFINE_TYPED_SLOT(0, PRIMITIVE_VALUE_SLOT, Boolean);
 
   static const ClassSpec classSpec_;
 

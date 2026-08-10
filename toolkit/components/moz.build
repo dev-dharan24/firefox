@@ -28,7 +28,6 @@ DIRS += [
     "certviewer",
     "cleardata",
     "clearsitedata",
-    "cookiebanners",
     "commandlines",
     "content-classifier",
     "content-classifier/content_classifier_engine",
@@ -126,7 +125,7 @@ DIRS += ["autocomplete", "printingui", "satchel", "captivedetect"]
 if CONFIG["OS_TARGET"] != "Android":
     DIRS += ["terminator"]
 
-if CONFIG["MOZ_UPDATE_AGENT"]:
+if CONFIG["MOZ_BACKGROUNDTASKS"] and CONFIG["OS_TARGET"] in ("WINNT", "Darwin"):
     DIRS += ["taskscheduler"]
 
 DIRS += ["build"]

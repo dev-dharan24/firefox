@@ -11,8 +11,11 @@ import mozilla.components.concept.engine.ipprotection.IPProtectionHandler
 import mozilla.components.concept.engine.ipprotection.ServiceState
 import mozilla.components.feature.ipprotection.store.state.AccountStatus
 import mozilla.components.feature.ipprotection.store.state.Authorized
+import mozilla.components.feature.ipprotection.store.state.Country
 import mozilla.components.feature.ipprotection.store.state.IPProtectionState
+import mozilla.components.feature.ipprotection.store.state.LocationState
 import mozilla.components.feature.ipprotection.store.state.ProxyStatus
+import mozilla.components.feature.ipprotection.store.state.Recommended
 import mozilla.components.feature.ipprotection.store.state.Uninitialized
 
 @Suppress("CognitiveComplexMethod", "LongMethod", "ForbiddenSuppress")
@@ -55,7 +58,7 @@ internal fun iPProtectionReducer(
         // update with the service being READY, before EngineState updates itself with the new
         // account status.
         val newAccountStatus = if (action.info.serviceState == ServiceState.Ready &&
-            state.accountState.status != AccountStatus.Uninitialized
+            state.accountState.status != AccountStatus.NoAccount
         ) {
             AccountStatus.EnrolledAndEntitled
         } else {
@@ -86,7 +89,14 @@ internal fun iPProtectionReducer(
     }
 
     is IPProtectionAction.CountryListChanged -> {
-        state.copy(countries = action.countries)
+        state.copy(
+            locationState = LocationState(
+                selectedLocation = state.locationState.selectedLocation,
+                locations = listOf(Recommended()) + action.countries.map {
+                    Country(countryCode = it.code, available = it.available)
+                },
+            ),
+        )
     }
 
    is IPProtectionAction.AccountStateChanged -> {
@@ -126,10 +136,12 @@ internal fun iPProtectionReducer(
 
                 // We need to authenticate first because we haven't done so before or
                 // our account is in a wonky state.
-                if (status == AccountStatus.NeedsAuthentication ||
+                val requiresAuthentication = status == AccountStatus.NeedsAuthentication ||
                     status == AccountStatus.Uninitialized ||
-                    status == AccountStatus.WarmingUp
-                ) {
+                    status == AccountStatus.WarmingUp ||
+                    status == AccountStatus.NoAccount
+
+                if (requiresAuthentication) {
                     return state.copy(
                         accountState = state.accountState.copy(
                             status = AccountStatus.RequestingAuthentication,
@@ -205,6 +217,14 @@ internal fun iPProtectionReducer(
         }
     }
 
+    is IPProtectionAction.LocationChanged -> state.copy(
+        activate = if (state.proxyStatus == Authorized.Active) true else null,
+        locationState = LocationState(
+            selectedLocation = action.location,
+            locations = state.locationState.locations,
+        ),
+    )
+
     is InternalAction -> internalReducer(state, action)
 }
 
@@ -231,6 +251,7 @@ internal fun internalReducer(
             AccountStatus.EnrolledAndEntitled,
                 -> state
 
+            AccountStatus.Uninitialized,
             AccountStatus.WarmingUp,
             AccountStatus.NeedsAuthentication,
             AccountStatus.NeedsAuthorization,
@@ -249,7 +270,7 @@ internal fun internalReducer(
                 )
             }
 
-            AccountStatus.Uninitialized -> state.clearProfileData(action)
+            AccountStatus.NoAccount -> state.clearProfileData(action)
         }
     }
 
@@ -282,6 +303,7 @@ internal fun internalReducer(
             AccountStatus.AwaitingAuthentication,
             AccountStatus.WarmingUp,
             AccountStatus.Uninitialized,
+            AccountStatus.NoAccount,
                 -> {
                 AccountStatus.NeedsAuthentication
             }

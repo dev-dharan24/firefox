@@ -154,7 +154,7 @@ class DocGroup final {
 
   DocGroupKey mKey;
 
-  nsTArray<Document*> mDocuments;
+  nsTHashSet<Document*> mDocuments;
   RefPtr<mozilla::dom::CustomElementReactionsStack> mReactionsStack;
   nsTArray<RefPtr<HTMLSlotElement>> mSignalSlotList;
   RefPtr<BrowsingContextGroup> mBrowsingContextGroup;

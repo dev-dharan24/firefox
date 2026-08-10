@@ -129,12 +129,18 @@ macro_rules! declare_data_stores {
                 updates: InternerUpdates,
                 profile: &mut TransactionProfile,
             ) {
+                let mut insertions = 0;
+                let mut removals = 0;
                 $(
-                    self.$name.apply_updates(
+                    let (added, removed) = self.$name.apply_updates(
                         updates.$name,
                         profile,
                     );
+                    insertions += added;
+                    removals += removed;
                 )+
+                profile.set(profiler::INTERN_INSERTIONS, insertions);
+                profile.set(profiler::INTERN_REMOVALS, removals);
             }
 
             /// Fill in any data store slots that are missing relative to the
@@ -160,7 +166,7 @@ impl DataStores {
     pub fn get_local_prim_rect(
         &self,
         prim_instance: &PrimitiveInstance,
-        snapped_local_rect: LayoutRect,
+        snapped_pattern_rect: LayoutRect,
         pictures: &[PictureInstance],
         surfaces: &[SurfaceInfo],
     ) -> LayoutRect {
@@ -179,7 +185,7 @@ impl DataStores {
                     }
                 }
             }
-            _ => snapped_local_rect,
+            _ => snapped_pattern_rect,
         }
     }
 
@@ -190,7 +196,7 @@ impl DataStores {
     pub fn get_local_prim_coverage_rect(
         &self,
         prim_instance: &PrimitiveInstance,
-        snapped_local_rect: LayoutRect,
+        snapped_pattern_rect: LayoutRect,
         pictures: &[PictureInstance],
         surfaces: &[SurfaceInfo],
     ) -> LayoutRect {
@@ -209,7 +215,7 @@ impl DataStores {
                     }
                 }
             }
-            _ => snapped_local_rect,
+            _ => snapped_pattern_rect,
         }
     }
 

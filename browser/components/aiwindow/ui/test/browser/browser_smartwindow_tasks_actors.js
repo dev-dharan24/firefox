@@ -153,6 +153,7 @@ add_task(async function test_smartwindow_tasks_monitor_operations() {
           hour: 9,
           minute: 0,
         },
+        source: "test",
       }
     );
 
@@ -182,11 +183,15 @@ add_task(async function test_smartwindow_tasks_monitor_operations() {
     );
 
     // Clean up the created monitor to avoid affecting other tests
+    // Skip confirmation dialog in tests
     const deleteResult = await actor.sendQuery(
       "SmartWindowTasks:DeleteMonitor",
-      { id: newMonitor.id }
+      { id: newMonitor.id, skipConfirmation: true }
     );
+
     Assert.ok(deleteResult.success, "Should delete monitor successfully");
+    Assert.ok(deleteResult.deleted, "Monitor should be deleted");
+    Assert.ok(!deleteResult.cancelled, "Deletion should not be cancelled");
 
     // Verify cleanup
     const finalResult = await actor.sendQuery(
@@ -249,6 +254,7 @@ add_task(async function test_smartwindow_tasks_pause_monitor() {
           hour: 9,
           minute: 0,
         },
+        source: "test",
       }
     );
 
@@ -319,10 +325,12 @@ add_task(async function test_smartwindow_tasks_pause_monitor() {
     );
 
     // Clean up the created monitor
+    // Skip confirmation dialog in tests
     const deleteResult = await actor.sendQuery(
       "SmartWindowTasks:DeleteMonitor",
-      { id: monitorId }
+      { id: monitorId, skipConfirmation: true }
     );
+
     Assert.ok(deleteResult.success, "Should delete monitor successfully");
   });
 
@@ -375,6 +383,7 @@ add_task(async function test_smartwindow_tasks_run_monitor() {
           hour: 9,
           minute: 0,
         },
+        source: "test",
       }
     );
 
@@ -402,10 +411,12 @@ add_task(async function test_smartwindow_tasks_run_monitor() {
     }
 
     // Clean up the created monitor
+    // Skip confirmation dialog in tests
     const deleteResult = await actor.sendQuery(
       "SmartWindowTasks:DeleteMonitor",
-      { id: monitorId }
+      { id: monitorId, skipConfirmation: true }
     );
+
     Assert.ok(deleteResult.success, "Should delete monitor successfully");
   });
 

@@ -6055,17 +6055,6 @@ static bool ClearModules(JSContext* cx, unsigned argc, Value* vp) {
   return true;
 }
 
-static bool ModuleLoadResolved(JSContext* cx, HandleValue hostDefined) {
-  RootedObject module(cx, &hostDefined.toObject());
-  return JS::ModuleLink(cx, module);
-}
-
-static bool ModuleLoadRejected(JSContext* cx, HandleValue hostDefined,
-                               HandleValue error) {
-  JS_SetPendingException(cx, error);
-  return false;
-}
-
 static bool ModuleLink(JSContext* cx, unsigned argc, Value* vp) {
   CallArgs args = CallArgsFromVp(argc, vp);
 
@@ -6090,8 +6079,87 @@ static bool ModuleLink(JSContext* cx, unsigned argc, Value* vp) {
 
   Rooted<ModuleObject*> module(cx,
                                object->as<ShellModuleObjectWrapper>().get());
+  if (!JS::ModuleLink(cx, module)) {
+    return false;
+  }
 
-  // TODO: Bug 1968904: Update ModuleLink
+  args.rval().setUndefined();
+  return true;
+}
+
+static bool ModuleLoadRequestedModules(JSContext* cx, unsigned argc,
+                                       Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+
+  if (args.length() != 1 || !args[0].isObject()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_INVALID_ARGS,
+                              "loadRequestedModules");
+    return false;
+  }
+
+  RootedObject object(cx, UncheckedUnwrap(&args[0].toObject()));
+  if (!object->is<ShellModuleObjectWrapper>()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_INVALID_ARGS,
+                              "loadRequestedModules");
+    return false;
+  }
+
+  if (!CheckModuleFunctionAllowed(cx)) {
+    return false;
+  }
+
+  {
+    AutoRealm ar(cx, object);
+
+    Rooted<ModuleObject*> module(cx,
+                                 object->as<ShellModuleObjectWrapper>().get());
+    RootedValue hostDefined(cx, ObjectValue(*module));
+    RootedObject promise(cx);
+    if (!JS::LoadRequestedModules(cx, module, hostDefined, &promise)) {
+      return false;
+    }
+
+    args.rval().setObject(*promise);
+  }
+
+  return JS_WrapValue(cx, args.rval());
+}
+
+static bool ModuleLoadResolved(JSContext* cx, HandleValue hostDefined) {
+  RootedObject module(cx, &hostDefined.toObject());
+  return JS::ModuleLink(cx, module);
+}
+
+static bool ModuleLoadRejected(JSContext* cx, HandleValue hostDefined,
+                               HandleValue error) {
+  JS_SetPendingException(cx, error);
+  return false;
+}
+
+static bool ModuleLoadAndLink(JSContext* cx, unsigned argc, Value* vp) {
+  CallArgs args = CallArgsFromVp(argc, vp);
+
+  if (args.length() != 1 || !args[0].isObject()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_INVALID_ARGS,
+                              "moduleLoadAndLink");
+    return false;
+  }
+
+  RootedObject object(cx, UncheckedUnwrap(&args[0].toObject()));
+  if (!object->is<ShellModuleObjectWrapper>()) {
+    JS_ReportErrorNumberASCII(cx, GetErrorMessage, nullptr, JSMSG_INVALID_ARGS,
+                              "moduleLoadAndLink");
+    return false;
+  }
+
+  if (!CheckModuleFunctionAllowed(cx)) {
+    return false;
+  }
+
+  AutoRealm ar(cx, object);
+
+  Rooted<ModuleObject*> module(cx,
+                               object->as<ShellModuleObjectWrapper>().get());
   RootedValue hostDefined(cx, ObjectValue(*module));
   if (!JS::LoadRequestedModules(cx, module, hostDefined, ModuleLoadResolved,
                                 ModuleLoadRejected)) {
@@ -6224,7 +6292,8 @@ static bool GetModuleEnvironmentValue(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-  if (module->hadEvaluationError()) {
+  if (module->hadEvaluationError() ||
+      module->status() == ModuleStatus::Unlinked) {
     JS_ReportErrorASCII(cx, "Module environment unavailable");
     return false;
   }
@@ -10164,7 +10233,19 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 
     JS_FN_HELP("moduleLink", ModuleLink, 1, 0,
 "moduleLink(moduleOjbect)",
-"  Link a module graph, performing the spec's Link method."),
+"  Link a module graph, performing the spec's Link method. The requested\n"
+"  modules must already have been loaded with loadRequestedModules()."),
+
+    JS_FN_HELP("loadRequestedModules", ModuleLoadRequestedModules, 1, 0,
+"loadRequestedModules(moduleOjbect)",
+"  Load a module graph, performing the spec's LoadRequestedModules method, and\n"
+"  return its promise."),
+
+    JS_FN_HELP("moduleLoadAndLink", ModuleLoadAndLink, 1, 0,
+"moduleLoadAndLink(moduleOjbect)",
+"  Load a module graph and link it, performing the spec's LoadRequestedModules\n"
+"  method followed by Link.  The shell's module loader is synchronous, so this\n"
+"  reports loading failures by throwing rather than by returning a promise."),
 
     JS_FN_HELP("moduleEvaluate", ModuleEvaluate, 1, 0,
 "moduleEvaluate(moduleOjbect)",
@@ -11548,7 +11629,7 @@ static bool dom_genericGetter(JSContext* cx, unsigned argc, JS::Value* vp) {
 
   RootedObject obj(cx, &args.thisv().toObject());
   if (JS::GetClass(obj) != &dom_class) {
-    args.rval().set(UndefinedValue());
+    args.rval().setUndefined();
     return true;
   }
 
@@ -11570,7 +11651,7 @@ static bool dom_genericSetter(JSContext* cx, unsigned argc, JS::Value* vp) {
 
   RootedObject obj(cx, &args.thisv().toObject());
   if (JS::GetClass(obj) != &dom_class) {
-    args.rval().set(UndefinedValue());
+    args.rval().setUndefined();
     return true;
   }
 
@@ -11582,7 +11663,7 @@ static bool dom_genericSetter(JSContext* cx, unsigned argc, JS::Value* vp) {
   if (!setter(cx, obj, val.toPrivate(), JSJitSetterCallArgs(args))) {
     return false;
   }
-  args.rval().set(UndefinedValue());
+  args.rval().setUndefined();
   return true;
 }
 
@@ -11596,7 +11677,7 @@ static bool dom_genericMethod(JSContext* cx, unsigned argc, JS::Value* vp) {
 
   RootedObject obj(cx, &args.thisv().toObject());
   if (JS::GetClass(obj) != &dom_class) {
-    args.rval().set(UndefinedValue());
+    args.rval().setUndefined();
     return true;
   }
 
@@ -13414,9 +13495,8 @@ bool SetGlobalOptionsPreJSInit(const OptionParser& op) {
   if (op.getBoolOption("enable-joint-iteration")) {
     JS::Prefs::setAtStartup_experimental_joint_iteration(true);
   }
-
   if (op.getBoolOption("enable-legacy-regexp")) {
-    JS::Prefs::set_experimental_legacy_regexp(true);
+    JS::Prefs::setAtStartup_experimental_legacy_regexp(true);
   }
   if (op.getBoolOption("enable-import-text")) {
     JS::Prefs::set_experimental_import_text(true);

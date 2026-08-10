@@ -48,6 +48,13 @@ enum class SelectorStrategy {
     UIAUTOMATOR2_BY_RES,
     UIAUTOMATOR2_BY_CLASS,
     UIAUTOMATOR2_BY_TEXT,
+
+    // UiObject2 content-description-contains. Prefer this over UIAUTOMATOR_WITH_DESCRIPTION_CONTAINS
+    // for a control whose reaction is SLOW (opens a dialog, starts a download): UiObject (the
+    // UiSelector strategies) clicks via clickAndSync, which reports failure when no window update
+    // lands inside its ~5.5s budget — a slow-but-successful click is then indistinguishable from a
+    // missed one. UiObject2.click() just injects the gesture and lets the caller do the waiting.
+    UIAUTOMATOR2_BY_DESCRIPTION_CONTAINS,
     UIAUTOMATOR_WITH_TEXT_CONTAINS,
     UIAUTOMATOR_WITH_RES_ID,
     UIAUTOMATOR_WITH_COMPOSE_TAG,
@@ -65,4 +72,16 @@ enum class SelectorStrategy {
     // but additionally asserts the element's text equals secondaryValue. Mirrors the legacy
     // MatcherHelper.itemWithResIdAndText applied to a web form field (e.g. verifying an autofilled value).
     UIAUTOMATOR_WITH_WEB_ID_AND_TEXT,
+
+    // Raw (un-prefixed) res-id whose text merely CONTAINS secondaryValue. Needed for system-UI ids that
+    // are not ours to prefix — e.g. a notification action button is "android:id/action0", so the
+    // packageName-prefixing done by UIAUTOMATOR_WITH_RES_ID_CONTAINING_TEXT would look for
+    // "org.mozilla.fenix.debug:id/action0" and never match. Mirrors the legacy
+    // NotificationRobot.downloadSystemNotificationButton.
+    UIAUTOMATOR_WITH_RAW_RES_ID_CONTAINING_TEXT,
+
+    // Raw (un-prefixed) res-id on its own, for a system-UI container that carries no text of its own —
+    // e.g. the notification shade's scroller. UIAUTOMATOR_WITH_RAW_RES_ID_CONTAINING_TEXT cannot stand in
+    // for this: its text criterion is not optional at the UiSelector level.
+    UIAUTOMATOR_WITH_RAW_RES_ID,
 }

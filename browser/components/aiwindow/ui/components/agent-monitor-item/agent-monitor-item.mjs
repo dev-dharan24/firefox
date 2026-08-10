@@ -21,18 +21,28 @@ const SCHEDULE_TYPES = Object.freeze({
 });
 
 const SCHEDULE_ICON = "chrome://browser/skin/calendar-24.svg";
+const TIME_ICON = "chrome://browser/skin/history-20.svg";
 const MAX_WATCH_URLS = 5;
 
 // Check times offered by the create card in 30-minute increments
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const hour24 = Math.floor(i / 2);
   const minute = i % 2 ? 30 : 0;
-  const period = hour24 < 12 ? "AM" : "PM";
-  const hour12 = hour24 % 12 || 12;
-  const mm = String(minute).padStart(2, "0");
+
+  // Create a date object with the specific time for localization
+  const timeDate = new Date();
+  timeDate.setHours(hour24, minute, 0, 0);
+
+  // Use toLocaleTimeString for locale-appropriate formatting
+  const label = timeDate.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
   return {
-    value: `${String(hour24).padStart(2, "0")}:${mm}`,
-    label: `${hour12}:${mm} ${period}`,
+    value: `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    label,
   };
 });
 
@@ -89,6 +99,7 @@ const WEEKDAYS = [
  * @property {"display"|"create"} mode - Which card layout to render
  * @property {boolean} expanded - Whether the display card is expanded
  * @property {boolean} editing - Whether the editable condition field is shown
+ * @property {boolean} showLastResult - Whether to show the last check result chip (defaults to false)
  */
 export class AgentMonitorItem extends MozLitElement {
   static properties = {
@@ -96,6 +107,7 @@ export class AgentMonitorItem extends MozLitElement {
     mode: { type: String, reflect: true },
     expanded: { type: Boolean, reflect: true },
     editing: { type: Boolean, reflect: true },
+    showLastResult: { type: Boolean },
     checkFrequency: { type: String, state: true },
     scheduleTime: { type: String, state: true },
     scheduleWeekday: { type: Number, state: true },
@@ -111,6 +123,7 @@ export class AgentMonitorItem extends MozLitElement {
     this.mode = "display";
     this.expanded = false;
     this.editing = false;
+    this.showLastResult = false;
     this.checkFrequency = SCHEDULE_TYPES.DAILY;
     this.scheduleTime = "09:00";
     this.scheduleWeekday = 1;
@@ -127,7 +140,7 @@ export class AgentMonitorItem extends MozLitElement {
     if (changed.has("agent")) {
       this.#draftName = null;
 
-      const { watchUrls, url, condition } = this.agent ?? {};
+      const { watchUrls, url, condition, expanded } = this.agent ?? {};
       let seededUrls = [];
       if (watchUrls?.length) {
         seededUrls = watchUrls;
@@ -138,6 +151,11 @@ export class AgentMonitorItem extends MozLitElement {
       this.alertDescription = condition ?? "";
       this.pendingUrl = "";
       this.pendingUrlError = "";
+
+      // If the agent data includes an expanded state, apply it
+      if (expanded !== undefined) {
+        this.expanded = expanded;
+      }
 
       // Seed the schedule fields from an existing monitor so edit mode reflects
       // its current scheduled
@@ -173,7 +191,7 @@ export class AgentMonitorItem extends MozLitElement {
   }
 
   #onCardClick(e) {
-    if (e.target.closest("button")) {
+    if (e.target.closest("button, moz-button")) {
       return;
     }
     this.#onToggle(e);
@@ -186,10 +204,6 @@ export class AgentMonitorItem extends MozLitElement {
 
   #onEditToggle() {
     this.editing = !this.editing;
-
-    if (this.editing) {
-      this.expanded = true;
-    }
     this.#dispatch("agent-monitor-item:edit-toggle", { editing: this.editing });
   }
 
@@ -287,6 +301,7 @@ export class AgentMonitorItem extends MozLitElement {
     if (!this.#isFormValid) {
       return;
     }
+    const isCreateMode = this.mode === "create";
     this.#dispatch("agent-monitor-item:submit", {
       mode: this.mode,
       id: this.agent?.id,
@@ -298,7 +313,13 @@ export class AgentMonitorItem extends MozLitElement {
         time: this.scheduleTime,
         weekday: this.scheduleWeekday,
       },
+      autoExpandAndCheck: isCreateMode, // Signal to expand and check after creation
     });
+    // Exit edit mode after saving
+    if (this.editing) {
+      this.editing = false;
+      this.#dispatch("agent-monitor-item:edit-toggle", { editing: false });
+    }
   }
 
   #renderStatusChip() {
@@ -311,15 +332,31 @@ export class AgentMonitorItem extends MozLitElement {
         ? "ai-tasks-alert-status-watching"
         : "ai-tasks-alert-status-paused";
 
-    return html`<span
-      class="status-chip ${statusInfo.kind}"
-      data-kind=${statusInfo.kind}
-      data-l10n-id=${l10nId}
-    >
-      ${statusInfo.kind === "watching"
-        ? html`<span class="pulse-dot"></span>`
+    return html`
+      <span
+        class="status-chip ${statusInfo.kind}"
+        data-kind=${statusInfo.kind}
+        data-l10n-id=${l10nId}
+      >
+      </span>
+    `;
+  }
+
+  #renderLastCheckedCondition() {
+    // Get the most recent history item (first in array) to show its condition status
+    const historyItems = this.agent?.history ?? [];
+    const mostRecentItem = historyItems.length ? historyItems[0] : null;
+
+    return html`
+      ${mostRecentItem && mostRecentItem.conditionMet !== undefined
+        ? html`<span
+            class="status-chip"
+            data-l10n-id=${mostRecentItem.conditionMet
+              ? "ai-tasks-alert-last-result-met"
+              : "ai-tasks-alert-last-result-not-met"}
+          ></span>`
         : nothing}
-    </span>`;
+    `;
   }
 
   #renderConditionField() {
@@ -409,36 +446,108 @@ export class AgentMonitorItem extends MozLitElement {
     `;
   }
 
+  #transformHistoryItem(item) {
+    // Only process items with valid timestamps
+    if (!item.checkedAt) {
+      return null;
+    }
+
+    // Format the timestamp
+    const date = new Date(item.checkedAt);
+    const displayTime =
+      date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }) +
+      " - " +
+      date.toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+    // Handle error status
+    if (item.status === "error") {
+      return {
+        when: displayTime,
+        conditionMet: undefined,
+        note: item.resultExplanation || "",
+        noteL10nId: "smartwindow-agent-monitor-history-check-failed",
+        status: item.status,
+        low: true,
+      };
+    }
+
+    // Handle conditionMet cases
+    if (item.conditionMet) {
+      return {
+        when: displayTime,
+        conditionMet: true,
+        note: item.resultExplanation || "",
+        status: item.status,
+        low: false,
+      };
+    }
+
+    // Handle condition not met
+    return {
+      when: displayTime,
+      conditionMet: false,
+      note: item.resultExplanation || "",
+      noteL10nId: item.resultExplanation
+        ? null
+        : "smartwindow-agent-monitor-history-no-match",
+      status: item.status,
+      low: true,
+    };
+  }
+
   #renderHistory() {
     const historyItems = this.agent?.history ?? [];
     if (!historyItems.length) {
       return nothing;
     }
+
     return html`
       <div
         class="section-toggle"
         data-l10n-id="ai-tasks-alert-change-history"
       ></div>
       <div class="history">
-        ${historyItems.map(
-          item =>
-            html`<div class="history-item ${item.low ? "low" : ""}">
-              <span class="when">${item.when}</span>
-              ${item.oldValue
-                ? html`<span class="old-value">${item.oldValue}</span
-                    ><span class="arrow">→</span>`
-                : nothing}
-              ${item.newValue
-                ? html`<span class="new-value">${item.newValue}</span>`
-                : nothing}
-              ${item.flag
-                ? html`<span class="history-flag">${item.flag}</span>`
-                : nothing}
-              ${item.note
-                ? html`<span class="deemphasized">${item.note}</span>`
-                : nothing}
-            </div>`
-        )}
+        ${historyItems.map(item => {
+          const normalizedItem = this.#transformHistoryItem(item);
+
+          // Skip items without valid timestamps
+          if (!normalizedItem) {
+            return nothing;
+          }
+
+          return html`<div class="history-item">
+            <span class="when">${normalizedItem.when}</span>
+            ${normalizedItem.conditionMet !== undefined
+              ? html`<span
+                  class="condition-badge ${normalizedItem.conditionMet
+                    ? "met"
+                    : "not-met"}"
+                  data-l10n-id=${normalizedItem.conditionMet
+                    ? "ai-tasks-alert-condition-met"
+                    : "ai-tasks-alert-condition-not-met"}
+                ></span>`
+              : html`<span>-</span>`}
+            ${(() => {
+              if (normalizedItem.noteL10nId) {
+                return html`<span
+                  data-l10n-id=${normalizedItem.noteL10nId}
+                ></span>`;
+              }
+              if (normalizedItem.note) {
+                return html`<span>${normalizedItem.note}</span>`;
+              }
+              return nothing;
+            })()}
+          </div>`;
+        })}
       </div>
     `;
   }
@@ -493,13 +602,13 @@ export class AgentMonitorItem extends MozLitElement {
       }
     }
 
-    return html`<div class="monitor-row">
+    return html`
       <span
         class="val"
         data-l10n-id="ai-tasks-alert-schedule-daily-at"
         data-l10n-args=${JSON.stringify({ time: timeDate.getTime() })}
       ></span>
-    </div>`;
+    `;
   }
 
   #renderTimeField() {
@@ -518,7 +627,7 @@ export class AgentMonitorItem extends MozLitElement {
             html`<moz-option
               value=${opt.value}
               label=${opt.label}
-              iconsrc=${SCHEDULE_ICON}
+              iconsrc=${TIME_ICON}
             ></moz-option>`
         )}
       </moz-select>
@@ -605,7 +714,7 @@ export class AgentMonitorItem extends MozLitElement {
                 ? html`<span class="from">${agent.valueMeta}</span>`
                 : nothing}
             </div>`
-          : html``}
+          : nothing}
         ${this.#renderConditionField()} ${this.#renderPagesField()}
         ${this.#renderScheduler()}
 
@@ -631,21 +740,14 @@ export class AgentMonitorItem extends MozLitElement {
   #renderDisplay() {
     const agent = this.agent ?? {};
     return html`
-      <div class="monitor-card chatcard live" @click=${this.#onCardClick}>
+      <div class="monitor-card chatcard" @click=${this.#onCardClick}>
         <div class="monitor-card-head">
+          ${this.#renderStatusChip()}
           <span class="monitor-card-title"
             ><span class="monitor-card-name">${agent.monitorName}</span></span
           >
           <span class="spacer"></span>
-          ${this.#renderStatusChip()}
-          <button
-            type="button"
-            class="page-action edit"
-            data-l10n-id="ai-tasks-alert-edit-button"
-            data-l10n-attrs="title,aria-label"
-            aria-pressed=${this.editing}
-            @click=${this.#onEditToggle}
-          ></button>
+          ${this.showLastResult ? this.#renderLastCheckedCondition() : nothing}
           <button
             type="button"
             class="chev"
@@ -675,60 +777,92 @@ export class AgentMonitorItem extends MozLitElement {
         ${this.editing
           ? html`${this.#renderConditionField()} ${this.#renderPagesField()}
             ${this.#renderScheduler()}`
-          : html`<div class="monitor-row">
-                <span class="val">${agent.condition}</span>
+          : html`<div class="task-section">
+                <div
+                  class="task-header"
+                  data-l10n-id="ai-tasks-alert-the-alert"
+                ></div>
+                <div class="task-content">${agent.condition}</div>
               </div>
-              ${this.#renderScheduleSummary()}
               ${agent.watchUrls?.length
-                ? html`<div class="monitor-row">
-                    <span
-                      class="val"
-                      data-l10n-id="ai-tasks-alert-watching-pages"
-                      data-l10n-args=${JSON.stringify({
-                        count: agent.watchUrls.length,
-                      })}
-                    ></span>
+                ? html`<div class="url-section">
+                    <div
+                      class="section-toggle"
+                      data-l10n-id="ai-tasks-alert-on-this-page"
+                    ></div>
+                    <div class="url-chips">
+                      ${agent.watchUrls.map(
+                        url =>
+                          html`<span class="url-chip"
+                            >${this.#displayUrl(url)}</span
+                          >`
+                      )}
+                    </div>
                   </div>`
-                : nothing} `}
-        ${this.#renderHistory()}
+                : nothing}
+              <div class="monitor-row">${this.#renderScheduleSummary()}</div>`}
+        ${!this.editing ? this.#renderHistory() : nothing}
+
         <div class="monitor-card-actions">
-          <button
-            type="button"
-            class="page-action danger delete"
-            data-l10n-id="ai-tasks-alert-delete-button"
-            data-l10n-attrs="title,aria-label"
-            @click=${() =>
-              this.#dispatch("agent-monitor-item:delete", { id: agent.id })}
-          ></button>
-          <moz-button
-            type="default"
-            @click=${() =>
-              this.#dispatch("agent-monitor-item:pause", {
-                id: agent.id,
-                paused: agent.status?.kind !== "paused",
-              })}
-            data-l10n-id=${agent.status?.kind === "paused"
-              ? "ai-tasks-alert-resume-button"
-              : "ai-tasks-alert-pause-button"}
-            data-l10n-attrs="label"
-          ></moz-button>
+          ${!this.editing
+            ? html`<moz-button
+                  type="default"
+                  @click=${this.#onEditToggle}
+                  data-l10n-id="ai-tasks-alert-edit-button"
+                  data-l10n-attrs="label"
+                ></moz-button>
+                <moz-button
+                  type="default"
+                  @click=${() => {
+                    const isPaused = agent.status?.kind === "paused";
+                    this.#dispatch("agent-monitor-item:pause", {
+                      id: agent.id,
+                      paused: !isPaused,
+                    });
+                  }}
+                  data-l10n-id=${agent.status?.kind === "paused"
+                    ? "ai-tasks-alert-resume-button"
+                    : "ai-tasks-alert-pause-button"}
+                  data-l10n-attrs="label"
+                ></moz-button>
+                <moz-button
+                  type="default"
+                  @click=${() =>
+                    this.#dispatch("agent-monitor-item:check-now", {
+                      id: agent.id,
+                    })}
+                  data-l10n-id="ai-tasks-alert-check-now-button"
+                  data-l10n-attrs="label"
+                ></moz-button>`
+            : nothing}
+
           <span class="spacer"></span>
           ${this.editing
-            ? html`<moz-button
-                type="primary"
-                @click=${this.#onSubmit}
-                data-l10n-id="ai-tasks-alert-save-button"
-                data-l10n-attrs="label"
-              ></moz-button>`
-            : html`<moz-button
-                type="default"
-                @click=${() =>
-                  this.#dispatch("agent-monitor-item:check-now", {
-                    id: agent.id,
-                  })}
-                data-l10n-id="ai-tasks-alert-check-now-button"
-                data-l10n-attrs="label"
-              ></moz-button>`}
+            ? html` <moz-button
+                  type="secondary"
+                  @click=${this.#onEditToggle}
+                  data-l10n-id="ai-tasks-alert-cancel-button"
+                  data-l10n-attrs="label"
+                ></moz-button
+                ><moz-button
+                  type="primary"
+                  @click=${this.#onSubmit}
+                  data-l10n-id="ai-tasks-alert-save-button"
+                  data-l10n-attrs="label"
+                ></moz-button>`
+            : html`
+                <moz-button
+                  class="delete-button"
+                  type="icon"
+                  iconsrc="chrome://global/skin/icons/delete.svg"
+                  data-l10n-id="ai-tasks-alert-delete-button"
+                  data-l10n-attrs="aria-label"
+                  @click=${() =>
+                    this.#dispatch("agent-monitor-item:delete", {
+                      id: agent.id,
+                    })}
+                ></moz-button>
+              `}
         </div>
       </div>
     `;

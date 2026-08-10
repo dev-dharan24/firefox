@@ -40,7 +40,7 @@ const PREFS = {
   REPORTER_ENABLED: "ui.new-webcompat-reporter.enabled",
   REASON: "ui.new-webcompat-reporter.reason-dropdown",
   SCREENSHOTS: "ui.new-webcompat-reporter.screenshots.enabled",
-  SEND_MORE_INFO: "ui.new-webcompat-reporter.send-more-info-link",
+  SHOW_SEND_MORE_INFO: "ui.new-webcompat-reporter.show-send-more-info-link",
   NEW_REPORT_ENDPOINT: "ui.new-webcompat-reporter.new-report-endpoint",
   TOUCH_EVENTS: "dom.w3c_touch_events.enabled",
   USE_ACCESSIBILITY_THEME: "ui.useAccessibilityTheme",
@@ -391,11 +391,11 @@ function ensureReportBrokenSitePreffedOff() {
 }
 
 function enableSendMoreInfo() {
-  Services.prefs.setBoolPref(PREFS.SEND_MORE_INFO, true);
+  Services.prefs.setBoolPref(PREFS.SHOW_SEND_MORE_INFO, true);
 }
 
 function disableSendMoreInfo() {
-  Services.prefs.setBoolPref(PREFS.SEND_MORE_INFO, false);
+  Services.prefs.setBoolPref(PREFS.SHOW_SEND_MORE_INFO, false);
 }
 
 function enableScreenshots() {

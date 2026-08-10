@@ -2785,6 +2785,9 @@ class FunctionCompiler {
     // type. Each phi node has an operand for each of the returns of the
     // inlined function.
     for (uint32_t i = 0; i < calleeFuncType.results().length(); i++) {
+      if (!mirGen().ensureBallast()) {
+        return false;
+      }
       MPhi* phi = MPhi::New(alloc(), calleeFuncType.results()[i].toMIRType());
       if (!phi || !phi->reserveLength(calleeReturns.length())) {
         return false;
@@ -3653,6 +3656,9 @@ class FunctionCompiler {
     // Eagerly create a phi for all loop params. setLoopBackedge will remove
     // any that were not necessary.
     for (size_t i = 0; i < paramCount; i++) {
+      if (!mirGen().ensureBallast()) {
+        return false;
+      }
       MPhi* phi = MPhi::New(alloc(), loopParams[i]->type());
       if (!phi) {
         return false;

@@ -56,6 +56,7 @@
 #include "nsIClassifiedChannel.h"
 #include "nsIContentSniffer.h"
 #include "nsIDownloader.h"
+#include "nsIEnterprisePolicies.h"
 #include "nsIFileProtocolHandler.h"
 #include "nsIFileStreams.h"
 #include "nsIFileURL.h"
@@ -2948,8 +2949,9 @@ bool handleResultFunc(bool aAllowSTS, bool aIsStsHost) {
   return false;
 };
 // That function is a helper function of NS_ShouldSecureUpgrade to check if
-// CSP upgrade-insecure-requests, Mixed content auto upgrading or HTTPs-Only/-
-// First should upgrade the given request.
+// CSP upgrade-insecure-requests, Mixed content auto upgrading, HTTPs-Only/-
+// First, or an enterprise HttpsOnly site policy should upgrade the given
+// request.
 static bool ShouldSecureUpgradeNoHSTS(nsIURI* aURI, nsILoadInfo* aLoadInfo) {
   // 2. CSP upgrade-insecure-requests
   if (aLoadInfo->GetUpgradeInsecureRequests()) {
@@ -3023,6 +3025,48 @@ static bool ShouldSecureUpgradeNoHSTS(nsIURI* aURI, nsILoadInfo* aLoadInfo) {
     }
     return true;
   }
+
+  // 5. Enterprise policy HttpsOnly site policy.
+  // Use the top-level document URI so that subresources inherit the same
+  // HTTPS policy as their containing page rather than being checked
+  // independently.
+  const bool isHttpsOnlyByPolicy = [&]() {
+    nsCOMPtr<nsIEnterprisePolicies> policyService =
+        do_GetService("@mozilla.org/enterprisepolicies;1");
+    if (!policyService) {
+      return false;
+    }
+
+    int16_t status;
+    if (NS_FAILED(policyService->GetStatus(&status)) ||
+        status != nsIEnterprisePolicies::ACTIVE) {
+      return false;
+    }
+
+    nsCOMPtr<nsIURI> policyCheckURI;
+    nsCOMPtr<nsIPrincipal> topLevelPrincipal =
+        aLoadInfo->GetTopLevelPrincipal();
+
+    if (topLevelPrincipal) {
+      nsAutoCString siteOrigin;
+      if (NS_FAILED(topLevelPrincipal->GetSiteOriginNoSuffix(siteOrigin)) ||
+          NS_FAILED(NS_NewURI(getter_AddRefs(policyCheckURI), siteOrigin))) {
+        return false;
+      }
+    } else {
+      policyCheckURI = aURI;
+    }
+
+    bool isHttpAllowed = true;
+    return NS_SUCCEEDED(policyService->IsAllowedForURI(
+               "http"_ns, policyCheckURI, &isHttpAllowed)) &&
+           !isHttpAllowed;
+  }();
+
+  if (isHttpsOnlyByPolicy) {
+    return true;
+  }
+
   return false;
 }
 
@@ -3031,7 +3075,8 @@ static bool ShouldSecureUpgradeNoHSTS(nsIURI* aURI, nsILoadInfo* aLoadInfo) {
 // 2. CSP upgrade-insecure-requests
 // 3. Mixed content auto upgrading
 // 4. Https-Only / first
-// (5. Https RR - will be checked in nsHttpChannel)
+// 5. Enterprise policy HttpsOnly
+// (6. Https RR - will be checked in nsHttpChannel)
 nsresult NS_ShouldSecureUpgrade(
     nsIURI* aURI, nsILoadInfo* aLoadInfo, nsIPrincipal* aChannelResultPrincipal,
     bool aAllowSTS, const OriginAttributes& aOriginAttributes,

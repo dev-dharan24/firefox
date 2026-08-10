@@ -326,6 +326,15 @@ body,
   fill: var(--theme-icon-dimmed-color);
 }
 
+@media -moz-pref("browser.nova.enabled") {
+  /* In Nova, remove the inline-end padding and margin so the close button aligns with
+     the ones in .notificationBox */
+  #toolbar #exit-button {
+    margin-inline-end: 0;
+    padding-inline-end: 0;
+  }
+}
+
 /**
  * Viewport Dimension Input
  */

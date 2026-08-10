@@ -113,6 +113,8 @@
     <string name="preferences_debug_settings_add_shortcuts_improvement" translatable="false">Enable Add Shortcuts Improvement</string>
     <!-- Label for enabling Merino Client -->
     <string name="preferences_debug_settings_merino_client" translatable="false">Enable Merino Client</string>
+    <!-- Label for enabling Homepage Weather Widget -->
+    <string name="preferences_debug_settings_homepage_weather_widget" translatable="false">Enable Homepage Weather Widget</string>
     <!-- Label for enabling Mozilla Ads Client for Sponsored Stories -->
     <string name="preferences_debug_settings_ads_client_for_stories" translatable="false">Enable Ads Client for Stories</string>
     <!-- Label for enabling the custom tab extension -->
@@ -187,6 +189,9 @@
     <string name="preferences_debug_settings_ip_protection" translatable="false">Enable IP Protection UI</string>
     <string name="preferences_debug_settings_ip_protection_locations" translatable="false">Enable IP Protection Locations selection</string>
 
+    <!-- Label for forcing GPI (Google Play Integrity) authentication for IPProtection through secret settings -->
+    <string name="preferences_debug_settings_ip_protection_use_gpi" translatable="false">Use GPI authentication for IP Protection (requires restart)</string>
+
     <!-- Label for enabling LNA blocking -->
     <string name="preferences_debug_settings_enable_lna_blocking" translatable="false">Enable LNA request blocking</string>
     <string name="preferences_debug_settings_enable_lna_tracker_blocking" translatable="false">Enable LNA tracker blocking</string>
@@ -198,6 +203,9 @@
 
     <!-- Label for enabling uninstall survey in secret settings. -->
     <string name="preferences_debug_settings_uninstall_survey">Enable Uninstall Survey</string>
+
+    <!-- Label for showing the OLED theme option in secret settings. -->
+    <string name="preferences_debug_settings_oled_theme" translatable="false">Show OLED Theme option</string>
 
     <!-- Label for the defaults section and reset action in secret settings. -->
     <string name="preferences_debug_settings_reset_defaults" translatable="false">Reset switches to defaults</string>
@@ -396,6 +404,9 @@
 
     <!-- Summary for secret settings that are still being developed and not recommended to be enabled by nightly users. -->
     <string name="preferences_debug_settings_development_phase_summary" translatable="false">In development phase</string>
+
+    <!-- Label for the Customize Home preference to show the weather widget on the homepage. -->
+    <string name="customize_toggle_weather" translatable="false">Weather</string>
 
     <!--  Firefox brand name  -->
     <string name="app_name_firefox" tools:ignore="BrandUsage">Firefox</string>

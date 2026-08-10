@@ -77,10 +77,6 @@ const DISALLOWED = {
     flag: Ci.nsIWebBrowserChrome.CHROME_WINDOW_RESIZE,
     defaults_to: true,
   },
-  status: {
-    flag: Ci.nsIWebBrowserChrome.CHROME_STATUSBAR,
-    defaults_to: true,
-  },
 };
 
 // This magic value of 2 means that by default, when content tries

@@ -11,9 +11,14 @@
     <issue id="PluralsCandidate" severity="ignore" />
     <issue id="StringFormatCount" severity="ignore" />
     <issue id="TypographyEllipsis" severity="ignore" />
-    <issue id="ExtraTranslation" severity="warning" />
+    <issue id="ExtraTranslation" severity="ignore" />
     <issue id="Untranslatable" severity="ignore" />
     <issue id="MissingDefaultResource" severity="ignore" />
+    <!-- Localized strings are removed by the l10n import a while after the string is removed from the
+         default strings.xml, so the localized files temporarily hold strings nothing references. -->
+    <issue id="UnusedResources" severity="error">
+        <ignore path="**/values-*/strings.xml" />
+    </issue>
     <issue id="BlankString" severity="error">
         <ignore path="**/values/preference_keys.xml" />
     </issue>

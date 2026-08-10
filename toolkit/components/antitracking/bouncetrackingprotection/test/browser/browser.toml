@@ -24,6 +24,10 @@ support-files = [
 
 ["browser_bouncetracking_fpi.js"]
 
+["browser_bouncetracking_iframe_initiated_load.js"]
+
+["browser_bouncetracking_iframe_popup.js"]
+
 ["browser_bouncetracking_ipv6.js"]
 
 ["browser_bouncetracking_mode_prefs.js"]

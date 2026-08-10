@@ -826,7 +826,8 @@ function Widgets() {
         {novaEnabled && (
           <moz-button
             className="widgets-row-toggle"
-            type="default"
+            type="muted"
+            size="small"
             aria-expanded={rowExpanded}
             aria-controls="widgets-container"
             onClick={handleToggleRowExpandedClick}

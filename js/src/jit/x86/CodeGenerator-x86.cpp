@@ -419,9 +419,11 @@ void CodeGenerator::visitWasmCompareExchangeI64(LWasmCompareExchangeI64* ins) {
   MOZ_ASSERT(ToOutRegister64(ins).low == eax);
   MOZ_ASSERT(ToOutRegister64(ins).high == edx);
 
-  masm.append(ins->mir()->access(), wasm::TrapMachineInsn::Atomic,
-              FaultingCodeOffset(masm.currentOffset()));
+  auto before = masm.currentOffset();
   masm.lock_cmpxchg8b(edx, eax, ecx, ebx, srcAddr);
+  auto after = masm.currentOffset();
+  masm.appendAndVerify(ins->mir()->access(), wasm::TrapMachineInsn::Atomic,
+                       FaultingCodeRange(before, after));
 }
 
 template <typename T>
@@ -443,9 +445,12 @@ void CodeGeneratorX86::emitWasmStoreOrExchangeAtomicI64(
 
   Label again;
   masm.bind(&again);
-  masm.append(access, wasm::TrapMachineInsn::Atomic,
-              FaultingCodeOffset(masm.currentOffset()));
+  auto before = masm.currentOffset();
   masm.lock_cmpxchg8b(edx, eax, ecx, ebx, srcAddr);
+  auto after = masm.currentOffset();
+  masm.appendAndVerify(access, wasm::TrapMachineInsn::Atomic,
+                       FaultingCodeRange(before, after));
+
   masm.j(Assembler::Condition::NonZero, &again);
 }
 

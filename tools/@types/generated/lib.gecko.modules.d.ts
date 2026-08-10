@@ -1127,7 +1127,6 @@ export interface Modules {
   "resource://gre/modules/components-utils/JsonSchemaValidator.sys.mjs": typeof import("resource://gre/modules/components-utils/JsonSchemaValidator.sys.mjs"),
   "resource://gre/modules/components-utils/Sampling.sys.mjs": typeof import("resource://gre/modules/components-utils/Sampling.sys.mjs"),
   "resource://gre/modules/components-utils/WindowsInstallsInfo.sys.mjs": typeof import("resource://gre/modules/components-utils/WindowsInstallsInfo.sys.mjs"),
-  "resource://gre/modules/components-utils/WindowsVersionInfo.sys.mjs": typeof import("resource://gre/modules/components-utils/WindowsVersionInfo.sys.mjs"),
   "resource://gre/modules/components-utils/mozjexl.sys.mjs": typeof import("resource://gre/modules/components-utils/mozjexl.sys.mjs"),
   "resource://gre/modules/contentrelevancy/private/InputUtils.sys.mjs": typeof import("resource://gre/modules/contentrelevancy/private/InputUtils.sys.mjs"),
   "resource://gre/modules/ctypes.sys.mjs": typeof import("resource://gre/modules/ctypes.sys.mjs"),

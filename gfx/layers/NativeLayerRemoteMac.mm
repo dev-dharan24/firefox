@@ -248,7 +248,8 @@ void NativeLayerRemoteMac::FlushDirtyLayerInfoToCommandQueue() {
     }
 
     mCommandQueue->AppendCommand(mozilla::layers::CommandChangedSurface(
-        ID, std::move(surfacePort), IsDRM(), IsHDR(), GetSize()));
+        ID, mozilla::layers::SurfaceTransferMacOS(std::move(surfacePort)),
+        IsDRM(), IsHDR(), GetSize()));
     mDirtyChangedSurface = false;
   }
 

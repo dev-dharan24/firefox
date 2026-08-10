@@ -44,6 +44,7 @@ task-defaults:
         toolchain:
             - linux64-sccache
             - terser
+            - newtab-node-modules
 
 tasks:
     linux64-shippable/opt:

@@ -1108,7 +1108,7 @@ static bool CyclicModuleResolveExport(JSContext* cx,
         //                 starResolution.[[BindingName]]), return AMBIGUOUS.
         if (binding->module() != starResolution->module() ||
             binding->bindingName() != starResolution->bindingName()) {
-          result.set(StringValue(cx->names().ambiguous));
+          result.setString(cx->names().ambiguous);
 
           if (errorInfoOut) {
             ModuleObject* module1 = starResolution->module();
@@ -1583,6 +1583,20 @@ static bool ModuleInitializeEnvironment(JSContext* cx,
   return ModuleObject::instantiateFunctionDeclarations(cx, module);
 }
 
+// Reject the load with the pending exception instead of unwinding out of it.
+// ContinueModuleLoading sets state.[[IsLoading]] to false and calls the state
+// record's rejected handler.
+static bool FailWithPendingException(
+    JSContext* cx, Handle<GraphLoadingStateRecordObject*> state) {
+  JS::ExceptionStack exnStack(cx);
+  if (!JS::StealPendingExceptionStack(cx, &exnStack)) {
+    return false;
+  }
+
+  return ContinueModuleLoading(cx, state, nullptr, ImportPhase::Evaluation,
+                               exnStack.exception());
+}
+
 static bool FailWithUnsupportedAttributeException(
     JSContext* cx, Handle<GraphLoadingStateRecordObject*> state,
     Handle<ModuleRequestObject*> moduleRequest) {
@@ -1593,13 +1607,7 @@ static bool FailWithUnsupportedAttributeException(
       JSMSG_IMPORT_ATTRIBUTES_STATIC_IMPORT_UNSUPPORTED_ATTRIBUTE,
       printableKey ? printableKey.get() : "");
 
-  JS::ExceptionStack exnStack(cx);
-  if (!JS::StealPendingExceptionStack(cx, &exnStack)) {
-    return false;
-  }
-
-  return ContinueModuleLoading(cx, state, nullptr, ImportPhase::Evaluation,
-                               exnStack.exception());
+  return FailWithPendingException(cx, state);
 }
 
 // https://tc39.es/proposal-source-phase-imports/#sec-InnerModuleLoading
@@ -1614,7 +1622,7 @@ static bool InnerModuleLoading(JSContext* cx,
 
   AutoCheckRecursionLimit recursion(cx);
   if (!recursion.check(cx)) {
-    return false;
+    return FailWithPendingException(cx, state);
   }
 
   // Step 1. Assert: state.[[IsLoading]] is true.
@@ -1628,7 +1636,7 @@ static bool InnerModuleLoading(JSContext* cx,
     // Step 2.a. Append module to state.[[Visited]].
     if (!state->visited().putNew(module)) {
       ReportOutOfMemory(cx);
-      return false;
+      return FailWithPendingException(cx, state);
     }
 
     // Step 2.b. Let requestedModulesCount be the number of elements in
@@ -1783,7 +1791,15 @@ bool js::LoadRequestedModules(JSContext* cx, Handle<ModuleObject*> module,
   }
 
   // Step 4. Perform InnerModuleLoading(state, module, recursive-load).
-  return InnerModuleLoading(cx, state, module, LoadType::RecursiveLoad);
+  if (!InnerModuleLoading(cx, state, module, LoadType::RecursiveLoad)) {
+    // Returning false means the load was abandoned without notifying the
+    // caller through |resolved| or |rejected|, i.e. an OOM occurred.
+    // Deactivate the state.[[IsLoading]] accordingly.
+    state->setIsLoading(false);
+    return false;
+  }
+
+  return true;
 }
 
 bool js::LoadRequestedModules(JSContext* cx, Handle<ModuleObject*> module,
@@ -1815,6 +1831,10 @@ bool js::LoadRequestedModules(JSContext* cx, Handle<ModuleObject*> module,
 
   // Step 4. Perform InnerModuleLoading(state, module, recursive-load).
   if (!InnerModuleLoading(cx, state, module, LoadType::RecursiveLoad)) {
+    // Returning false means the load was abandoned without notifying the
+    // caller through |resolved| or |rejected|, i.e. an OOM occurred.
+    // Deactivate the state.[[IsLoading]] accordingly.
+    state->setIsLoading(false);
     return false;
   }
 
@@ -2040,7 +2060,7 @@ static bool SyntheticModuleEvaluate(JSContext* cx,
   }
 
   // 16. Return pc.[[Promise]].
-  rval.set(ObjectValue(*resultPromise));
+  rval.setObject(*resultPromise);
   return true;
 }
 
@@ -2080,7 +2100,7 @@ static bool ModuleEvaluate(JSContext* cx, Handle<ModuleObject*> moduleArg,
   // Step 4. If module.[[TopLevelCapability]] is not empty, then:
   if (module->hasTopLevelCapability()) {
     // Step 4.a. Return module.[[TopLevelCapability]].[[Promise]].
-    result.set(ObjectValue(*module->topLevelCapability()));
+    result.setObject(*module->topLevelCapability());
     return true;
   }
 
@@ -2158,7 +2178,7 @@ static bool ModuleEvaluate(JSContext* cx, Handle<ModuleObject*> moduleArg,
   }
 
   // Step 11. Return capability.[[Promise]].
-  result.set(ObjectValue(*capability));
+  result.setObject(*capability);
   return true;
 }
 

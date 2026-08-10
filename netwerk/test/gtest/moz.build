@@ -97,6 +97,10 @@ if CONFIG["OS_TARGET"] == "WINNT":
 if CONFIG["TARGET_OS"] == "OSX":
     LOCAL_INCLUDES += ["/netwerk/system/mac"]
 
+# android includes only
+if CONFIG["MOZ_WIDGET_TOOLKIT"] == "android":
+    LOCAL_INCLUDES += ["/netwerk/system/android"]
+
 include("/ipc/chromium/chromium-config.mozbuild")
 
 FINAL_LIBRARY = "xul-gtest"

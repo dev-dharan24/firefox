@@ -7,6 +7,7 @@
 
 #include "mozilla/Assertions.h"
 #include "mozilla/Attributes.h"
+#include "mozilla/MacroForEach.h"
 #include "mozilla/Maybe.h"
 
 #include <algorithm>
@@ -709,18 +710,20 @@ class TypedSlot {
  private:
   uint32_t index_;
 
-  static consteval bool PackContainsDuplicate() {
-    for (ValueType target : {ValidTypes...}) {
-      // Count number of pack elements with value == target.
-      if ((size_t(ValidTypes == target) + ...) > 1) {
-        return true;
-      }
-    }
-
-    return false;
+  static consteval size_t CountOccurrencesInPack(ValueType target) {
+    return (size_t(ValidTypes == target) + ...);
   }
+
+  static consteval bool PackContainsDuplicate() {
+    return ((CountOccurrencesInPack(ValidTypes) > 1) || ...);
+  }
+
   static_assert(sizeof...(ValidTypes) != 0,
                 "TypedSlot constructed without any type specified");
+  // Double and Private are tagged identically. Ensure that a slot isn't
+  // declared as holding both.
+  static_assert(CountOccurrencesInPack(ValueType::Double) <= 1,
+                "TypedSlot contains multiple double-tagged types");
   static_assert(!PackContainsDuplicate(),
                 "TypedSlot contains duplicate type specifiers");
 
@@ -739,6 +742,12 @@ class TypedSlot {
   }
 #endif
 };
+
+#define JS_DEFINE_TYPED_SLOT_TYPE_(slotType) JS::ValueType::slotType
+
+#define JS_DEFINE_TYPED_SLOT(index, slotName, ...)                       \
+  static constexpr auto slotName = js::TypedSlot<MOZ_FOR_EACH_SEPARATED( \
+      JS_DEFINE_TYPED_SLOT_TYPE_, (, ), (), (__VA_ARGS__))>(index)
 
 namespace detail {
 template <class C>
@@ -1586,6 +1595,12 @@ class NativeObject : public JSObject {
   template <typename T>
   T* maybePtrFromReservedSlot(uint32_t slot) const {
     Value v = getReservedSlot(slot);
+    return v.isUndefined() ? nullptr : static_cast<T*>(v.toPrivate());
+  }
+
+  template <typename T, TypedSlotConcept TypedSlot>
+  T* maybePtrFromReservedSlotTyped(TypedSlot slot) const {
+    Value v = getReservedSlotTyped(slot);
     return v.isUndefined() ? nullptr : static_cast<T*>(v.toPrivate());
   }
 

@@ -44,6 +44,21 @@ add_task(async function test_help_panel_cloning() {
       continue;
     }
 
+    // When the Nova UI is enabled, the helpSwitchDevice menuitem is
+    // intentionally not cloned into the AppMenu Help subview; it is replaced
+    // there by a moz-promo element. That behavior is covered separately by
+    // browser_novaHelpSwitchDevicePromo.js, so skip it here.
+    if (
+      helpMenuPopupItem.id == "helpSwitchDevice" &&
+      Services.prefs.getBoolPref("browser.nova.enabled", false)
+    ) {
+      info(
+        "Skipping helpSwitchDevice: replaced by Nova promo " +
+          "(covered by browser_novaHelpSwitchDevicePromo.js)"
+      );
+      continue;
+    }
+
     let appMenuHelpId = "appMenu_" + helpMenuPopupItem.id;
     info(`Checking ${appMenuHelpId}`);
 

@@ -20,6 +20,7 @@ class GpuFenceMTLSharedEvent : public GpuFence {
 
   bool HasCompleted() override;
   bool ClientWait(TimeDuration aTimeout) override;
+  bool ServerWait(gl::GLContext* aGL, TimeDuration aTimeout) override;
 
  protected:
   GpuFenceMTLSharedEvent(void* aSharedEvent, const uint64_t aFenceValue);

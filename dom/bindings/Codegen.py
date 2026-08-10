@@ -18048,7 +18048,7 @@ class CGDictionary(CGThing):
                 if (!obj) {
                   return false;
                 }
-                rval.set(JS::ObjectValue(*obj));
+                rval.setObject(*obj);
 
                 """
             )

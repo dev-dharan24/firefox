@@ -175,6 +175,8 @@ enum JSValueType : uint8_t {
 namespace JS {
 enum class ValueType : uint8_t {
   Double = JSVAL_TYPE_DOUBLE,
+  // Alias for Double storing a non-GC pointer.
+  Private = JSVAL_TYPE_DOUBLE,
   Int32 = JSVAL_TYPE_INT32,
   Boolean = JSVAL_TYPE_BOOLEAN,
   Undefined = JSVAL_TYPE_UNDEFINED,

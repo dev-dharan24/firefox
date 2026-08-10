@@ -310,6 +310,11 @@ bool ModuleLoaderBase::FinishLoadingImportedModule(
   MOZ_ASSERT_IF(aRequest->IsDynamicImport(),
                 !aRequest->mLoader->HasDynamicImport(aRequest));
 
+  // This is the normal completion path, so the imports must have been loaded.
+  // Otherwise the promise of a dynamic import has already been rejected in
+  // OnLoadRequestedModulesRejected.
+  MOZ_ASSERT(!aRequest->IsErroredLoadingImports());
+
   Rooted<JSObject*> module(aCx);
   {
     ModuleScript* moduleScript = aRequest->mModuleScript;
@@ -1385,7 +1390,9 @@ void ModuleLoaderBase::StartFetchingModuleDependencies(
 
     Rooted<JSObject*> loadPromise(cx);
     result = LoadRequestedModules(cx, module, hostDefinedVal, &loadPromise);
-    AddPromiseReactions(cx, loadPromise, resolveFuncObj, rejectFuncObj);
+    if (result) {
+      AddPromiseReactions(cx, loadPromise, resolveFuncObj, rejectFuncObj);
+    }
   } else {
     result = LoadRequestedModules(cx, module, hostDefinedVal,
                                   OnLoadRequestedModulesResolved,
@@ -1481,6 +1488,10 @@ bool ModuleLoaderBase::OnLoadRequestedModulesRejected(
       FinishLoadingImportedModuleFailedWithPendingException(aCx, payload);
     }
     aRequest->SetErroredLoadingImports();
+
+    // The promise has been settled, so the import is done. The other error
+    // paths clear the import as well, see OnFetchFailed and Cancel.
+    aRequest->ClearImport();
   } else if (moduleScript && !error.isUndefined()) {
     LOG(
         ("ScriptLoadRequest (%p): LoadRequestedModules rejected: set error to "
@@ -1670,19 +1681,25 @@ bool ModuleLoaderBase::InstantiateModuleGraph(ModuleLoadRequest* aRequest) {
 }
 
 void ModuleLoaderBase::ProcessDynamicImport(ModuleLoadRequest* aRequest) {
+  MOZ_ASSERT(aRequest->IsDynamicImport());
+
+  // A request that failed to fetch or compile is processed in OnFetchFailed,
+  // and a request whose imports failed to load is processed in
+  // OnLoadRequestedModulesRejected. Both reject the promise of the dynamic
+  // import and clear the import, so there is nothing left to do here.
+  if (aRequest->IsErrored() || aRequest->IsErroredLoadingImports()) {
+    LOG(("ScriptLoadRequest (%p): ProcessDynamicImport, request has an error",
+         aRequest));
+    MOZ_ASSERT_IF(aRequest->IsErroredLoadingImports(),
+                  aRequest->mPayload.isUndefined());
+    return;
+  }
+
   AutoJSAPI jsapi;
   if (!jsapi.Init(GetGlobalObject())) {
     return;
   }
   JSContext* cx = jsapi.cx();
-  MOZ_ASSERT(aRequest->IsDynamicImport());
-
-  if (aRequest->IsErrored()) {
-    LOG(("ScriptLoadRequest (%p): ProcessDynamicImport, request has an error",
-         aRequest));
-    // The error is already processed in OnLoadRequestedModulesRejected.
-    return;
-  }
 
   LOG(("ScriptLoadRequest (%p): ProcessDynamicImport", aRequest));
   FinishLoadingImportedModule(cx, aRequest);

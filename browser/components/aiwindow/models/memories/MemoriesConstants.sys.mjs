@@ -102,7 +102,8 @@ export const INTENTS_LIST = [
  * Memory retrieval constants
  */
 export const DEFAULT_RELEVANT_MEMORIES_TOP_K = 5;
-export const DEFAULT_RELEVANT_MEMORIES_SIMILARITY_THRESHOLD = 0.22;
+export const DEFAULT_RELEVANT_MEMORIES_SIMILARITY_THRESHOLD = 0.04;
+export const DEFAULT_RELEVANT_MEMORIES_MESSAGE_COUNT = 3;
 
 // if generate memories is enabled. This is used by
 // - MemoriesScheduler

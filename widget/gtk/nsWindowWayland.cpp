@@ -2292,3 +2292,5 @@ bool nsWindowWayland::ApplyEnterLeaveMutterWorkaround() {
   }
   return false;
 }
+
+void nsWindowWayland::OnMapNative() { MaybeCreatePipResources(); }

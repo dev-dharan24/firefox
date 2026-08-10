@@ -112,7 +112,7 @@ wr::WrExternalImage RenderMacIOSurfaceTextureHost::Lock(uint8_t aChannelIndex,
     // This timeout matches the acquisition timeout for the keyed mutex
     // in the D3D11 texture host.
     AUTO_PROFILER_MARKER("Lock MacIOSurfaceTexture", GRAPHICS);
-    mGpuFence->ClientWait(TimeDuration::FromMilliseconds(10000));
+    mGpuFence->ServerWait(mGL, TimeDuration::FromMilliseconds(10000));
   } else {
     PROFILER_MARKER_UNTYPED("No GpuFence", GRAPHICS);
   }

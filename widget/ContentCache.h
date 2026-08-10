@@ -354,10 +354,8 @@ class ContentCacheInChild final : public ContentCache {
       const IMENotification::SelectionChangeDataBase& aSelectionChangeData);
 
  private:
-  // Query first character rect to use as a fallback if there are
-  // no selection ranges, etc.
-  bool QueryFirstCharFallbackRect(nsIWidget* aWidget,
-                                  LayoutDeviceIntRect& aCharRect) const;
+  bool QueryCharRect(nsIWidget* aWidget, uint32_t aOffset,
+                     LayoutDeviceIntRect& aCharRect) const;
   bool QueryCharRectArray(nsIWidget* aWidget, uint32_t aOffset,
                           uint32_t aLength, RectArray& aCharRectArray) const;
   bool CacheSelection(nsIWidget* aWidget,

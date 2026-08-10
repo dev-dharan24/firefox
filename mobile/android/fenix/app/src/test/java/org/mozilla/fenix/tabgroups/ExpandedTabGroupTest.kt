@@ -36,7 +36,7 @@ class ExpandedTabGroupTest {
         override val openingAnimationEnabled: Boolean = false
         override val tabGroupsEnabled: Boolean = true
         override val tabGroupsDragAndDropEnabled: Boolean = false
-        override val shareTabGroupEnabled: Boolean = true
+        override val ungroupTabGroupEnabled: Boolean = true
         override val tabGroupsOnboardingEnabled: Boolean = false
         override val tabGroupsLiveReorderEnabled: Boolean = false
     }
@@ -50,6 +50,7 @@ class ExpandedTabGroupTest {
                         ExpandedTabGroup(
                             group = fakeTabGroup(),
                             actions = expandedTabGroupActions(),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -57,8 +58,6 @@ class ExpandedTabGroupTest {
             }
         }
         composeTestRule.onNodeWithTag(TabsTrayTestTag.TAB_GROUP_BOTTOM_SHEET_ROOT)
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithTag(TabsTrayTestTag.BOTTOM_SHEET_SHARE_BUTTON)
             .assertIsDisplayed()
         composeTestRule.onNodeWithTag(TabsTrayTestTag.BOTTOM_SHEET_ADD_TAB_BUTTON)
             .assertIsDisplayed()
@@ -73,13 +72,16 @@ class ExpandedTabGroupTest {
     @Test
     fun verifyMenuItems() {
         composeTestRule.setContent {
-            FirefoxTheme(theme = Theme.Light) {
-                Surface {
-                    ExpandedTabGroup(
-                        group = fakeTabGroup(),
-                        actions = expandedTabGroupActions(),
-                        tabInteractionHandler = NoOpTabInteractionHandler,
-                    )
+            CompositionLocalProvider(LocalTabManagementFeatureHelper provides tabManagementFeatureHelper) {
+                FirefoxTheme(theme = Theme.Light) {
+                    Surface {
+                        ExpandedTabGroup(
+                            group = fakeTabGroup(),
+                            actions = expandedTabGroupActions(),
+                            displayTabsInGrid = true,
+                            tabInteractionHandler = NoOpTabInteractionHandler,
+                        )
+                    }
                 }
             }
         }
@@ -87,7 +89,52 @@ class ExpandedTabGroupTest {
             .performClick()
         composeTestRule.onNodeWithTag(TabsTrayTestTag.EDIT_TAB_GROUP).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TabsTrayTestTag.CLOSE_TAB_GROUP).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.UNGROUP_TAB_GROUP).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TabsTrayTestTag.DELETE_TAB_GROUP).assertIsDisplayed()
+    }
+
+    @Test
+    fun verifyGridView() {
+        val tab = createTab(url = "test tab")
+
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalUnderTest provides true) {
+                FirefoxTheme(theme = Theme.Light) {
+                    Surface {
+                        ExpandedTabGroup(
+                            group = fakeTabGroup(tabs = mutableListOf(tab)),
+                            actions = expandedTabGroupActions(),
+                            displayTabsInGrid = true,
+                            tabInteractionHandler = NoOpTabInteractionHandler,
+                        )
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.TAB_GRID).assertIsDisplayed()
+    }
+
+    @Test
+    fun verifyListView() {
+        val tab = createTab(url = "test tab")
+
+        composeTestRule.setContent {
+            CompositionLocalProvider(LocalUnderTest provides true) {
+                FirefoxTheme(theme = Theme.Light) {
+                    Surface {
+                        ExpandedTabGroup(
+                            group = fakeTabGroup(tabs = mutableListOf(tab)),
+                            actions = expandedTabGroupActions(),
+                            displayTabsInGrid = false,
+                            tabInteractionHandler = NoOpTabInteractionHandler,
+                        )
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithTag(TabsTrayTestTag.TAB_LIST).assertIsDisplayed()
     }
 
     @Test
@@ -104,6 +151,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onItemClick = { if (it == tab) itemClicked = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -131,6 +179,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onTabClose = { if (it == tab) itemClosed = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -158,6 +207,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onDeleteTabGroupClick = { deleteClicked = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -186,6 +236,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onEditTabGroupClick = { editClicked = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -214,6 +265,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onCloseTabGroupClick = { closeClicked = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -242,6 +294,7 @@ class ExpandedTabGroupTest {
                             actions = expandedTabGroupActions(
                                 onAddNewTabClick = { addNewTabClicked = true },
                             ),
+                            displayTabsInGrid = true,
                             tabInteractionHandler = NoOpTabInteractionHandler,
                         )
                     }
@@ -271,6 +324,7 @@ class ExpandedTabGroupTest {
         onEditTabGroupClick: () -> Unit = {},
         onCloseTabGroupClick: () -> Unit = {},
         onAddNewTabClick: (() -> Unit)? = {},
+        onShareTabGroupClick: () -> Unit = {},
     ) = ExpandedTabGroupActions(
         onItemClick = onItemClick,
         onTabClose = onTabClose,
@@ -278,5 +332,6 @@ class ExpandedTabGroupTest {
         onEditTabGroupClick = onEditTabGroupClick,
         onCloseTabGroupClick = onCloseTabGroupClick,
         onAddNewTabClick = onAddNewTabClick,
+        onShareTabGroupClick = onShareTabGroupClick,
     )
 }

@@ -40,6 +40,19 @@ function stateWithTrackers(trackersToday, sitesToday = 9) {
   };
 }
 
+function stateWithMessage(message, trackersToday = 87, sitesToday = 9) {
+  return {
+    ...mockState,
+    PrivacyWidget: {
+      ...INITIAL_STATE.PrivacyWidget,
+      initialized: true,
+      trackersToday,
+      sitesToday,
+      ...message,
+    },
+  };
+}
+
 function renderPrivacy(dispatch = jest.fn(), props = {}, state = mockState) {
   const { container, unmount } = render(
     <WrapWithProvider state={state}>
@@ -107,6 +120,34 @@ describe("Privacy widget", () => {
     expect(container.querySelector(".privacy-count")).toBeFalsy();
   });
 
+  it("leaves the empty state once the count climbs, even with a stale empty variant", () => {
+    // A SYSTEM_TICK refreshes trackersToday without touching `variant`, so a
+    // tab that opened at zero can carry variant "empty" with a non-zero count.
+    // trackersToday must win (Dré, jsx:82).
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({ variant: "empty", icon: "shield" }, 12)
+    );
+    expect(container.querySelector("article.privacy").className).not.toContain(
+      "is-empty"
+    );
+    expect(container.querySelector(".privacy-count-number").textContent).toBe(
+      "12"
+    );
+  });
+
+  it("uses the shield icon in the empty state, ignoring a stale decision icon", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({ variant: "blank", icon: "shieldCheck" }, 0)
+    );
+    const img = container.querySelector(".privacy-empty .privacy-image-icon");
+    expect(img.getAttribute("src")).toContain("widget-privacy-shield.svg");
+    expect(img.getAttribute("src")).not.toContain("shield-check");
+  });
+
   it("shows today's blocked-tracker count", () => {
     const { container } = renderPrivacy(jest.fn(), {}, stateWithTrackers(42));
     expect(container.querySelector(".privacy-count-number").textContent).toBe(
@@ -117,20 +158,27 @@ describe("Privacy widget", () => {
     );
   });
 
-  it("ceilings the count at 100+", () => {
-    const { container } = renderPrivacy(jest.fn(), {}, stateWithTrackers(250));
+  it("ceilings the readout at 999+ by default", () => {
+    const { container } = renderPrivacy(jest.fn(), {}, stateWithTrackers(1200));
     expect(container.querySelector(".privacy-count-number").textContent).toBe(
-      "100+"
+      "999+"
     );
   });
 
-  it("caps at the widgets.privacy.maxCount pref when set", () => {
+  it("shows the real count past the daily-cap threshold (no 100+ ceiling)", () => {
+    const { container } = renderPrivacy(jest.fn(), {}, stateWithTrackers(250));
+    expect(container.querySelector(".privacy-count-number").textContent).toBe(
+      "250"
+    );
+  });
+
+  it("caps at the widgets.privacy.maxDisplayCount pref when set", () => {
     const base = stateWithTrackers(75);
     const state = {
       ...base,
       Prefs: {
         ...base.Prefs,
-        values: { ...base.Prefs.values, "widgets.privacy.maxCount": 50 },
+        values: { ...base.Prefs.values, "widgets.privacy.maxDisplayCount": 50 },
       },
     };
     const { container } = renderPrivacy(jest.fn(), {}, state);
@@ -139,7 +187,7 @@ describe("Privacy widget", () => {
     );
   });
 
-  it("lets trainhopConfig.widgets.privacyMaxCount override the pref", () => {
+  it("lets trainhopConfig.widgets.privacyMaxDisplayCount override the pref", () => {
     const base = stateWithTrackers(75);
     const state = {
       ...base,
@@ -147,8 +195,8 @@ describe("Privacy widget", () => {
         ...base.Prefs,
         values: {
           ...base.Prefs.values,
-          "widgets.privacy.maxCount": 200,
-          trainhopConfig: { widgets: { privacyMaxCount: 50 } },
+          "widgets.privacy.maxDisplayCount": 200,
+          trainhopConfig: { widgets: { privacyMaxDisplayCount: 50 } },
         },
       },
     };
@@ -156,6 +204,26 @@ describe("Privacy widget", () => {
     // trainhop (50) wins over the pref (200): 75 > 50 caps to "50+".
     expect(container.querySelector(".privacy-count-number").textContent).toBe(
       "50+"
+    );
+  });
+
+  it("caps the readout to countCeiling+ on the daily-cap render", () => {
+    // The daily-cap decision carries countCeiling (100); the real count is 137
+    // but this one render shows "100+".
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage(
+        {
+          variant: "tip",
+          messageId: "newtab-privacy-message-daily-cap",
+          countCeiling: 100,
+        },
+        137
+      )
+    );
+    expect(container.querySelector(".privacy-count-number").textContent).toBe(
+      "100+"
     );
   });
 
@@ -185,5 +253,177 @@ describe("Privacy widget", () => {
     expect(label.getAttribute("data-l10n-args")).toBe(
       JSON.stringify({ count: 250 })
     );
+  });
+
+  it("renders the blank variant as count only (no tip, no divider)", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({ variant: "blank", icon: "shieldCheck" })
+    );
+    expect(container.querySelector(".privacy-count")).toBeTruthy();
+    expect(container.querySelector(".privacy-divider")).toBeFalsy();
+    expect(container.querySelector(".privacy-tip")).toBeFalsy();
+    expect(container.querySelector(".privacy-streak")).toBeFalsy();
+  });
+
+  it("renders a View protections CTA in the blank state (info-1 label)", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "blank",
+        icon: "shieldCheck",
+        cta: { type: "OPEN_ABOUT_PAGE", data: { args: "protections" } },
+      })
+    );
+    const button = container.querySelector(".privacy-cta");
+    expect(button).toBeTruthy();
+    expect(button.getAttribute("data-l10n-id")).toBe(
+      "newtab-privacy-message-info-1-cta"
+    );
+    // Still no tip/divider — it's the count-only layout plus the CTA.
+    expect(container.querySelector(".privacy-tip")).toBeFalsy();
+    expect(container.querySelector(".privacy-divider")).toBeFalsy();
+  });
+
+  it("renders the tip variant via its l10n id and mapped icon", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "tip",
+        messageId: "newtab-privacy-message-info-4",
+        icon: "planet",
+      })
+    );
+    expect(container.querySelector(".privacy-divider")).toBeTruthy();
+    const tip = container.querySelector(".privacy-tip-message");
+    expect(tip.getAttribute("data-l10n-id")).toBe(
+      "newtab-privacy-message-info-4"
+    );
+    const img = container.querySelector(".privacy-image-icon");
+    expect(img.getAttribute("src")).toContain("widget-privacy-planet.svg");
+  });
+
+  it("renders the streak variant with a divider and its message", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "streak",
+        messageId: "newtab-privacy-message-streak",
+        icon: "kit",
+        countArg: { count: 5 },
+      })
+    );
+    expect(container.querySelector("article.privacy").className).toContain(
+      "has-streak"
+    );
+    expect(container.querySelector(".privacy-divider")).toBeTruthy();
+    const streak = container.querySelector(
+      ".privacy-streak .privacy-tip-message"
+    );
+    expect(streak.getAttribute("data-l10n-id")).toBe(
+      "newtab-privacy-message-streak"
+    );
+  });
+
+  it("resolves messageId as an l10n id with count args", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "tip",
+        messageId: "newtab-privacy-message-milestone-week",
+        icon: "kit",
+        countArg: { count: 120 },
+      })
+    );
+    const tip = container.querySelector(".privacy-tip-message");
+    expect(tip.getAttribute("data-l10n-id")).toBe(
+      "newtab-privacy-message-milestone-week"
+    );
+    expect(tip.getAttribute("data-l10n-args")).toBe(
+      JSON.stringify({ count: 120 })
+    );
+  });
+
+  it("renders a CTA button labelled from the message's -cta id", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "tip",
+        messageId: "newtab-privacy-message-info-1",
+        icon: "shield",
+        cta: { type: "OPEN_ABOUT_PAGE", data: { args: "protections" } },
+      })
+    );
+    const button = container.querySelector(".privacy-cta");
+    expect(button).toBeTruthy();
+    expect(button.getAttribute("data-l10n-id")).toBe(
+      "newtab-privacy-message-info-1-cta"
+    );
+  });
+
+  it("renders no CTA button when the decision has no cta", () => {
+    const { container } = renderPrivacy(
+      jest.fn(),
+      {},
+      stateWithMessage({
+        variant: "tip",
+        messageId: "newtab-privacy-message-info-1",
+        icon: "shield",
+        cta: null,
+      })
+    );
+    expect(container.querySelector(".privacy-cta")).toBeFalsy();
+  });
+
+  it("dispatches WIDGETS_PRIVACY_CTA with the action on CTA click", () => {
+    const dispatch = jest.fn();
+    const cta = { type: "OPEN_ABOUT_PAGE", data: { args: "protections" } };
+    const { container } = renderPrivacy(
+      dispatch,
+      {},
+      stateWithMessage({
+        variant: "tip",
+        messageId: "newtab-privacy-message-info-1",
+        icon: "shield",
+        cta,
+      })
+    );
+    fireEvent.click(container.querySelector(".privacy-cta"));
+    const ctaAction = dispatch.mock.calls.find(
+      ([action]) => action.type === at.WIDGETS_PRIVACY_CTA
+    );
+    expect(ctaAction).toBeTruthy();
+    expect(ctaAction[0].data.action).toEqual(cta);
+    expect(ctaAction[0].data.message_id).toBe("newtab-privacy-message-info-1");
+  });
+
+  it("attributes blank-state CTA clicks to a stable id (not null)", () => {
+    const dispatch = jest.fn();
+    const { container } = renderPrivacy(
+      dispatch,
+      {},
+      stateWithMessage({
+        variant: "blank",
+        icon: "shieldCheck",
+        cta: { type: "OPEN_ABOUT_PAGE", data: { args: "protections" } },
+      })
+    );
+    fireEvent.click(container.querySelector(".privacy-cta"));
+    const ctaAction = dispatch.mock.calls.find(
+      ([action]) => action.type === at.WIDGETS_PRIVACY_CTA
+    );
+    expect(ctaAction[0].data.message_id).toBe("newtab-privacy-blank");
+    const userEvent = dispatch.mock.calls.find(
+      ([action]) =>
+        action.type === at.WIDGETS_USER_EVENT &&
+        action.data.user_action === "message_cta"
+    );
+    expect(userEvent[0].data.action_value).toBe("newtab-privacy-blank");
   });
 });

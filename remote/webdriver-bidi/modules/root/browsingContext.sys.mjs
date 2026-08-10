@@ -1672,9 +1672,16 @@ class BrowsingContextModule extends RootBiDiModule {
         const { sessionHistory } = context;
         const flags = Ci.nsIWebNavigation.LOAD_FLAGS_NONE;
 
-        // Bug 2026546: As workaround use sessionHistory if available to avoid
-        // issues with frames.
-        if (sessionHistory?.count && sessionHistory?.index >= 0) {
+        // Bug 2026546: If available, use sessionHistory to properly reload
+        // top-level contexts which contain frames. Note that sessionHistory
+        // always belongs to the top-level context, so it must only be used
+        // for top-level navigables, otherwise reloading a child navigable
+        // would reload the whole tab.
+        if (
+          context.parent === null &&
+          sessionHistory?.count &&
+          sessionHistory?.index >= 0
+        ) {
           sessionHistory.reload(flags);
         } else {
           context.reload(flags);

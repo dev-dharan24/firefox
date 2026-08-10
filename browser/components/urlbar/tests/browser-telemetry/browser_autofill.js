@@ -533,6 +533,22 @@ async function doDeletionTest({
 
     await trigger();
 
+    if (expectedScalar) {
+      // With `browser.urlbar.ipc.chromeMessagePassing`, the deletion is
+      // recorded parent-side after an async actor round-trip, so reading the
+      // scalar right after the trigger can race it. On the default in-process
+      // path it's already recorded and this resolves immediately.
+      await TestUtils.waitForCondition(
+        () =>
+          TelemetryTestUtils.getProcessScalars("parent")[
+            "urlbar.autofill_deletion"
+          ] >= expectedScalar,
+        `Waiting for urlbar.autofill_deletion to reach ${expectedScalar}`
+      ).catch(() => {
+        // Fall through to the assertion below for a precise failure.
+      });
+    }
+
     const scalars = TelemetryTestUtils.getProcessScalars("parent", false, true);
     if (expectedScalar) {
       TelemetryTestUtils.assertScalar(

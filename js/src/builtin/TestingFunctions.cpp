@@ -1742,7 +1742,7 @@ static bool WasmLosslessInvoke(JSContext* cx, unsigned argc, Value* vp) {
   if (!wasmCallFrame.resize(len)) {
     return false;
   }
-  wasmCallFrame[0].set(ObjectValue(*func));
+  wasmCallFrame[0].setObject(*func);
   wasmCallFrame[1].set(args.thisv());
   // Copy over the arguments needed to invoke the provided wasm function,
   // skipping the wasm function we're calling that is at `args.get(0)`.
@@ -2124,7 +2124,7 @@ static bool WasmDisassemble(JSContext* cx, unsigned argc, Value* vp) {
 
   CallArgs args = CallArgsFromVp(argc, vp);
 
-  args.rval().set(UndefinedValue());
+  args.rval().setUndefined();
 
   if (!args.get(0).isObject()) {
     JS_ReportErrorASCII(cx, "argument is not an object");
@@ -2245,7 +2245,7 @@ static bool WasmModuleToText(JSContext* cx, unsigned argc, Value* vp) {
     ReportOutOfMemory(cx);
     return false;
   }
-  args.rval().set(StringValue(str));
+  args.rval().setString(str);
   return true;
 }
 
@@ -2257,7 +2257,7 @@ static bool WasmFunctionTier(JSContext* cx, unsigned argc, Value* vp) {
 
   CallArgs args = CallArgsFromVp(argc, vp);
 
-  args.rval().set(UndefinedValue());
+  args.rval().setUndefined();
 
   if (!args.get(0).isObject()) {
     JS_ReportErrorASCII(cx, "argument is not an object");
@@ -2287,7 +2287,7 @@ static bool WasmDumpIon(JSContext* cx, unsigned argc, Value* vp) {
 
   CallArgs args = CallArgsFromVp(argc, vp);
 
-  args.rval().set(UndefinedValue());
+  args.rval().setUndefined();
 
   if (!args.get(0).isObject()) {
     JS_ReportErrorASCII(cx, "argument is not an object");
@@ -2339,7 +2339,7 @@ static bool WasmDumpIon(JSContext* cx, unsigned argc, Value* vp) {
     ReportOutOfMemory(cx);
     return false;
   }
-  args.rval().set(StringValue(str));
+  args.rval().setString(str);
   return true;
 }
 
@@ -2373,7 +2373,7 @@ static bool WasmReturnFlag(JSContext* cx, unsigned argc, Value* vp, Flag flag) {
       break;
   }
 
-  args.rval().set(BooleanValue(b));
+  args.rval().setBoolean(b);
   return true;
 }
 
@@ -2461,7 +2461,7 @@ static bool WasmBuiltinI8VecMul(JSContext* cx, unsigned argc, Value* vp) {
                                   &module)) {
     return false;
   }
-  args.rval().set(ObjectValue(*module.get()));
+  args.rval().setObject(*module.get());
   return true;
 }
 
@@ -5014,7 +5014,7 @@ static bool GetWaitForAllPromise(JSContext* cx, unsigned argc, Value* vp) {
     return false;
   }
 
-  args.rval().set(ObjectValue(*resultPromise));
+  args.rval().setObject(*resultPromise);
   return true;
 }
 
@@ -7331,10 +7331,10 @@ class BackEdge {
   JS::ubi::Node predecessor_;
 
   // The name of this edge.
-  EdgeName name_;
+  EdgeName name_{nullptr};
 
  public:
-  BackEdge() : name_(nullptr) {}
+  BackEdge() = default;
   // Construct an initialized back edge, taking ownership of |name|.
   BackEdge(JS::ubi::Node predecessor, EdgeName name)
       : predecessor_(predecessor), name_(std::move(name)) {}

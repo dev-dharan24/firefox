@@ -2886,7 +2886,7 @@ struct LenientThisPolicyMixin {
     if (!ReportLenientThisUnwrappingFailure(aCx, &aArgs.callee())) {
       return false;
     }
-    aArgs.rval().set(JS::UndefinedValue());
+    aArgs.rval().setUndefined();
     return true;
   }
 };

@@ -429,6 +429,8 @@ add_task(async function test_firstrun_telemetry() {
   await SpecialPowers.pushPrefEnv({
     set: [
       ["browser.smartwindow.firstrun.autoAdvanceMS", 0],
+      // TODO: Bug 2053495 - Refactor tests upon pref removal
+      ["browser.smartwindow.mistralRelease", false],
       ["browser.smartwindow.firstrun.modelChoice", ""],
     ],
   });
@@ -761,6 +763,8 @@ add_task(async function test_firstrun_telemetry_unchecked() {
   await SpecialPowers.pushPrefEnv({
     set: [
       ["browser.smartwindow.firstrun.autoAdvanceMS", 0],
+      // TODO: Bug 2053495 - Refactor tests upon pref removal
+      ["browser.smartwindow.mistralRelease", false],
       ["browser.smartwindow.firstrun.modelChoice", ""],
       ["browser.smartwindow.memories.generateFromHistory", true],
       ["browser.smartwindow.memories.generateFromConversation", true],

@@ -113,7 +113,7 @@ add_task(async function test_https_with_tls_key_logging() {
 add_task(async function test_http() {
   const tab = await BrowserTestUtils.openNewForegroundTab({
     gBrowser,
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     opening: "http://example.com",
     waitForLoad: true,
   });
@@ -287,7 +287,7 @@ add_task(async function test_2_qwac() {
 
 add_task(async function test_non_qwac() {
   let uris = [
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     "http://example.com",
     "https://example.com",
     "data:,Hello%2C World!",

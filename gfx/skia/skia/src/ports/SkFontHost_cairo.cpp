@@ -403,7 +403,19 @@ public:
         return result;
     }
 
-    void getPostScriptGlyphNames(SkString*) const override {}
+    void getPostScriptGlyphNames(SkString* dstArray) const override
+    {
+        mozilla_LockSharedFTFace(fFTFaceContext, nullptr);
+        if (FT_HAS_GLYPH_NAMES(fFTFace)) {
+            for (FT_Long gID = 0; gID < fFTFace->num_glyphs; ++gID) {
+                char glyphName[128];  // PS limit for names is 127 bytes.
+                if (!FT_Get_Glyph_Name(fFTFace, gID, glyphName, sizeof(glyphName))) {
+                    dstArray[gID] = glyphName;
+                }
+            }
+        }
+        mozilla_UnlockSharedFTFace(fFTFaceContext);
+    }
 
     void getGlyphToUnicodeMap(SkSpan<SkUnichar> dstArray) const override
     {
@@ -701,7 +713,8 @@ SkScalerContext::GlyphMetrics SkScalerContext_CairoFT::generateMetrics(const SkG
 
         if (fFTFace->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_BGRA) {
             mx.maskFormat = SkMask::kARGB32_Format;
-        } else if (isLCD(fRec)) {
+        } else if (fFTFace->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY ||
+                   isLCD(fRec)) {
             mx.maskFormat = SkMask::kA8_Format;
         }
 

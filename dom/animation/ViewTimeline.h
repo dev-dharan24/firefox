@@ -50,7 +50,7 @@ class ViewTimeline final : public ScrollTimeline {
   static already_AddRefed<ViewTimeline> Constructor(
       const GlobalObject& aGlobal, const ViewTimelineOptions& aOptions,
       ErrorResult& aRv);
-  Element* GetSubject() const { return mSubject; }
+  Element* Subject() const { return mSubject; }
   already_AddRefed<CSSNumericValue> GetStartOffset(ErrorResult& aRv) const;
   already_AddRefed<CSSNumericValue> GetEndOffset(ErrorResult& aRv) const;
 

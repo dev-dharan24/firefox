@@ -3229,7 +3229,9 @@ bool JSStructuredCloneReader::startReadUnchecked(
     }
 
     case SCTAG_REGEXP_OBJECT: {
-      if ((data & RegExpFlag::AllFlags) != data) {
+      // Reject invalid flags. /u and /v are mutually exclusive.
+      if ((data & RegExpFlag::AllFlags) != data ||
+          ((data & RegExpFlag::Unicode) && (data & RegExpFlag::UnicodeSets))) {
         JS_ReportErrorNumberASCII(context(), GetErrorMessage, nullptr,
                                   JSMSG_SC_BAD_SERIALIZED_DATA, "regexp");
         return false;
@@ -4327,6 +4329,7 @@ void JSAutoStructuredCloneBuffer::clear() {
   data_.discardTransferables();
   data_.ownTransferables_ = OwnTransferablePolicy::NoTransferables;
   data_.refsHeld_.releaseAll();
+  MOZ_ASSERT(data_.stringBufferRefsHeld_.isStorageConsistent());
   data_.stringBufferRefsHeld_.clear();
   data_.Clear();
   version_ = 0;

@@ -35,16 +35,14 @@ class AbstractGeneratorObject : public NativeObject {
   // generator state.
   static const int32_t RESUME_INDEX_INITIAL_YIELD = 0;
 
-  enum {
-    CALLEE_OR_MODULE_SLOT = 0,
-    ENV_CHAIN_SLOT,
-    ARGS_OBJ_SLOT,
-    STACK_STORAGE_SLOT,
-    RESUME_INDEX_SLOT,
-    RESERVED_SLOTS
-  };
+  JS_DEFINE_TYPED_SLOT(0, CALLEE_OR_MODULE_SLOT, Object, Null, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, ENV_CHAIN_SLOT, Object, Null, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, ARGS_OBJ_SLOT, Object, Null, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, STACK_STORAGE_SLOT, Object, Null, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, RESUME_INDEX_SLOT, Int32, Null, Undefined);
+  static constexpr uint32_t RESERVED_SLOTS = 5;
 
-  static_assert(RESUME_INDEX_SLOT == GENERATOR_RESUME_INDEX_SLOT,
+  static_assert(RESUME_INDEX_SLOT.index() == GENERATOR_RESUME_INDEX_SLOT,
                 "RESUME_INDEX_SLOT must match self-hosting define for resume "
                 "index slot.");
 
@@ -75,24 +73,26 @@ class AbstractGeneratorObject : public NativeObject {
   // True for an async module's top-level-await generator, whose
   // CALLEE_OR_MODULE_SLOT holds a ModuleObject rather than a callee function.
   bool isModuleGenerator() const {
-    const Value& v = getFixedSlot(CALLEE_OR_MODULE_SLOT);
+    const Value& v = getFixedSlotTyped(CALLEE_OR_MODULE_SLOT);
     return v.isObject() && v.toObject().is<ModuleObject>();
   }
 
   JSFunction& callee() const {
     MOZ_ASSERT(!isModuleGenerator());
-    return getFixedSlot(CALLEE_OR_MODULE_SLOT).toObject().as<JSFunction>();
+    return getFixedSlotTyped(CALLEE_OR_MODULE_SLOT).toObject().as<JSFunction>();
   }
   void setCallee(JSFunction& callee) {
-    setFixedSlot(CALLEE_OR_MODULE_SLOT, ObjectValue(callee));
+    setFixedSlotTyped(CALLEE_OR_MODULE_SLOT, ObjectValue(callee));
   }
 
   ModuleObject& module() const {
     MOZ_ASSERT(isModuleGenerator());
-    return getFixedSlot(CALLEE_OR_MODULE_SLOT).toObject().as<ModuleObject>();
+    return getFixedSlotTyped(CALLEE_OR_MODULE_SLOT)
+        .toObject()
+        .as<ModuleObject>();
   }
   void setModule(ModuleObject& module) {
-    setFixedSlot(CALLEE_OR_MODULE_SLOT, ObjectValue(module));
+    setFixedSlotTyped(CALLEE_OR_MODULE_SLOT, ObjectValue(module));
   }
 
   JSScript* script() const {
@@ -100,31 +100,33 @@ class AbstractGeneratorObject : public NativeObject {
   }
 
   JSObject& environmentChain() const {
-    return getFixedSlot(ENV_CHAIN_SLOT).toObject();
+    return getFixedSlotTyped(ENV_CHAIN_SLOT).toObject();
   }
   void setEnvironmentChain(JSObject& envChain) {
-    setFixedSlot(ENV_CHAIN_SLOT, ObjectValue(envChain));
+    setFixedSlotTyped(ENV_CHAIN_SLOT, ObjectValue(envChain));
   }
 
-  bool hasArgsObj() const { return getFixedSlot(ARGS_OBJ_SLOT).isObject(); }
+  bool hasArgsObj() const {
+    return getFixedSlotTyped(ARGS_OBJ_SLOT).isObject();
+  }
   ArgumentsObject& argsObj() const {
-    return getFixedSlot(ARGS_OBJ_SLOT).toObject().as<ArgumentsObject>();
+    return getFixedSlotTyped(ARGS_OBJ_SLOT).toObject().as<ArgumentsObject>();
   }
   void setArgsObj(ArgumentsObject& argsObj) {
-    setFixedSlot(ARGS_OBJ_SLOT, ObjectValue(argsObj));
+    setFixedSlotTyped(ARGS_OBJ_SLOT, ObjectValue(argsObj));
   }
 
   bool hasStackStorage() const {
-    return getFixedSlot(STACK_STORAGE_SLOT).isObject();
+    return getFixedSlotTyped(STACK_STORAGE_SLOT).isObject();
   }
   bool isStackStorageEmpty() const {
     return stackStorage().getDenseInitializedLength() == 0;
   }
   ArrayObject& stackStorage() const {
-    return getFixedSlot(STACK_STORAGE_SLOT).toObject().as<ArrayObject>();
+    return getFixedSlotTyped(STACK_STORAGE_SLOT).toObject().as<ArrayObject>();
   }
   void setStackStorage(ArrayObject& stackStorage) {
-    setFixedSlot(STACK_STORAGE_SLOT, ObjectValue(stackStorage));
+    setFixedSlotTyped(STACK_STORAGE_SLOT, ObjectValue(stackStorage));
   }
 
   // Access stack storage. Requires `hasStackStorage() && isSuspended()`.
@@ -144,44 +146,47 @@ class AbstractGeneratorObject : public NativeObject {
   // the bytecode offset (interpreter) or to the native code offset (JIT).
 
   bool isBeforeInitialYield() const {
-    return getFixedSlot(RESUME_INDEX_SLOT).isUndefined();
+    return getFixedSlotTyped(RESUME_INDEX_SLOT).isUndefined();
   }
   bool isRunning() const {
-    return getFixedSlot(RESUME_INDEX_SLOT) == Int32Value(RESUME_INDEX_RUNNING);
+    return getFixedSlotTyped(RESUME_INDEX_SLOT) ==
+           Int32Value(RESUME_INDEX_RUNNING);
   }
   bool isSuspended() const {
-    // Note: also update Baseline's IsSuspendedGenerator code if this
+    // Note: also update MacroAssembler::branchIfNotSuspendedGenerator if this
     // changes.
-    Value resumeIndex = getFixedSlot(RESUME_INDEX_SLOT);
+    Value resumeIndex = getFixedSlotTyped(RESUME_INDEX_SLOT);
     return resumeIndex.isInt32() &&
            resumeIndex.toInt32() < RESUME_INDEX_RUNNING;
   }
   void setRunning() {
     MOZ_ASSERT(isSuspended());
-    setFixedSlot(RESUME_INDEX_SLOT, Int32Value(RESUME_INDEX_RUNNING));
+    setFixedSlotTyped(RESUME_INDEX_SLOT, Int32Value(RESUME_INDEX_RUNNING));
   }
   void setResumeIndex(const jsbytecode* pc) {
     MOZ_ASSERT(JSOp(*pc) == JSOp::InitialYield || JSOp(*pc) == JSOp::Yield ||
                JSOp(*pc) == JSOp::Await);
 
     MOZ_ASSERT_IF(JSOp(*pc) == JSOp::InitialYield,
-                  getFixedSlot(RESUME_INDEX_SLOT).isUndefined());
+                  getFixedSlotTyped(RESUME_INDEX_SLOT).isUndefined());
     MOZ_ASSERT_IF(JSOp(*pc) != JSOp::InitialYield, isRunning());
 
     uint32_t resumeIndex = GET_UINT24(pc);
     MOZ_ASSERT(resumeIndex < uint32_t(RESUME_INDEX_RUNNING));
 
-    setFixedSlot(RESUME_INDEX_SLOT, Int32Value(resumeIndex));
+    setFixedSlotTyped(RESUME_INDEX_SLOT, Int32Value(resumeIndex));
     MOZ_ASSERT(isSuspended());
   }
   void setResumeIndex(int32_t resumeIndex) {
-    setFixedSlot(RESUME_INDEX_SLOT, Int32Value(resumeIndex));
+    setFixedSlotTyped(RESUME_INDEX_SLOT, Int32Value(resumeIndex));
   }
   uint32_t resumeIndex() const {
     MOZ_ASSERT(isSuspended());
-    return getFixedSlot(RESUME_INDEX_SLOT).toInt32();
+    return getFixedSlotTyped(RESUME_INDEX_SLOT).toInt32();
   }
-  bool isClosed() const { return getFixedSlot(CALLEE_OR_MODULE_SLOT).isNull(); }
+  bool isClosed() const {
+    return getFixedSlotTyped(CALLEE_OR_MODULE_SLOT).isNull();
+  }
   void setClosed(JSContext* cx);
 
   bool isAfterYield();
@@ -194,26 +199,26 @@ class AbstractGeneratorObject : public NativeObject {
   void trace(JSTracer* trc);
 
   static size_t offsetOfCalleeOrModuleSlot() {
-    return getFixedSlotOffset(CALLEE_OR_MODULE_SLOT);
+    return getFixedSlotOffsetTyped(CALLEE_OR_MODULE_SLOT);
   }
   static size_t offsetOfEnvironmentChainSlot() {
-    return getFixedSlotOffset(ENV_CHAIN_SLOT);
+    return getFixedSlotOffsetTyped(ENV_CHAIN_SLOT);
   }
   static size_t offsetOfArgsObjSlot() {
-    return getFixedSlotOffset(ARGS_OBJ_SLOT);
+    return getFixedSlotOffsetTyped(ARGS_OBJ_SLOT);
   }
   static size_t offsetOfResumeIndexSlot() {
-    return getFixedSlotOffset(RESUME_INDEX_SLOT);
+    return getFixedSlotOffsetTyped(RESUME_INDEX_SLOT);
   }
   static size_t offsetOfStackStorageSlot() {
-    return getFixedSlotOffset(STACK_STORAGE_SLOT);
+    return getFixedSlotOffsetTyped(STACK_STORAGE_SLOT);
   }
 
-  static size_t calleeOrModuleSlot() { return CALLEE_OR_MODULE_SLOT; }
-  static size_t envChainSlot() { return ENV_CHAIN_SLOT; }
-  static size_t argsObjectSlot() { return ARGS_OBJ_SLOT; }
-  static size_t stackStorageSlot() { return STACK_STORAGE_SLOT; }
-  static size_t resumeIndexSlot() { return RESUME_INDEX_SLOT; }
+  static size_t calleeOrModuleSlot() { return CALLEE_OR_MODULE_SLOT.index(); }
+  static size_t envChainSlot() { return ENV_CHAIN_SLOT.index(); }
+  static size_t argsObjectSlot() { return ARGS_OBJ_SLOT.index(); }
+  static size_t stackStorageSlot() { return STACK_STORAGE_SLOT.index(); }
+  static size_t resumeIndexSlot() { return RESUME_INDEX_SLOT.index(); }
 
 #ifdef DEBUG
   void dump() const;

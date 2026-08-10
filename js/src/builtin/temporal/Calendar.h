@@ -98,7 +98,7 @@ class CalendarObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto IDENTIFIER_SLOT = TypedSlot<ValueType::Int32>(0);
+  JS_DEFINE_TYPED_SLOT(0, IDENTIFIER_SLOT, Int32);
   static constexpr uint32_t SLOT_COUNT = 1;
 
   CalendarId identifier() const {

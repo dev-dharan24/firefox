@@ -537,18 +537,18 @@ NonOwningAnimationTarget ScrollTimeline::ScrollerInfo::Source() const {
           PseudoStyleRequest{}};
 }
 
-NS_IMPL_CYCLE_COLLECTION_CLASS(InactiveTimeline)
-NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(InactiveTimeline,
+NS_IMPL_CYCLE_COLLECTION_CLASS(UnresolvedTimeline)
+NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(UnresolvedTimeline,
                                                 ScrollTimeline)
 NS_IMPL_CYCLE_COLLECTION_UNLINK_END
-NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(InactiveTimeline,
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(UnresolvedTimeline,
                                                   ScrollTimeline)
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
-NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED_0(InactiveTimeline,
+NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED_0(UnresolvedTimeline,
                                                AnimationTimeline)
 
-InactiveTimeline::InactiveTimeline(Document* aDocument)
+UnresolvedTimeline::UnresolvedTimeline(Document* aDocument)
     : ScrollTimeline{
           aDocument,
           ScrollerInfo::Anonymous(ScrollerInfo::Type::Provided, nullptr, {}),

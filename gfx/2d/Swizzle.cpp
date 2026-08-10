@@ -1208,40 +1208,42 @@ static void SwizzleCmykRowFallback(const uint8_t* aSrc, uint8_t* aDst,
   // B = 1 - Y => 1 - (1 - iY*iK) => iY*iK
   const uint8_t* end = aSrc + 4 * aLength;
   do {
-    // Load and process 1 entire pixel at a time. The source is always CMYK with
-    // C, M, Y, K in bytes 0..3, so K is the high byte, C/Y form the even 16-bit
-    // lane pair and M/K form the odd pair.
+    // Load and process 1 entire pixel at a time. The source is always inverted
+    // CMYK with iC, iM, iY, iK in bytes 0..3, so iK is the high byte, iC/iY
+    // form the even 16-bit lane pair and iM/iK form the odd pair.
     uint32_t color = *reinterpret_cast<const uint32_t*>(aSrc);
-    if constexpr (aInverted) {
+
+    // Invert if necessary, as the math expects inverted CMYK.
+    if constexpr (!aInverted) {
       color = ~color;
     }
 
-    uint32_t k = color >> 24;
+    uint32_t ik = color >> 24;
 
-    // Isolate the C and Y components (the even lanes).
-    uint32_t cy = color & 0x00FF00FF;
-    // Swap the order of C and Y if necessary.
+    // Isolate the iC and iY components (the even lanes).
+    uint32_t icy = color & 0x00FF00FF;
+    // Swap the order of iC and iY if necessary.
     if constexpr (aSwapRB) {
-      cy = (cy >> 16) | (cy << 16);
+      icy = (icy >> 16) | (icy << 16);
     }
-    // Approximate the multiply by alpha and divide by 255 which is
-    // essentially:
-    // c = c*k; c = (c + (c >> 8) + 1) >> 8;
+    // Approximate the multiply by iK and divide by 255 which is essentially (ic
+    // means inverted channel here, not the iC channel):
+    // ic = ic*ik; ic = (ic + (ic >> 8) + 1) >> 8;
     // However, we omit the final >> 8 to fold it with the final shift into
     // place depending on desired output format.
-    cy = cy * k;
-    cy = (cy + ((cy >> 8) & 0x00FF00FF) + 0x00010001) & 0xFF00FF00;
+    icy = icy * ik;
+    icy = (icy + ((icy >> 8) & 0x00FF00FF) + 0x00010001) & 0xFF00FF00;
 
     // Do the same for the M and K channels.
-    uint32_t mk = (color >> 8) & 0x00FF00FF;
-    mk = mk * k;
-    mk = (mk + ((mk >> 8) & 0x00FF00FF) + 0x00010001) & 0xFF00FF00;
+    uint32_t imk = (color >> 8) & 0x00FF00FF;
+    imk = imk * ik;
+    imk = (imk + ((imk >> 8) & 0x00FF00FF) + 0x00010001) & 0xFF00FF00;
 
     // The above math leaves each channel shifted left by 8 bits. Shift the C/Y
     // pair and the M channel into their destination positions and force
     // the alpha opaque.
-    *reinterpret_cast<uint32_t*>(aDst) = (cy >> (8 - aDstRGBShift)) |
-                                         ((mk & 0x0000FF00) << aDstRGBShift) |
+    *reinterpret_cast<uint32_t*>(aDst) = (icy >> (8 - aDstRGBShift)) |
+                                         ((imk & 0x0000FF00) << aDstRGBShift) |
                                          (0xFF << aDstAShift);
 
     aSrc += 4;

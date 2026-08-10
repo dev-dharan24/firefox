@@ -115,6 +115,12 @@ export const PREF_WIDGETS_PRIVACY_ENABLED = "widgets.privacy.enabled";
 export const PREF_PRIVACY_SIZE = "widgets.privacy.size";
 export const PREF_WIDGETS_SYSTEM_PRIVACY_ENABLED =
   "widgets.system.privacy.enabled";
+export const PREF_PRIVACY_MAX_COUNT = "widgets.privacy.maxCount";
+export const PREF_PRIVACY_MAX_DISPLAY_COUNT = "widgets.privacy.maxDisplayCount";
+export const PREF_PRIVACY_BLANK_CHANCE = "widgets.privacy.blankChance";
+export const PREF_PRIVACY_SHOW_VPN_MESSAGES = "widgets.privacy.showVpnMessages";
+export const PREF_PRIVACY_FORCE_MESSAGE_ID = "widgets.privacy.forceMessageId";
+export const PREF_PRIVACY_MESSAGE_STATE = "widgets.privacy.messageState";
 export const PREF_WIDGETS_CROSSWORD_ENABLED = "widgets.crossword.enabled";
 export const PREF_CROSSWORD_SIZE = "widgets.crossword.size";
 export const PREF_WIDGETS_SYSTEM_CROSSWORD_ENABLED =
@@ -474,6 +480,98 @@ export function resolveCrosswordEndpoint(prefs) {
     prefs.trainhopConfig?.widgets?.crosswordEndpoint ||
     prefs[PREF_CROSSWORD_ENDPOINT]
   );
+}
+
+/**
+ * Resolves the today-count at which the Privacy widget fires its "daily cap"
+ * celebration message. This is NOT the display ceiling — the readout keeps
+ * showing the real number past this point (see resolvePrivacyDisplayCount).
+ * Priority: trainhopConfig > pref > 100. Routed through this helper (never the
+ * raw pref) per the trainhop-gate convention.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+export function resolvePrivacyMaxCount(prefs) {
+  return (
+    prefs.trainhopConfig?.widgets?.privacyMaxCount ||
+    prefs[PREF_PRIVACY_MAX_COUNT] ||
+    100
+  );
+}
+
+/**
+ * Resolves the ceiling for the tracker-count readout: above it the number
+ * shows as "{cap}+" so it stays a tidy few characters. Default 999 (three
+ * digits). Distinct from resolvePrivacyMaxCount (the daily-cap celebration
+ * threshold). Priority: trainhopConfig > pref > 999.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+export function resolvePrivacyDisplayCount(prefs) {
+  return (
+    prefs.trainhopConfig?.widgets?.privacyMaxDisplayCount ||
+    prefs[PREF_PRIVACY_MAX_DISPLAY_COUNT] ||
+    999
+  );
+}
+
+/**
+ * Resolves the Privacy widget "blank chance" — the probability (0..1) that an
+ * eligible info message is suppressed to keep the experience calm. It's compared
+ * against Math.random(), so it MUST be a 0–1 fraction (0.4 = 40%), not a percent.
+ * A value > 1 (e.g. 40) would blank every message; guard against that by warning
+ * and falling back to the default. Priority: trainhopConfig > pref > 0.4.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+export function resolvePrivacyBlankChance(prefs) {
+  const DEFAULT = 0.4;
+  const trainhop = prefs.trainhopConfig?.widgets?.privacyBlankChance;
+  // The pref is stored as a string ("0.4") because Firefox prefs have no float
+  // type — a numeric default would land as 0 and silently disable blanks.
+  // trainhopConfig comes from JSON, so it's already a number.
+  const rawPref = prefs[PREF_PRIVACY_BLANK_CHANCE];
+  const raw = typeof trainhop === "number" ? trainhop : parseFloat(rawPref);
+  if (Number.isNaN(raw)) {
+    // Warn on a present-but-unparseable value (a misconfig); stay quiet when
+    // the pref is simply unset.
+    if (rawPref !== undefined && rawPref !== "") {
+      console.warn(
+        `widgets.privacy.blankChance is ${JSON.stringify(
+          rawPref
+        )}; expected a 0-1 number. Using ${DEFAULT}.`
+      );
+    }
+    return DEFAULT;
+  }
+  if (raw < 0 || raw > 1) {
+    console.warn(
+      `widgets.privacy.blankChance is ${raw}; expected a 0-1 fraction (0.4 = 40%). Using ${DEFAULT}.`
+    );
+    return DEFAULT;
+  }
+  return raw;
+}
+
+/**
+ * Resolves whether the Privacy widget may show VPN promotional messages. Off by
+ * default: not all users are eligible for the built-in VPN (unsupported region,
+ * enterprise-managed, removed from the toolbar), and promoting an unavailable
+ * feature erodes trust. An experiment can enable them for eligible cohorts — or
+ * force them off. Priority: trainhopConfig > pref > false.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {boolean}
+ */
+export function resolvePrivacyShowVpnMessages(prefs) {
+  const trainhop = prefs.trainhopConfig?.widgets?.privacyShowVpnMessages;
+  if (typeof trainhop === "boolean") {
+    return trainhop;
+  }
+  return !!prefs[PREF_PRIVACY_SHOW_VPN_MESSAGES];
 }
 
 /**

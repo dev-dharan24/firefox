@@ -61,6 +61,11 @@ https_first_disabled = true
 
 ["browser_policy_disable_fxaccounts.js"]
 
+["browser_policy_disable_launch_on_login.js"]
+run-if = [
+  "os == 'win'",
+]
+
 ["browser_policy_disable_masterpassword.js"]
 
 ["browser_policy_disable_password_reveal.js"]
@@ -148,7 +153,13 @@ support-files = [
 
 ["browser_policy_set_startpage.js"]
 
-["browser_policy_sitepolicies.js"]
+["browser_policy_sitepolicies_https.js"]
+https_first_disabled = true
+support-files = [
+  "sitepolicies_https_subresource.html",
+]
+
+["browser_policy_sitepolicies_jit.js"]
 https_first_disabled = true
 support-files = [
   "framed.html",

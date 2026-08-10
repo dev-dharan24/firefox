@@ -14,6 +14,13 @@ loader.lazyRequireGetter(
   true
 );
 
+loader.lazyRequireGetter(
+  this,
+  "Toolbox",
+  "resource://devtools/client/framework/toolbox.js",
+  true
+);
+
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
@@ -26,6 +33,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const MIN_PAGE_SIZE = 25;
 
 const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+
+const BROWSER_SIDEBAR_CONTAINER_DEVTOOLS_HOST_TYPE_ATTR = "devtools-host-type";
 
 /**
  * A toolbox host represents an object that contains a toolbox (e.g. the
@@ -57,6 +66,9 @@ class BaseInBrowserHost {
     this._browserContainer = this._gBrowser.getBrowserContainer(
       this.hostTab.linkedBrowser
     );
+    this.#browserSidebarContainerEl = this._browserContainer.closest(
+      ".browserSidebarContainer"
+    );
 
     // Reference to the <browser> element used to load DevTools.
     // This is created by each subclass from createElements() method
@@ -64,6 +76,8 @@ class BaseInBrowserHost {
 
     Services.obs.addObserver(this, "browsing-context-active-change");
   }
+
+  #browserSidebarContainerEl;
 
   _createFrame() {
     this.frame = createDevToolsFrame(
@@ -77,6 +91,13 @@ class BaseInBrowserHost {
     if (container) {
       this.frame.id = `${container.id}-devtools-toolbox`;
     }
+
+    // Set attribute on the .browserSidebarContainer element so we can style the dialogs
+    // depending on where the toolbox is docked.
+    this.#browserSidebarContainerEl.setAttribute(
+      BROWSER_SIDEBAR_CONTAINER_DEVTOOLS_HOST_TYPE_ATTR,
+      this.type
+    );
   }
 
   observe(subject, topic) {
@@ -120,10 +141,33 @@ class BaseInBrowserHost {
    */
   setTitle() {}
 
-  destroy() {
+  /**
+   * Destroy this host.
+   *
+   * @param {object} options
+   * @param {string} options.newHostType: The new host type, if we're switching host (e.g.
+   *                 from bottom to right)
+   */
+  destroy(options = {}) {
     Services.obs.removeObserver(this, "browsing-context-active-change");
     this._gBrowser = null;
     this._browserContainer = null;
+
+    const isSwitchingToInBrowserHost =
+      options.newHostType === Toolbox.HostType.LEFT ||
+      options.newHostType === Toolbox.HostType.RIGHT ||
+      options.newHostType === Toolbox.HostType.BOTTOM;
+    if (!isSwitchingToInBrowserHost) {
+      // When switching to a non-in-browser host (e.g. separate window), we need to remove
+      // the host type attribute.
+      // We don't need to do it when switching to a in-browser host, as the attribute is
+      // already set by the constructor of the new host.
+      this.#browserSidebarContainerEl.removeAttribute(
+        BROWSER_SIDEBAR_CONTAINER_DEVTOOLS_HOST_TYPE_ATTR
+      );
+    }
+
+    this.#browserSidebarContainerEl = null;
   }
 }
 
@@ -301,8 +345,12 @@ class BottomHost extends BaseInBrowserHost {
 
   /**
    * Destroy the bottom dock.
+   *
+   * @param {object} options
+   * @param {string} options.newHostType: The new host type, if we're switching host (e.g.
+   *                 from bottom to right)
    */
-  destroy() {
+  destroy(options = {}) {
     if (!this.#destroyed) {
       this.#destroyed = true;
 
@@ -323,7 +371,7 @@ class BottomHost extends BaseInBrowserHost {
       this.frame = null;
       this.#splitter = null;
 
-      super.destroy();
+      super.destroy(options);
     }
 
     return Promise.resolve(null);
@@ -452,8 +500,12 @@ class SidebarHost extends BaseInBrowserHost {
 
   /**
    * Destroy the sidebar.
+   *
+   * @param {object} options
+   * @param {string} options.newHostType: The new host type, if we're switching host (e.g.
+   *                 from right to bottom)
    */
-  destroy() {
+  destroy(options = {}) {
     if (!this.#destroyed) {
       this.#destroyed = true;
 
@@ -480,7 +532,7 @@ class SidebarHost extends BaseInBrowserHost {
       this.#splitter = null;
       this.frame = null;
 
-      super.destroy();
+      super.destroy(options);
     }
 
     return Promise.resolve(null);

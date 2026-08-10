@@ -88,11 +88,6 @@ class BounceTrackingState : public nsIWebProgressListener,
       nsIPrincipal* aTriggeringPrincipal,
       const bool aHasValidUserGestureActivation, uint64_t aLoadId);
 
-  // Whether the given BrowsingContext should hold a BounceTrackingState
-  // instance to monitor bounce tracking navigations.
-  static bool ShouldCreateBounceTrackingStateForBC(
-      dom::CanonicalBrowsingContext* aBrowsingContext);
-
   // Whether the given principal should be tracked for bounce tracking.
   static bool ShouldTrackPrincipal(nsIPrincipal* aPrincipal);
 

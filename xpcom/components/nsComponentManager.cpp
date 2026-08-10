@@ -54,10 +54,6 @@
 #include "prthread.h"
 #include "xpcpublic.h"
 
-#ifdef MOZ_MEMORY
-#  include "mozmemory.h"
-#endif
-
 using namespace mozilla;
 using namespace mozilla::xpcom;
 
@@ -453,15 +449,6 @@ nsresult nsComponentManagerImpl::Init() {
              "Initial component hashtable size is too large");
 
   return NS_OK;
-}
-
-template <typename T>
-static void AssertNotMallocAllocated(T* aPtr) {
-#if defined(DEBUG) && defined(MOZ_MEMORY)
-  jemalloc_ptr_info_t info;
-  jemalloc_ptr_info((void*)aPtr, &info);
-  MOZ_ASSERT(info.tag == TagUnknown);
-#endif
 }
 
 template <typename T>

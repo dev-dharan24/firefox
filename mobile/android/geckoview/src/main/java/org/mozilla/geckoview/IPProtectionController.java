@@ -604,6 +604,12 @@ public class IPProtectionController {
     /** Activation was canceled (e.g. deactivate was called mid-activation). */
     public static final int ERROR_ACTIVATION_CANCELED = -6;
 
+    /** The proxy service failed in a way it cannot recover from. */
+    public static final int ERROR_CATASTROPHIC = -7;
+
+    /** The proxy is not available in the region of the user. */
+    public static final int ERROR_VPN_UNAVAILABLE = -8;
+
     /** Error codes for {@link IPProxyException}. */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
@@ -614,6 +620,8 @@ public class IPProtectionController {
           ERROR_PASS_UNAVAILABLE,
           ERROR_SERVER_NOT_FOUND,
           ERROR_ACTIVATION_CANCELED,
+          ERROR_CATASTROPHIC,
+          ERROR_VPN_UNAVAILABLE,
         })
     public @interface Code {}
 
@@ -646,6 +654,10 @@ public class IPProtectionController {
           return new IPProxyException(ERROR_SERVER_NOT_FOUND);
         case "activation-canceled":
           return new IPProxyException(ERROR_ACTIVATION_CANCELED);
+        case "catastrophic-error":
+          return new IPProxyException(ERROR_CATASTROPHIC);
+        case "vpn-unavailable":
+          return new IPProxyException(ERROR_VPN_UNAVAILABLE);
         default:
           return new IPProxyException(ERROR_UNKNOWN);
       }

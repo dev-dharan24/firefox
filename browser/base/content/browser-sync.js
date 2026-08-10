@@ -1151,6 +1151,23 @@ var gSync = {
     }
   },
 
+  // Performs the state-specific action for a sync promo (see getSyncPromoState).
+  // `action` is one of the promo states, `entryPoint` identifies the surface for
+  // FxA telemetry/URL building.
+  handleSyncPromoAction(action, entryPoint) {
+    switch (action) {
+      case "signin":
+        this.openFxAEmailFirstPage(entryPoint);
+        break;
+      case "turnonsync":
+        this.openSyncSetupForEntryPoint(entryPoint);
+        break;
+      case "connectdevice":
+        this.openConnectAnotherDevice(entryPoint);
+        break;
+    }
+  },
+
   shouldHideSendContextMenuItems(enabled) {
     return !enabled || !this.FXA_ENABLED;
   },
@@ -1290,10 +1307,24 @@ var gSync = {
 
     EnsureFxAccountsWebChannel();
 
+    // Sign-in promo shown in the app menu (main view) when signed out.
+    PanelMultiView.getViewNode(
+      document,
+      "appMenu-fxa-sign-in-promo-button"
+    ).addEventListener("click", this);
+
     let fxaPanelView = PanelMultiView.getViewNode(document, "PanelUI-fxa");
     fxaPanelView.addEventListener("ViewShowing", this);
     fxaPanelView.addEventListener("ViewHiding", this);
     fxaPanelView.addEventListener("command", this);
+    PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-sign-in-promo-button"
+    ).addEventListener("click", this);
+    PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-sign-in-button"
+    ).addEventListener("click", this);
     PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-sendtab-sign-in-button"
@@ -1606,8 +1637,17 @@ var gSync = {
         this.openPrefsFromFxaMenu("sync_settings", button);
         break;
 
-      case "fxa-manage-account-button":
+      case "PanelUI-fxa-menu-signed-out-sign-in-button":
+      case "PanelUI-fxa-menu-manage-account-button":
         this.clickFxAMenuHeaderButton(button);
+        break;
+      case "PanelUI-fxa-menu-sign-in-promo-button":
+        this.openFxAEmailFirstPageFromFxaMenu(button);
+        break;
+      case "appMenu-fxa-sign-in-promo-button":
+        // Sign-in promo in the app menu: go to the sign-in page, close the menu.
+        this.openFxAEmailFirstPageFromFxaMenu(button);
+        PanelUI.hide();
         break;
       case "PanelUI-fxa-menu-account-signout-button":
         this.disconnect();
@@ -1615,7 +1655,6 @@ var gSync = {
       case "PanelUI-fxa-menu-monitor-button":
         this.openMonitorLink(button);
         break;
-      case "PanelUI-services-menu-relay-button":
       case "PanelUI-fxa-menu-relay-button":
         this.openRelayLink(button);
         break;
@@ -1844,9 +1883,17 @@ var gSync = {
       document,
       "fxa-menu-header-description"
     );
-    const fxaMenuAccountButtonEl = PanelMultiView.getViewNode(
+    const manageAccountButtonEl = PanelMultiView.getViewNode(
       document,
-      "fxa-manage-account-button"
+      "PanelUI-fxa-menu-manage-account-button"
+    );
+    const signInPromoEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-sign-in-promo"
+    );
+    const signedOutCardEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-card"
     );
     const signedInContainer = PanelMultiView.getViewNode(
       document,
@@ -1855,10 +1902,6 @@ var gSync = {
     const signOutSeparator = PanelMultiView.getViewNode(
       document,
       "PanelUI-sign-out-separator"
-    );
-    const profilesHeaderSeparator = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-profiles-header-separator"
     );
     const profilesHeaderLabel = PanelMultiView.getViewNode(
       document,
@@ -1899,8 +1942,9 @@ var gSync = {
     signedInContainer.prepend(syncStatusBtn);
     syncSetupEl.setAttribute("hidden", "true");
     signedInContainer.hidden = false;
-    fxaMenuAccountButtonEl.classList.remove("subviewbutton-nav");
-    fxaMenuAccountButtonEl.removeAttribute("closemenu");
+    manageAccountButtonEl.hidden = true;
+    signInPromoEl.hidden = true;
+    signedOutCardEl.hidden = true;
     menuHeaderDescriptionEl.hidden = false;
 
     // Expanded sign in copy experiment is only for signed out users
@@ -1943,6 +1987,14 @@ var gSync = {
       case UIState.STATUS_NOT_CONFIGURED:
         signOutSeparator.hidden = true;
         mainWindowEl.style.removeProperty("--avatar-image-url");
+
+        // When signed out, show the sign-in promo. A previous account may be
+        // remembered as a hashed UID, but the email can't be recovered from it,
+        // so the promo is shown regardless. The signed-out card (with the
+        // remembered email) is only used for the login-failed and not-verified
+        // states.
+        signInPromoEl.hidden = false;
+
         headerTitleL10nId = this.FXA_CTA_MENU_ENABLED
           ? "synced-tabs-fxa-sign-in"
           : "appmenuitem-sign-in-account";
@@ -1960,7 +2012,6 @@ var gSync = {
         }
 
         // Reposition profiles elements
-        profilesHeaderSeparator.remove();
         profilesHeaderLabel.remove();
         profileButtonsContainer.remove();
         profilesSeparator.remove();
@@ -1973,7 +2024,6 @@ var gSync = {
         signedInContainer.after(profilesSeparator);
         signedInContainer.after(profileButtonsContainer);
         signedInContainer.after(profilesHeaderLabel);
-        signedInContainer.after(profilesHeaderSeparator);
 
         secureSyncHeader.after(syncStatusBtn);
 
@@ -1985,6 +2035,7 @@ var gSync = {
         headerTitleL10nId = "account-disconnected2";
         headerDescription = state.displayName || state.email;
         mainWindowEl.style.removeProperty("--avatar-image-url");
+        this._showFxASignedOutCard(signedOutCardEl, state);
         break;
 
       case UIState.STATUS_NOT_VERIFIED:
@@ -1992,6 +2043,7 @@ var gSync = {
         stateValue = "unverified";
         headerTitleL10nId = "account-finish-account-setup";
         headerDescription = state.displayName || state.email;
+        this._showFxASignedOutCard(signedOutCardEl, state);
         break;
 
       case UIState.STATUS_SIGNED_IN:
@@ -2003,12 +2055,18 @@ var gSync = {
           state.avatarURL,
           state.avatarIsDefault
         );
+        // Show the signed-in account button with the avatar, the account email
+        // and a "Manage account" affordance.
+        PanelMultiView.getViewNode(
+          document,
+          "PanelUI-fxa-menu-manage-account-email"
+        ).value = state.displayName || state.email;
+        manageAccountButtonEl.hidden = false;
         signOutSeparator.hidden = false;
         signedInContainer.hidden = false;
         syncSetupSeparator.setAttribute("hidden", "true");
 
         // Reposition profiles elements
-        profilesHeaderSeparator.remove();
         profilesHeaderLabel.remove();
         profileButtonsContainer.remove();
         profilesSeparator.remove();
@@ -2017,15 +2075,16 @@ var gSync = {
         profilesSeparator.hidden = false;
         secureSyncHeader.hidden = false;
 
-        fxaMenuAccountButtonEl.after(secureSyncHeader);
-        fxaMenuAccountButtonEl.after(profilesSeparator);
-        fxaMenuAccountButtonEl.after(profileButtonsContainer);
-        fxaMenuAccountButtonEl.after(profilesHeaderLabel);
-        fxaMenuAccountButtonEl.after(profilesHeaderSeparator);
+        manageAccountButtonEl.after(secureSyncHeader);
+        manageAccountButtonEl.after(profilesSeparator);
+        manageAccountButtonEl.after(profileButtonsContainer);
+        manageAccountButtonEl.after(profilesHeaderLabel);
 
         break;
 
       default:
+        // Unknown/empty state: fall back to the signed-out promo.
+        signInPromoEl.hidden = false;
         headerTitleL10nId = this.FXA_CTA_MENU_ENABLED
           ? "synced-tabs-fxa-sign-in"
           : "appmenuitem-sign-in-account";
@@ -2049,6 +2108,29 @@ var gSync = {
     // around in the DOM.
     menuHeaderTitleEl.removeAttribute("data-l10n-id");
     menuHeaderDescriptionEl.removeAttribute("data-l10n-id");
+  },
+
+  // Shows a card with the remembered account's email, a status-specific reason,
+  // and a button to sign back in.
+  _showFxASignedOutCard(cardEl, state) {
+    const emailEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-email"
+    );
+    const messageEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-message"
+    );
+
+    emailEl.value = state.email ?? "";
+    document.l10n.setAttributes(
+      messageEl,
+      state.status === UIState.STATUS_NOT_VERIFIED
+        ? "fxa-menu-signed-out-message-unverified"
+        : "fxa-menu-signed-out-message-login-failed"
+    );
+
+    cardEl.hidden = false;
   },
 
   updateAvatarURL(mainWindowEl, avatarURL, avatarIsDefault) {
@@ -3519,7 +3601,15 @@ var gSync = {
       "identity.fxaccounts.toolbar.pxiToolbarEnabled.monitorEnabled",
       false
     );
-    monitorPanelEl.hidden = !monitorEnabled;
+    let monitorInUse =
+      this.isSignedIn && this.hasClientForId(FX_MONITOR_OAUTH_CLIENT_ID);
+    monitorPanelEl.hidden = !(monitorEnabled || monitorInUse);
+    this.updateCTAButtonStrings(monitorPanelEl, {
+      inUse: monitorInUse,
+      titleId: "appmenuitem-monitor-title2",
+      inUseTitleId: "appmenuitem-monitor-title-signed-in",
+      descriptionId: "appmenuitem-monitor-description2",
+    });
 
     // Relay checks
     let relayPanelEl = PanelMultiView.getViewNode(
@@ -3532,26 +3622,15 @@ var gSync = {
         "identity.fxaccounts.toolbar.pxiToolbarEnabled.relayEnabled",
         false
       );
-    let myServicesRelayPanelEl = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-services-menu-relay-button"
-    );
-    let servicesContainerEl = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-services"
-    );
-    if (this.isSignedIn) {
-      const hasRelayClient = this.hasClientForId(FX_RELAY_OAUTH_CLIENT_ID);
-      relayPanelEl.hidden = hasRelayClient;
-      // Right now only relay is under "my services" so if we don't have, we turn it off
-      myServicesRelayPanelEl.hidden = !hasRelayClient;
-      servicesContainerEl.hidden = !hasRelayClient;
-    } else {
-      relayPanelEl.hidden = !relayEnabled;
-      // We'll never show my services when signed out
-      myServicesRelayPanelEl.hidden = true;
-      servicesContainerEl.hidden = true;
-    }
+    let relayInUse =
+      this.isSignedIn && this.hasClientForId(FX_RELAY_OAUTH_CLIENT_ID);
+    relayPanelEl.hidden = !(relayEnabled || relayInUse);
+    this.updateCTAButtonStrings(relayPanelEl, {
+      inUse: relayInUse,
+      titleId: "appmenuitem-relay-title2",
+      inUseTitleId: "appmenuitem-relay-title-signed-in",
+      descriptionId: "appmenuitem-relay-description2",
+    });
 
     // VPN checks
     let VpnPanelEl = PanelMultiView.getViewNode(
@@ -3564,7 +3643,14 @@ var gSync = {
         "identity.fxaccounts.toolbar.pxiToolbarEnabled.vpnEnabled",
         false
       );
-    VpnPanelEl.hidden = !vpnEnabled;
+    let vpnInUse = this.isSignedIn && this.hasClientForId(VPN_OAUTH_CLIENT_ID);
+    VpnPanelEl.hidden = !(vpnEnabled || vpnInUse);
+    this.updateCTAButtonStrings(VpnPanelEl, {
+      inUse: vpnInUse,
+      titleId: "appmenuitem-vpn-title2",
+      inUseTitleId: "appmenuitem-vpn-title-signed-in",
+      descriptionId: "appmenuitem-vpn-description4",
+    });
 
     // Share Firefox checks
     let shareFirefoxPanelEl = PanelMultiView.getViewNode(
@@ -3576,16 +3662,44 @@ var gSync = {
       false
     );
 
-    // The services section carries its own leading separator, so only show the
-    // privacy tools separator when that section is hidden (e.g. when signed
-    // out) to keep the header visually separated from the section above.
     let privacyToolsSeparatorEl = PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-privacy-tools-separator"
     );
-    privacyToolsSeparatorEl.hidden = !servicesContainerEl.hidden;
+    privacyToolsSeparatorEl.hidden = false;
 
     mainPanelEl.hidden = false;
+  },
+
+  /**
+   * Updates the title and description of a privacy tools CTA button depending
+   * on whether the associated tool is already in use by the signed-in account.
+   * When the tool is in use we swap in a shorter, action-oriented title and
+   * hide the description.
+   *
+   * @param {Element} buttonEl
+   *   The CTA toolbarbutton to update.
+   * @param {object} options
+   * @param {boolean} options.inUse
+   *   Whether the account has already signed up for this tool.
+   * @param {string} options.titleId
+   *   Fluent id for the default (promo) title.
+   * @param {string} options.inUseTitleId
+   *   Fluent id for the title shown when the tool is in use.
+   * @param {string} options.descriptionId
+   *   Fluent id for the default (promo) description.
+   */
+  updateCTAButtonStrings(
+    buttonEl,
+    { inUse, titleId, inUseTitleId, descriptionId }
+  ) {
+    let titleEl = buttonEl.querySelector(".cta-menu-title");
+    let descriptionEl = buttonEl.querySelector(".cta-menu-description");
+    document.l10n.setAttributes(titleEl, inUse ? inUseTitleId : titleId);
+    descriptionEl.hidden = inUse;
+    if (!inUse) {
+      document.l10n.setAttributes(descriptionEl, descriptionId);
+    }
   },
 
   async openMonitorLink(sourceElement) {

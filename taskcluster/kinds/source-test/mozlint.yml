@@ -523,30 +523,19 @@ yaml:
             - '**/*.yaml'
             - '**/.ymllint'
 
-rst:
-    description: rst lint run over the gecko codebase
+md:
+    description: Markdown linters run over the gecko codebase
     treeherder:
-        symbol: doc(rst)
-    run:
-        mach: lint -v -l rst -f treeherder -f json:/builds/worker/mozlint.json .
-    when:
-        files-changed:
-            - '**/*.rst'
-            - 'tools/lint/rst.yml'
-
-rumdl:
-    description: rumdl Markdown linter run over the gecko codebase
-    treeherder:
-        symbol: doc(rumdl)
+        symbol: doc(md)
         # Allow follow-ups for Markdown style issues rather than backing patches out.
         tier: 2
     run:
         clone-with: git
-        mach: lint -v -l rumdl -f treeherder -f json:/builds/worker/mozlint.json .
+        mach: lint -v -l md -f treeherder -f json:/builds/worker/mozlint.json .
     when:
         files-changed:
             - '**/*.md'
-            - 'tools/lint/rumdl.yml'
+            - 'tools/lint/md.yml'
             - 'tools/lint/rumdl.toml'
             - 'tools/lint/python/rumdl.py'
 

@@ -39,26 +39,82 @@ add_task(async function test_policies_schema_has_required_metadata() {
 // test to fail instead of reducing schema coverage.
 add_task(async function test_meta_schema_catches_violations() {
   let description = "A description long enough to satisfy minLength.";
+  let compat = {
+    firefox: { version_added: "60" },
+    firefox_esr: { version_added: "60" },
+    firefox_enterprise: { version_added: false },
+  };
   let bad = {
     properties: {
       MissingDescription: {
         "x-category": "Miscellaneous",
+        "x-compatibility": compat,
         examples: ["example"],
       },
       ShortDescription: {
         description: "Too short.",
         "x-category": "Miscellaneous",
+        "x-compatibility": compat,
         examples: ["example"],
       },
       EmptyCategory: {
         description,
         "x-category": "",
+        "x-compatibility": compat,
         examples: ["example"],
       },
       EmptyExamples: {
         description,
         "x-category": "Miscellaneous",
+        "x-compatibility": compat,
         examples: [],
+      },
+      MissingCompatibility: {
+        description,
+        "x-category": "Miscellaneous",
+        examples: ["example"],
+      },
+      MissingChannel: {
+        description,
+        "x-category": "Miscellaneous",
+        "x-compatibility": {
+          firefox: { version_added: "60" },
+          firefox_enterprise: { version_added: false },
+        },
+        examples: ["example"],
+      },
+      MissingVersionAdded: {
+        description,
+        "x-category": "Miscellaneous",
+        "x-compatibility": { ...compat, firefox: {} },
+        examples: ["example"],
+      },
+      BadVersionString: {
+        description,
+        "x-category": "Miscellaneous",
+        "x-compatibility": {
+          ...compat,
+          firefox: { version_added: "fifty" },
+        },
+        examples: ["example"],
+      },
+      BadVersionType: {
+        description,
+        "x-category": "Miscellaneous",
+        "x-compatibility": {
+          ...compat,
+          firefox: { version_added: 2 },
+        },
+        examples: ["example"],
+      },
+      UnknownChannel: {
+        description,
+        "x-category": "Miscellaneous",
+        "x-compatibility": {
+          ...compat,
+          firefox_galactic_edition: { version_added: "60" },
+        },
+        examples: ["example"],
       },
     },
   };
@@ -72,6 +128,12 @@ add_task(async function test_meta_schema_catches_violations() {
     ["ShortDescription", "minLength"],
     ["EmptyCategory", "minLength"],
     ["EmptyExamples", "minItems"],
+    ["MissingCompatibility", "required"],
+    ["MissingChannel", "required"],
+    ["MissingVersionAdded", "required"],
+    ["BadVersionString", "pattern"],
+    ["BadVersionType", "type"],
+    ["UnknownChannel", "additionalProperties"],
   ]) {
     Assert.ok(
       result.errors.some(

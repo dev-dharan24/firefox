@@ -25,7 +25,7 @@ class PlainTimeObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto PACKED_TIME_SLOT = TypedSlot<ValueType::Double>(0);
+  JS_DEFINE_TYPED_SLOT(0, PACKED_TIME_SLOT, Double);
   static constexpr uint32_t SLOT_COUNT = 1;
 
   /**

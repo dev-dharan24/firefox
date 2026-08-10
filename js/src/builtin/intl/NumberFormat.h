@@ -31,20 +31,13 @@ class NumberFormatObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto NUMBERING_SYSTEM_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto OPTIONS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(2);
-  static constexpr auto DIGITS_OPTIONS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(3);
-  static constexpr auto UNUMBER_FORMATTER_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(4);
-  static constexpr auto UNUMBER_RANGE_FORMATTER_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(5);
-  static constexpr auto BOUND_FORMAT_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(6);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE_SLOT, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, NUMBERING_SYSTEM_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, OPTIONS_SLOT, Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, DIGITS_OPTIONS_SLOT, Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, UNUMBER_FORMATTER_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(5, UNUMBER_RANGE_FORMATTER_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(6, BOUND_FORMAT_SLOT, Object, Undefined);
   static constexpr uint32_t SLOT_COUNT = 7;
 
   // Estimated memory use for UNumberFormatter and UFormattedNumber

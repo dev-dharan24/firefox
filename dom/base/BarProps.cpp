@@ -199,15 +199,12 @@ StatusbarProp::StatusbarProp(nsGlobalWindowInner* aWindow) : BarProp(aWindow) {}
 
 StatusbarProp::~StatusbarProp() = default;
 
-bool StatusbarProp::GetVisible(CallerType aCallerType, ErrorResult& aRv) {
-  return BarProp::GetVisibleByFlag(nsIWebBrowserChrome::CHROME_STATUSBAR,
-                                   aCallerType, aRv);
+bool StatusbarProp::GetVisible(CallerType, ErrorResult&) {
+  return BarProp::GetVisibleByIsPopup();
 }
 
-void StatusbarProp::SetVisible(bool aVisible, CallerType aCallerType,
-                               ErrorResult& aRv) {
-  return BarProp::SetVisibleByFlag(
-      aVisible, nsIWebBrowserChrome::CHROME_STATUSBAR, aCallerType, aRv);
+void StatusbarProp::SetVisible(bool, CallerType, ErrorResult&) {
+  /* Do nothing */
 }
 
 //

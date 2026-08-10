@@ -3180,6 +3180,13 @@ class nsContentUtils {
   static mozilla::dom::ReferrerPolicy GetReferrerPolicyFromChannel(
       nsIChannel* aChannel);
 
+  /*
+   * Returns true if aElement's rel attribute contains the noreferrer
+   * keyword. rel=noreferrer is only supported on <a>, <area>, <form>, and
+   * SVG <a> elements.
+   */
+  static bool HasRelNoReferrer(const mozilla::dom::Element& aElement);
+
   static bool IsNonSubresourceRequest(nsIChannel* aChannel);
 
   static bool IsNonSubresourceInternalPolicyType(nsContentPolicyType aType);

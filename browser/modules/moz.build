@@ -138,7 +138,6 @@ EXTRA_JS_MODULES += [
     "ReducedProtectionNotification.sys.mjs",
     "Sanitizer.sys.mjs",
     "SelectionChangedMenulist.sys.mjs",
-    "SharingUtils.sys.mjs",
     "SiteDataManager.sys.mjs",
     "SitePermissions.sys.mjs",
     "TransientPrefs.sys.mjs",

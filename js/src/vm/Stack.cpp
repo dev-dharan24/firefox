@@ -355,6 +355,11 @@ void InterpreterFrame::trace(JSTracer* trc, Value* sp, jsbytecode* pc) {
     // All locals are live.
     traceValues(trc, 0, sp - slots());
   } else {
+    // Make sure we don't incorrectly clear locals of a frame that's still
+    // resuming before we reach JSOp::AfterYield. Currently nothing can trigger
+    // GC between restoring stack slots and setting the pc.
+    MOZ_ASSERT_IF(isResumingGenerator(), JSOp(*pc) == JSOp::AfterYield);
+
     // Trace operand stack.
     traceValues(trc, nfixed, sp - slots());
 

@@ -111,6 +111,7 @@ async function createMonitorWatching(urls, prompt) {
     prompt,
     watchUrls: urls,
     schedule: { type: "interval", hours: 1 },
+    source: "test",
   });
   const monitors = await MonitorAgent.listMonitors();
   return monitors.at(-1);
@@ -645,6 +646,129 @@ add_task(function test_Monitor_fromJSON_normalizes_loaded_history() {
   );
 });
 
+add_task(function test_categorizeError() {
+  const { categorizeError } = ChromeUtils.importESModule(
+    "moz-src:///browser/components/aiwindow/models/agents/Monitor.sys.mjs"
+  );
+
+  // Test network errors
+  Assert.equal(
+    categorizeError(new Error("Network request failed")),
+    "network_error",
+    "Network errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError("Fetch failed: connection refused"),
+    "network_error",
+    "Fetch failed errors are categorized as network errors"
+  );
+
+  // Test timeout errors
+  Assert.equal(
+    categorizeError(new Error("Request timeout after 30 seconds")),
+    "timeout",
+    "Timeout errors are categorized correctly"
+  );
+
+  // Test rate limit errors
+  Assert.equal(
+    categorizeError("Rate limit exceeded, please try again later"),
+    "rate_limit",
+    "Rate limit errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError(new Error("Quota exceeded for API calls")),
+    "rate_limit",
+    "Quota errors are categorized as rate limit"
+  );
+
+  // Test auth errors
+  Assert.equal(
+    categorizeError(new Error("Authentication failed")),
+    "auth_error",
+    "Authentication errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError("Unauthorized: Invalid API key"),
+    "auth_error",
+    "Unauthorized errors are categorized as auth errors"
+  );
+
+  // Test content extraction errors
+  Assert.equal(
+    categorizeError(new Error("Failed to extract page content")),
+    "content_extraction_error",
+    "Content extraction errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError("Unable to parse HTML response"),
+    "content_extraction_error",
+    "Parse errors are categorized as content extraction errors"
+  );
+
+  // Test interrupted errors
+  Assert.equal(
+    categorizeError(new Error("Monitor check was interrupted")),
+    "interrupted",
+    "Interrupted errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError("Request aborted by user"),
+    "interrupted",
+    "Abort errors are categorized as interrupted"
+  );
+
+  // Test model/API errors
+  Assert.equal(
+    categorizeError(new Error("Model API returned error 500")),
+    "model_error",
+    "Model API errors are categorized correctly"
+  );
+  Assert.equal(
+    categorizeError("API endpoint not found"),
+    "model_error",
+    "API errors are categorized as model errors"
+  );
+
+  // Test unknown errors
+  Assert.equal(
+    categorizeError(new Error("Something unexpected happened")),
+    "unknown_error",
+    "Unrecognized errors are categorized as unknown"
+  );
+  Assert.equal(
+    categorizeError("Random error message"),
+    "unknown_error",
+    "Generic errors are categorized as unknown"
+  );
+
+  // Test that sensitive info would be categorized, not returned
+  const sensitiveError =
+    "Failed to connect to https://internal.api.com/v1/secret-key-12345";
+  Assert.equal(
+    categorizeError(sensitiveError),
+    "network_error",
+    "Sensitive URL info is not returned, just the category"
+  );
+
+  // Verify the result is always one of the predefined codes
+  const validCodes = [
+    "network_error",
+    "timeout",
+    "rate_limit",
+    "auth_error",
+    "content_extraction_error",
+    "interrupted",
+    "model_error",
+    "unknown_error",
+  ];
+  const result = categorizeError("any random error");
+  Assert.ok(
+    validCodes.includes(result),
+    "Result is always one of the predefined safe codes"
+  );
+});
+
 add_task(async function test_monitor_limits_watch_urls() {
   try {
     // create a monitor that watches more than the allowed number of URLs
@@ -658,6 +782,7 @@ add_task(async function test_monitor_limits_watch_urls() {
         prompt: "Check if any product price is below $300.",
         watchUrls,
         schedule: { type: "interval", hours: 1 },
+        source: "test",
       }),
       /Cannot watch more than \d+ URLs in a monitor\./,
       `The monitor should limit the number of watch URLs to ${TOTAL_NUM_URLS_IN_MONITOR}`
@@ -671,10 +796,13 @@ add_task(async function test_monitor_limits_watch_urls() {
 add_task(async function test_createMonitor_returns_id() {
   try {
     await resetMonitorAgentForTesting();
+    Services.fog.testResetFOG(); // Reset telemetry for testing
+
     const id = await MonitorAgent.createMonitor({
       prompt: "Check if any product price is below $300.",
       watchUrls: ["https://example.com/product"],
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     Assert.equal(typeof id, "string", "createMonitor resolves to a string id");
     const monitors = await MonitorAgent.listMonitors();
@@ -682,6 +810,21 @@ add_task(async function test_createMonitor_returns_id() {
       monitors.at(-1).id,
       id,
       "returned id matches the created monitor"
+    );
+
+    // Test telemetry was recorded
+    const events = Glean.smartWindow.monitorCreate.testGetValue();
+    Assert.ok(events, "monitor_create event was recorded");
+    Assert.equal(events.length, 1, "One monitor_create event was recorded");
+    Assert.equal(
+      events[0].extra.source,
+      "test",
+      "monitor_create event has correct source"
+    );
+    Assert.equal(
+      events[0].extra.urls,
+      "1",
+      "monitor_create event has correct url count"
     );
   } finally {
     await resetMonitorAgentForTesting();
@@ -701,6 +844,7 @@ add_task(async function test_limit_number_of_monitors() {
         prompt: "Check if any product price is below $300.",
         watchUrls,
         schedule: { type: "interval", hours: 1 },
+        source: "test",
       });
     }
     await Assert.rejects(
@@ -708,6 +852,7 @@ add_task(async function test_limit_number_of_monitors() {
         prompt: "Check if any product price is below $300.",
         watchUrls,
         schedule: { type: "interval", hours: 1 },
+        source: "test",
       }),
       /Cannot create more than \d+ monitors\./,
       `The monitor should limit the number of monitors to ${TOTAL_NUM_MONITORS}`
@@ -746,6 +891,7 @@ add_task(async function test_monitor_only_watches_http_urls() {
         "javascript:alert(1)",
       ],
       schedule: { type: "interval", hours: 10 },
+      source: "test",
     });
     const [monitor] = await MonitorAgent.listMonitors();
 
@@ -796,6 +942,7 @@ add_task(async function test_pauseMonitor() {
       prompt: "Check if the product price is below $300.",
       watchUrls: ["https://example.com/product"],
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
 
     let monitors = await MonitorAgent.listMonitors();
@@ -900,11 +1047,14 @@ add_task(async function test_notification_shown_when_condition_met() {
 
   try {
     await resetMonitorAgentForTesting();
+    Services.fog.testResetFOG(); // Reset telemetry for testing
+
     await MonitorAgent.createMonitor({
       prompt: "Check if the product price is below $300.",
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -917,6 +1067,19 @@ add_task(async function test_notification_shown_when_condition_met() {
       alertsMock.alerts.length,
       1,
       "A desktop notification is shown when the condition is met"
+    );
+
+    // Test notification send telemetry was recorded
+    const notificationEvents =
+      Glean.smartWindow.monitorNotificationSend.testGetValue();
+    Assert.ok(
+      notificationEvents,
+      "monitor_notification_send event was recorded"
+    );
+    Assert.equal(
+      notificationEvents.length,
+      1,
+      "One notification send event was recorded"
     );
     const alert = alertsMock.alerts[0];
     Assert.equal(
@@ -945,6 +1108,7 @@ add_task(async function test_no_notification_when_condition_not_met() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -971,6 +1135,7 @@ add_task(async function test_notification_shown_every_matching_run() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1013,6 +1178,7 @@ add_task(async function test_notification_has_snooze_and_dismiss_actions() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1043,6 +1209,7 @@ add_task(async function test_notification_uses_localized_fallbacks() {
       prompt: "Check if the product price is below $300.",
       watchUrls: ["https://example.com/product"],
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1064,6 +1231,7 @@ add_task(async function test_notification_uses_localized_fallbacks() {
 });
 
 add_task(async function test_notification_body_click_opens_watched_url() {
+  Services.fog.testResetFOG();
   const alertsMock = mockAlertsService();
 
   // Capture where a body click would navigate
@@ -1078,6 +1246,7 @@ add_task(async function test_notification_body_click_opens_watched_url() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1092,6 +1261,17 @@ add_task(async function test_notification_body_click_opens_watched_url() {
       ["https://example.com/product"],
       "Clicking the notification body opens the watched URL"
     );
+
+    // Test notification click telemetry was recorded
+    const clickEvents =
+      Glean.smartWindow.monitorNotificationClick.testGetValue();
+    Assert.ok(clickEvents, "Notification click events were recorded");
+    Assert.equal(clickEvents.length, 1, "One click event was recorded");
+    Assert.equal(
+      clickEvents[0].extra.click_type,
+      "open_url",
+      "Click type is open_url"
+    );
   } finally {
     MonitorAgent._openWatchedUrl = originalOpen;
     alertsMock.cleanup();
@@ -1100,6 +1280,7 @@ add_task(async function test_notification_body_click_opens_watched_url() {
 });
 
 add_task(async function test_notification_snooze_action_defers_next_run() {
+  Services.fog.testResetFOG();
   const alertsMock = mockAlertsService();
 
   try {
@@ -1109,6 +1290,7 @@ add_task(async function test_notification_snooze_action_defers_next_run() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1131,6 +1313,17 @@ add_task(async function test_notification_snooze_action_defers_next_run() {
 
     const monitor = (await MonitorAgent.listMonitors()).find(m => m.id === id);
     Assert.ok(monitor.enabled, "Snoozed monitor stays enabled");
+
+    // Test notification click telemetry was recorded for snooze
+    const clickEvents =
+      Glean.smartWindow.monitorNotificationClick.testGetValue();
+    Assert.ok(clickEvents, "Notification click events were recorded");
+    Assert.equal(clickEvents.length, 1, "One click event was recorded");
+    Assert.equal(
+      clickEvents[0].extra.click_type,
+      "snooze",
+      "Click type is snooze"
+    );
   } finally {
     alertsMock.cleanup();
     await MonitorAgent._resetForTesting();
@@ -1148,6 +1341,7 @@ add_task(async function test_notification_snooze_resumes_on_schedule() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "daily", hour: 9, minute: 30 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1184,6 +1378,7 @@ add_task(async function test_notification_snooze_resumes_on_schedule() {
 });
 
 add_task(async function test_notification_dismiss_action_mutes_notifications() {
+  Services.fog.testResetFOG();
   const alertsMock = mockAlertsService();
 
   try {
@@ -1193,6 +1388,7 @@ add_task(async function test_notification_dismiss_action_mutes_notifications() {
       watchUrls: ["https://example.com/product"],
       pageTitle: "Sneaker deal",
       schedule: { type: "interval", hours: 1 },
+      source: "test",
     });
     const { id } = (await MonitorAgent.listMonitors()).at(-1);
 
@@ -1214,6 +1410,17 @@ add_task(async function test_notification_dismiss_action_mutes_notifications() {
 
     const monitor = (await MonitorAgent.listMonitors()).find(m => m.id === id);
     Assert.ok(monitor.enabled, "Dismissed monitor keeps running");
+
+    // Test notification click telemetry was recorded for dismiss
+    const clickEvents =
+      Glean.smartWindow.monitorNotificationClick.testGetValue();
+    Assert.ok(clickEvents, "Notification click events were recorded");
+    Assert.equal(clickEvents.length, 1, "One click event was recorded");
+    Assert.equal(
+      clickEvents[0].extra.click_type,
+      "dismiss",
+      "Click type is dismiss"
+    );
 
     await notifyMonitor(id, { conditionMet: true });
     Assert.equal(

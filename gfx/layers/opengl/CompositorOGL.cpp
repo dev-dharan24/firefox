@@ -1496,7 +1496,7 @@ void CompositorOGL::InsertFrameDoneSync() {
 
   EGLSync sync = nullptr;
   if (AndroidHardwareBufferManager::Get()) {
-    sync = egl->fCreateSync(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
+    sync = egl->fCreateSyncKHR(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
   }
   if (sync) {
     int fenceFd = egl->fDupNativeFenceFDANDROID(sync);

@@ -85,6 +85,12 @@ void BaselineFrame::trace(JSTracer* trc, const JSJitFrameIter& frameIterator) {
       // All locals are live.
       TraceLocals(this, trc, 0, numValueSlots);
     } else {
+      // Make sure we don't incorrectly clear locals of a frame that's still
+      // resuming before we reach JSOp::AfterYield. Currently nothing can
+      // trigger GC between restoring stack slots and jumping to
+      // JSOp::AfterYield.
+      MOZ_ASSERT_IF(isResumingGenerator(), JSOp(*pc) == JSOp::AfterYield);
+
       // Trace operand stack.
       TraceLocals(this, trc, nfixed, numValueSlots);
 

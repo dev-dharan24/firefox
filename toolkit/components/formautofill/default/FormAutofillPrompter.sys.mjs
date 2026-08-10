@@ -256,6 +256,13 @@ export class AutofillDoorhanger {
       this.flowId
     );
 
+    // showPrompt() only starts loading the doorhanger's Fluent files. Every
+    // string except the buttons' is applied by the document's asynchronous
+    // localization, so format one of them here to make sure the files are
+    // available before the panel opens. Otherwise the doorhanger is displayed
+    // with those strings missing and resizes once the translation lands.
+    await this.doc.l10n.formatValue(this.ui.header.l10nId);
+
     let options = {
       ...this.ui.options,
       eventCallback: state => this.onEventCallback(state),
@@ -1244,6 +1251,10 @@ CONTENT = {
           l10nId: "address-capture-not-now-button",
           callbackState: "cancel",
         },
+        {
+          l10nId: "address-capture-never-save-button",
+          callbackState: "disable",
+        },
       ],
     },
     options: {
@@ -1660,10 +1671,15 @@ export let FormAutofillPrompter = {
     }
 
     if (action == "disable") {
-      Services.prefs.setBoolPref(
-        AutofillDataTypes.get(type).enabledPref,
-        false
-      );
+      const descriptor = AutofillDataTypes.get(type);
+      if (type == AutofillDataTypes.ADDRESS) {
+        Services.prefs.setBoolPref(
+          `extensions.formautofill.${descriptor.prefKey}.capture.enabled`,
+          false
+        );
+      } else {
+        Services.prefs.setBoolPref(descriptor.enabledPref, false);
+      }
       return;
     }
 

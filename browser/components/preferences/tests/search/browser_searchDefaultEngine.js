@@ -12,6 +12,10 @@ const { SearchTestUtils } = ChromeUtils.importESModule(
 
 SearchTestUtils.init(this);
 
+// Nearly every task here opens about:preferences#search, and each open costs
+// tens of seconds under test-verify's chaos mode, so request a longer timeout.
+requestLongerTimeout(8);
+
 add_setup(async function () {
   await SearchTestUtils.installSearchExtension({
     name: "engine1",

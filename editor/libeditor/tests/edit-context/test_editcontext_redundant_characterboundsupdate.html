@@ -32,7 +32,9 @@ function runTests() {
   host.focus();
   // Clear any existing character bounds
   editContext.updateCharacterBounds(0, []);
-  check(() => {}, true, 'rectangle is first queried');
+  check(() => {
+    editContext.updateSelection(3, 4);
+  }, true, 'Selection is set without any character bounds.');
   if (provideCharacterBounds) {
     editContext.updateCharacterBounds(3, [new DOMRect(10,20,30,40)]);
   }
@@ -40,10 +42,6 @@ function runTests() {
     host.after(document.createElement('hr'));
     document.body.getBoundingClientRect();
   }, false, 'unrelated element is reflowed');
-  check(() => {
-    host.before(document.createElement('hr'));
-    document.body.getBoundingClientRect();
-  }, true, 'associated element bounding rect changes');
   check(() => {
     editContext.updateSelection(3, 3);
     synthesizeKey('x');

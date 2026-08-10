@@ -245,7 +245,10 @@ export class Monitor {
           this,
           manual,
           MONITOR_PROMPT_VERSION,
+          historyEntry.status === "error",
           historyEntry.status === "error"
+            ? categorizeError(historyEntry.resultExplanation)
+            : null
         );
       }
     }
@@ -565,12 +568,18 @@ export function trimAndFilterWatchUrls(urls) {
   return urls.map(url => String(url ?? "").trim()).filter(isAllowedWatchUrl);
 }
 
-function isAllowedWatchUrl(urlString) {
+export function isAllowedWatchUrl(urlString) {
   const url = URL.parse(urlString);
   return !!url && ["http:", "https:"].includes(url.protocol);
 }
 
-function recordMonitorRunTelemetry(monitor, manual, promptVersion, failed) {
+function recordMonitorRunTelemetry(
+  monitor,
+  manual,
+  promptVersion,
+  failed,
+  errorCode = null
+) {
   const extra = {
     monitors: lazy.MonitorAgent._monitorCountForTelemetry(),
     urls: monitor.watchUrls.length,
@@ -581,17 +590,56 @@ function recordMonitorRunTelemetry(monitor, manual, promptVersion, failed) {
     enabled: monitor.enabled,
   };
 
+  // Record run type (manual vs scheduled)
   if (manual) {
     Glean.smartWindow.monitorRunManual.record(extra);
   } else {
     Glean.smartWindow.monitorRunScheduled.record(extra);
   }
-  if (failed) {
-    Glean.smartWindow.monitorFailure.record(extra);
+
+  // Record completion with success/failure status
+  const completeExtra = {
+    ...extra,
+    success: !failed,
+  };
+  if (failed && errorCode) {
+    completeExtra.error_code = errorCode;
   }
+  Glean.smartWindow.monitorComplete.record(completeExtra);
 }
 
 export function monitorAgeMs(monitor) {
   const createdAt = Date.parse(monitor.createdAt);
   return Number.isFinite(createdAt) ? Math.max(0, Date.now() - createdAt) : 0;
+}
+
+/**
+ * Categorizes an error into a safe, predefined code for telemetry.
+ *
+ * Raw error messages are never returned to avoid accidentally including
+ * sensitive information in telemetry.
+ *
+ * @param {Error|string} error - The error to categorize.
+ * @returns {string} A safe telemetry error code.
+ */
+export function categorizeError(error) {
+  const message = (error?.message ?? String(error)).toLowerCase();
+
+  const categories = [
+    ["network_error", ["network", "fetch failed", "failed to connect"]],
+    ["timeout", ["timeout"]],
+    ["rate_limit", ["rate limit", "quota"]],
+    ["auth_error", ["authentication", "unauthorized"]],
+    ["content_extraction_error", ["extract", "parse"]],
+    ["interrupted", ["interrupt", "abort"]],
+    ["model_error", ["model api", "api error", "api endpoint"]],
+  ];
+
+  for (const [code, patterns] of categories) {
+    if (patterns.some(pattern => message.includes(pattern))) {
+      return code;
+    }
+  }
+
+  return "unknown_error";
 }

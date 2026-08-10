@@ -3528,8 +3528,12 @@ nsDocShell::DisplayLoadError(nsresult aError, nsIURI* aURI,
         error = "clientSocketMisconfiguration";
         break;
       case NS_ERROR_NET_RESET:
+      case NS_ERROR_OS_LOCAL_NETWORK_ACCESS_DENIED:
         // Doc failed to load because the server kept reseting the connection
         // before we could read any data from it
+        // NS_ERROR_OS_LOCAL_NETWORK_ACCESS_DENIED is temporarily grouped
+        // with netReset; it will get its own dedicated error page in
+        // bug 2060188.
         error = "netReset";
         break;
       case NS_ERROR_DOCUMENT_NOT_CACHED:
@@ -6151,6 +6155,7 @@ nsresult nsDocShell::FilterStatusForErrorPage(
 
   if (aStatus == NS_ERROR_NET_TIMEOUT ||
       aStatus == NS_ERROR_NET_TIMEOUT_EXTERNAL ||
+      aStatus == NS_ERROR_OS_LOCAL_NETWORK_ACCESS_DENIED ||
       aStatus == NS_ERROR_NET_EMPTY_RESPONSE ||
       aStatus == NS_ERROR_NET_ERROR_RESPONSE ||
       aStatus == NS_ERROR_PROXY_GATEWAY_TIMEOUT ||
@@ -9468,13 +9473,13 @@ bool nsDocShell::ShouldDoInitialAboutBlankSyncLoad(
         mDocumentViewer->GetDocument()->NodePrincipal()->GetIsNullPrincipal(),
         "Load looks like first load but does not want principal inheritance.");
   } else {
-    if (XRE_IsContentProcess() &&
-        !ValidatePrincipalCouldPotentiallyBeLoadedBy(
-            aPrincipalToInherit, ContentChild::GetSingleton()->GetRemoteType(),
-            {})) {
-      // Principal doesn't match our remote type, so the we need the normal
-      // load path to do a process switch.
-      return false;
+    if (XRE_IsContentProcess()) {
+      RefPtr<LoadedOriginSet> loadedOrigins = CurrentLoadedOriginSet();
+      if (!loadedOrigins->ValidatePrincipal(aPrincipalToInherit)) {
+        // We can't directly load this principal, so we need the normal load
+        // path to do a process switch.
+        return false;
+      }
     }
 
     // If a page opens about:blank, it will have a content principal.

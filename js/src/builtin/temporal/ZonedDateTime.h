@@ -32,11 +32,10 @@ class ZonedDateTimeObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto SECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Int32>(0);
-  static constexpr auto NANOSECONDS_SLOT = TypedSlot<ValueType::Int32>(1);
-  static constexpr auto TIMEZONE_SLOT = TypedSlot<ValueType::Object>(2);
-  static constexpr auto CALENDAR_SLOT = TypedSlot<ValueType::Int32>(3);
+  JS_DEFINE_TYPED_SLOT(0, SECONDS_SLOT, Double, Int32);
+  JS_DEFINE_TYPED_SLOT(1, NANOSECONDS_SLOT, Int32);
+  JS_DEFINE_TYPED_SLOT(2, TIMEZONE_SLOT, Object);
+  JS_DEFINE_TYPED_SLOT(3, CALENDAR_SLOT, Int32);
   static constexpr uint32_t SLOT_COUNT = 4;
 
   /**

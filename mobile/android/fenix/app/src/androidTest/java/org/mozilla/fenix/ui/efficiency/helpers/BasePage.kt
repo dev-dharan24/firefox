@@ -685,6 +685,73 @@ abstract class BasePage(
     }
 
     /**
+     * Polls until [selector] is present AND enabled, then clicks it. Use for a control that renders
+     * immediately but is briefly disabled (e.g. the add-on permission dialog's "Add" button, which
+     * PermissionsDialogFragment disables for ~1s): [mozClick]/[mozClickIfPresent] check presence only
+     * and would tap the still-disabled control, which the app ignores — a silent no-op. Dispatches
+     * across all element backends so it works regardless of the selector's strategy.
+     */
+    fun mozClickWhenEnabled(
+        selector: Selector,
+        timeout: Long = TestAssetHelper.waitingTime,
+        interval: Long = 200,
+    ): BasePage {
+        val rep = rep()
+        rep?.startCmd(safeId("click_when_enabled", selector.description), "Attempting to click '${selector.description}' once enabled...", 1)
+
+        val deadline = System.currentTimeMillis() + timeout
+        var element: Any? = null
+        while (System.currentTimeMillis() < deadline) {
+            rep?.startLoc(safeId("loc", selector.description), "Waiting for '${selector.description}' to be enabled...", 2)
+            element = mozGetElement(selector, applyPreconditions = false)
+            val enabled = element != null && isElementEnabled(element)
+            rep?.endLoc(success = enabled, message = if (enabled) found(selector.description) else notFound(selector.description))
+            if (enabled) break
+            element = null
+            SystemClock.sleep(interval)
+        }
+
+        if (element == null) {
+            rep?.endCmd(success = false, message = "'${selector.description}' not enabled after ${timeout}ms")
+            ScreenDump.dump(composeRule, "mozClickWhenEnabled: '${selector.description}' never became enabled")
+            throw AssertionError("'${selector.description}' was expected to become enabled but did not, after ${timeout}ms")
+        }
+
+        try {
+            when (element) {
+                is ViewInteraction -> element.perform(click())
+                is UiObject -> element.click()
+                is UiObject2 -> element.click()
+                is SemanticsNodeInteraction -> {
+                    element.assertExists()
+                    element.assertIsDisplayed()
+                    element.performClick()
+                }
+                else -> throw AssertionError("Unsupported element type (${element::class.simpleName}) for selector: ${selector.description}")
+            }
+            rep?.endCmd(success = true, message = "Clicked '${selector.description}'")
+            return this
+        } catch (e: Throwable) {
+            rep?.endCmd(success = false, message = "Click '${selector.description}' failed: ${e.message ?: "exception"}")
+            ScreenDump.dump(composeRule, "mozClickWhenEnabled failed: ${selector.description}")
+            throw e
+        }
+    }
+
+    /** Exception-safe "is this element enabled right now?" probe, dispatched across all backends. */
+    private fun isElementEnabled(element: Any?): Boolean = try {
+        when (element) {
+            is ViewInteraction -> { element.check(matches(isEnabled())); true }
+            is UiObject -> element.isEnabled
+            is UiObject2 -> element.isEnabled
+            is SemanticsNodeInteraction -> { element.assertExists(); element.assertIsEnabled(); true }
+            else -> false
+        }
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
      * Presses back until [selector] disappears, bounded by [maxPresses]. Mirrors the legacy
      * exitMenu() pattern: gating on the anchor's disappearance rather than a fixed back-press
      * count tolerates presses that are swallowed while a Compose/fragment transition is still
@@ -778,10 +845,18 @@ abstract class BasePage(
         }
     }
 
+    /**
+     * Swipe a single [direction] on [selector]'s element. [steps] controls the gesture speed for the
+     * UiAutomator ([UiObject]) backend: it is the number of motion events sent, so a low value produces a
+     * fast flick and a high value a slow drag. Some gestures only register as a flick (e.g. swiping the
+     * navigation toolbar to switch tabs), so callers that need one pass a small [steps]; the default of
+     * 100 keeps the original slow-drag behaviour for existing callers.
+     */
     fun mozSwipeElement(
         selector: Selector,
         direction: SwipeDirection,
         applyPreconditions: Boolean = false,
+        steps: Int = 100,
     ): BasePage {
         val rep = rep()
         rep?.startCmd(safeId("swipe_element", selector.description), "Swiping ${direction.name} on '${selector.description}'...", 1)
@@ -801,13 +876,25 @@ abstract class BasePage(
                 }
 
                 is UiObject -> {
-                    val steps = 100
                     when (direction) {
                         SwipeDirection.DOWN -> containerElement.swipeDown(steps)
                         SwipeDirection.UP -> containerElement.swipeUp(steps)
                         SwipeDirection.RIGHT -> containerElement.swipeRight(steps)
                         SwipeDirection.LEFT -> containerElement.swipeLeft(steps)
                     }
+                }
+
+                is UiObject2 -> {
+                    val swipePercent = 1.0f
+
+                    val uiAutomatorDirection = when (direction) {
+                        SwipeDirection.DOWN -> androidx.test.uiautomator.Direction.DOWN
+                        SwipeDirection.UP -> androidx.test.uiautomator.Direction.UP
+                        SwipeDirection.RIGHT -> androidx.test.uiautomator.Direction.RIGHT
+                        SwipeDirection.LEFT -> androidx.test.uiautomator.Direction.LEFT
+                    }
+
+                    containerElement.swipe(uiAutomatorDirection, swipePercent)
                 }
 
                 is SemanticsNodeInteraction -> {
@@ -852,6 +939,35 @@ abstract class BasePage(
         }
 
         return this
+    }
+
+    fun mozSwipeElementUntilAbsent(
+        selector: Selector,
+        direction: SwipeDirection,
+        maxSwipes: Int = 3,
+        applyPreconditions: Boolean = false,
+    ): BasePage {
+        val rep = rep()
+        rep?.startCmd(safeId("swipe_element_until_absent", selector.description), "Swiping ${direction.name} on '${selector.description}' until absent...", 1)
+
+        repeat(maxSwipes) { attempt ->
+            rep?.startLoc(safeId("loc", "${selector.description}_attempt_${attempt + 1}"), "Attempting to locate '${selector.description}'...", 2)
+            val present = mozVerifyElement(selector, applyPreconditions = false)
+            rep?.endLoc(success = !present, message = if (present) found(selector.description) else notFound(selector.description))
+
+            if (!present) {
+                rep?.endCmd(success = true, message = "'${selector.description}' gone after $attempt swipe(s)")
+                return this
+            }
+
+            mozSwipeElement(selector, direction, applyPreconditions)
+            composeRule.waitForIdle()
+            mDevice.waitForIdle()
+        }
+
+        rep?.endCmd(success = false, message = "'${selector.description}' still present after $maxSwipes swipe(s)")
+        ScreenDump.dump(composeRule, "mozSwipeElementUntilAbsent failed: ${selector.description}")
+        throw AssertionError("'${selector.description}' still present after $maxSwipes swipe(s)")
     }
 
     fun mozOpenNotificationsTray(): BasePage {
@@ -1363,8 +1479,18 @@ abstract class BasePage(
                 }
             }
 
+            SelectorStrategy.UIAUTOMATOR2_BY_DESCRIPTION_CONTAINS -> {
+                val obj = mDevice.findObject(By.descContains(selector.value))
+                if (obj == null) {
+                    Log.i("mozGetElement", "UIObject2 not found for descContains: ${selector.value}")
+                    null
+                } else {
+                    obj
+                }
+            }
+
             SelectorStrategy.UIAUTOMATOR2_BY_RES -> {
-                val obj = mDevice.findObject(By.res(selector.value))
+                val obj = mDevice.findObject(By.res(packageName + ":id/" + selector.value))
                 if (obj == null) {
                     Log.i("mozGetElement", "UIObject2 not found for res: ${selector.value}")
                     null
@@ -1412,6 +1538,18 @@ abstract class BasePage(
                 val textToMatch = selector.secondaryValue ?: ""
                 val fullResId = packageName + ":id/" + selector.value
                 val obj = mDevice.findObject(UiSelector().resourceId(fullResId).textContains(textToMatch))
+                if (!obj.exists()) null else obj
+            }
+
+            // Res-id used verbatim — no packageName prefix — for system-UI ids we do not own.
+            SelectorStrategy.UIAUTOMATOR_WITH_RAW_RES_ID_CONTAINING_TEXT -> {
+                val textToMatch = selector.secondaryValue ?: ""
+                val obj = mDevice.findObject(UiSelector().resourceId(selector.value).textContains(textToMatch))
+                if (!obj.exists()) null else obj
+            }
+
+            SelectorStrategy.UIAUTOMATOR_WITH_RAW_RES_ID -> {
+                val obj = mDevice.findObject(UiSelector().resourceId(selector.value))
                 if (!obj.exists()) null else obj
             }
 

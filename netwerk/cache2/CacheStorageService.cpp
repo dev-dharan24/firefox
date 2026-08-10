@@ -1705,6 +1705,10 @@ nsresult CacheStorageService::AddStorageEntry(
               continue;
             }
 
+            if (!candidate->GetEnhanceID().Equals(aIdExtension)) {
+              continue;
+            }
+
             nsAutoCString nvsVal;
             candidate->GetMetaDataElement("no-vary-search",
                                           getter_Copies(nvsVal));

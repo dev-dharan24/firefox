@@ -6,11 +6,13 @@
 
 #include "mozilla/Components.h"
 #include "mozilla/IHistory.h"
+#include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/dom/BindContext.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/HTMLDNSPrefetch.h"
 #include "mozilla/dom/SVGAElement.h"
+#include "mozilla/dom/SpeculationRules.h"
 #include "nsAttrValueInlines.h"
 #include "nsGkAtoms.h"
 #include "nsIURIMutator.h"
@@ -403,6 +405,30 @@ void Link::ResetLinkState(bool aNotify, bool aHasHref) {
   // href is unvisited.
   SetLinkState(aHasHref ? State::Unvisited : State::NotLink, aNotify);
   TriggerLinkUpdate(aNotify);
+
+  UpdateSpeculationRulesLink(aHasHref);
+}
+
+void Link::UpdateSpeculationRulesLink(bool aHasHref) {
+  // "find matching links" only considers HTML <a> and <area> elements; SVG <a>
+  // elements are excluded.
+  if (!mElement->IsAnyOfHTMLElements(nsGkAtoms::a, nsGkAtoms::area)) {
+    return;
+  }
+
+  // A link is a candidate while it has an href and is connected to a document.
+  // The remaining "find matching links" conditions (being rendered, having an
+  // HTTP(S) URL) are evaluated when the candidates are fetched, since they can
+  // change without the link being reset.
+  if (StaticPrefs::dom_speculation_rules_enabled() && aHasHref &&
+      mElement->IsInComposedDoc()) {
+    mElement->OwnerDoc()->SpeculationRules().AddLink(mElement);
+  } else if (auto* speculationRules =
+                 mElement->OwnerDoc()->GetSpeculationRules()) {
+    // Always stop tracking, even if the pref was disabled after this link
+    // was added, so that we never leave a dangling pointer in the set.
+    speculationRules->RemoveLink(mElement);
+  }
 }
 
 void Link::Unregister() {

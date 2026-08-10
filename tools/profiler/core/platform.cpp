@@ -8156,16 +8156,17 @@ UniquePtr<ProfileChunkedBuffer> profiler_capture_backtrace() {
     return nullptr;
   }
 
-  auto buffer = MakeUnique<ProfileChunkedBuffer>(
+  ProfileChunkedBuffer captureBuffer(
       ProfileChunkedBuffer::ThreadSafety::WithoutMutex,
       MakeUnique<ProfileBufferChunkManagerSingle>(
           ProfileBufferChunkManager::scExpectedMaximumStackSize));
 
-  if (!profiler_capture_backtrace_into(*buffer, StackCaptureOptions::Full)) {
+  if (!profiler_capture_backtrace_into(captureBuffer,
+                                       StackCaptureOptions::Full)) {
     return nullptr;
   }
 
-  return buffer;
+  return mozilla::profiler::detail::CopyToRightSizedBuffer(captureBuffer);
 }
 
 UniqueProfilerBacktrace profiler_get_backtrace() {

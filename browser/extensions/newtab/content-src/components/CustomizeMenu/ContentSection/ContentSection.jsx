@@ -193,6 +193,7 @@ export class ContentSection extends React.PureComponent {
       pocketRegion,
       mayHaveInferredPersonalization,
       mayHaveWeather,
+      mayHaveWebNotifications,
       mayHaveWidgets,
       mayHaveTimerWidget,
       mayHaveListsWidget,
@@ -229,6 +230,7 @@ export class ContentSection extends React.PureComponent {
       weatherEnabled,
       showInferredPersonalizationEnabled,
       topSitesRowsCount,
+      webNotificationsEnabled,
     } = enabledSections;
     const {
       timerEnabled,
@@ -487,6 +489,17 @@ export class ContentSection extends React.PureComponent {
                         )}
                       </moz-select>
                     </div>
+                    {mayHaveWebNotifications && (
+                      <div className="more-information">
+                        <moz-toggle
+                          id="web-notifications-toggle"
+                          pressed={webNotificationsEnabled || null}
+                          ontoggle={this.onPreferenceSelect}
+                          data-preference="showWebNotifications"
+                          data-l10n-id="newtab-custom-web-notifications-toggle"
+                        ></moz-toggle>
+                      </div>
+                    )}
                   </div>
                 </div>
               </moz-toggle>

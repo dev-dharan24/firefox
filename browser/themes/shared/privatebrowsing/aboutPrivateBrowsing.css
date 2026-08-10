@@ -604,7 +604,6 @@ content-search-handoff-ui {
   }
 
   .nova-promo-wrapper {
-    position: relative;
     display: flex;
     width: 100%;
     margin-block-start: var(--space-xxlarge);
@@ -612,11 +611,5 @@ content-search-handoff-ui {
 
   #nova-promo {
     flex: 1;
-  }
-
-  #nova-dismiss-btn {
-    position: absolute;
-    inset-block-start: var(--space-small);
-    inset-inline-end: var(--space-small);
   }
 }

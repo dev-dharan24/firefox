@@ -497,6 +497,11 @@ class RenderThread final {
 
   ~RenderThread();
 
+  /// Shuts down the shared render backend pool, blocking until its threads
+  /// have exited. Does nothing if there is no pool or if it was already
+  /// destroyed.
+  void DestroyRenderBackendPool();
+
   RefPtr<nsIThread> const mThread;
 
   WebRenderThreadPool mThreadPool;

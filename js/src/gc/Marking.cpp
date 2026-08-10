@@ -1085,7 +1085,7 @@ void js::gc::PerformIncrementalBarrierDuringFlattening(JSString* str) {
   // Skip eager marking of ropes during flattening. Their children will also be
   // barriered by flattening process so we don't need to traverse them.
   if (str->isRope()) {
-    cell->markBlack();
+    cell->markBlackAtomic();
     return;
   }
 

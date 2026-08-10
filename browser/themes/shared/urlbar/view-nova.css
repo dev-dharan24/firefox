@@ -33,7 +33,7 @@
   --urlbarView-rich-search-suggestion-icon-border-radius: var(--border-radius-small);
   --urlbarView-top-pick-icon-size: 58px;
   --urlbarView-top-pick-icon-border-radius: calc(
-    var(--urlbarView-row-border-radius) - min(var(--urlbarView-row-padding-block), var(--urlbarView-row-padding-inline))
+    var(--urlbarView-row-border-radius) - min(var(--urlbarview-row-padding-block), var(--urlbarView-row-padding-inline))
   );
 
   /* Icon margin-end not taking into account the size of the icon */
@@ -255,6 +255,9 @@
     > .urlbarView-row-body-top-no-wrap {
       grid-area: title;
       max-width: 100%;
+      /* The title has dir="auto", so stretching it across the row would push an
+         LTR title to the left edge in an RTL locale. */
+      justify-self: start;
 
       > .urlbarView-title-separator {
         display: none;
@@ -901,6 +904,8 @@
 }
 
 .urlbarView-explanation {
+  display: flex;
+  align-items: baseline;
   visibility: collapse;
   margin-inline: calc(var(--urlbarView-row-padding-inline) + var(--urlbarView-icon-margin-start));
   flex: 0 0 auto;
@@ -1366,10 +1371,12 @@
     /* Inline spacing between multiple items in a row */
     margin-inline-end: var(--space-small);
 
-    /* The block and inline-start padding should match the normal inner inline
-     padding we removed above, in order to keep the first item's image aligned
-     with the text and images in other rows. */
-    padding: var(--urlbarView-row-padding-inline);
+    /* Except in compact mode, the block and inline-start padding should match the
+       normal inner inline padding we removed above, in order to keep the first
+       item's image aligned with the text and images in other rows. */
+    :root:not([uidensity="compact"]) & {
+      padding: var(--urlbarView-row-padding-inline);
+    }
     padding-inline-end: var(--space-large);
 
     .urlbarView-realtime-root:not([selectable]) > &:not([selected]):hover {
@@ -1431,7 +1438,8 @@
           display: inline;
         }
 
-        /* stylelint-disable-next-line max-nesting-depth */
+        /* Small subtree */
+        /* stylelint-disable-next-line max-nesting-depth, stylelint-plugin-mozilla/no-has-selector */
         &:has(+ span:empty) {
           display: none;
         }
@@ -1941,6 +1949,20 @@
   --panel-text-color: var(--toolbar-field-text-color-focus);
   --panel-background-color: var(--toolbar-field-background-color-focus);
   --panel-border-color: inherit;
+
+  > richlistbox > richlistitem {
+    width: 100%;
+
+    &[selected] {
+      border-radius: var(--border-radius-large);
+      background-color: var(--urlbarview-background-color-selected);
+      color: var(--urlbarview-text-color-selected);
+    }
+
+    > autocomplete-row-item {
+      width: 100%;
+    }
+  }
 }
 
 #PopupSearchAutoComplete::part(content) {

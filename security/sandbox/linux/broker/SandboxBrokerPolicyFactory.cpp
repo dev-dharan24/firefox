@@ -1074,6 +1074,18 @@ SandboxBrokerPolicyFactory::GetRDDPolicy(int aPid) {
 #  endif
     // Vulkan on X11/XWayland needs display server socket access.
     AddX11Dependencies(policy.get());
+#  if defined(MOZ_WIDGET_GTK) && defined(MOZ_X11)
+    // AddX11Dependencies() skips the X socket on a Wayland UI, but the EGL
+    // bring-up in RDD still connects to XWayland (bug 2057724). Grant the
+    // same paths it would have granted on X11: the socket, and the cookie
+    // ($XAUTHORITY — on GNOME this is $XDG_RUNTIME_DIR/.mutter-Xwaylandauth.*).
+    if (mozilla::widget::GdkIsWaylandDisplay() && PR_GetEnv("DISPLAY")) {
+      policy->AddPrefix(SandboxBroker::MAY_CONNECT, "/tmp/.X11-unix/X");
+      if (auto* const xauth = PR_GetEnv("XAUTHORITY")) {
+        policy->AddPath(rdonly, xauth);
+      }
+    }
+#  endif
   }
 #endif  // MOZ_ENABLE_VULKAN_VIDEO
 

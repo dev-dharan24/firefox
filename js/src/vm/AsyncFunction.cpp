@@ -258,7 +258,7 @@ AsyncFunctionGeneratorObject* AsyncFunctionGeneratorObject::create(
   if (!obj) {
     return nullptr;
   }
-  obj->initFixedSlot(PROMISE_SLOT, ObjectValue(*resultPromise));
+  obj->initFixedSlotTyped(PROMISE_SLOT, ObjectValue(*resultPromise));
 
   // Starts in the running state.
   obj->setResumeIndex(AbstractGeneratorObject::RESUME_INDEX_RUNNING);
@@ -327,7 +327,7 @@ AsyncFunctionGeneratorObject* AsyncFunctionGeneratorObject::create(
   if (!obj) {
     return nullptr;
   }
-  obj->initFixedSlot(PROMISE_SLOT, ObjectValue(*resultPromise));
+  obj->initFixedSlotTyped(PROMISE_SLOT, ObjectValue(*resultPromise));
 
   RootedObject onFulfilled(
       cx, NewHandler(cx, AsyncModuleExecutionFulfilledHandler, module));

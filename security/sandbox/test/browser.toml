@@ -39,7 +39,6 @@ run-if = [
 ]
 skip-if = [
   "os == 'linux' && debug && artifact", # bug 1945658
-  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && debug && nova", # Bug 2057884
   "os == 'win' && os_version == '11.26200' && arch == 'x86' && debug", # bug 2028636
   "os == 'win' && os_version == '11.26200' && arch == 'x86_64' && debug", # bug 2028636
 ]

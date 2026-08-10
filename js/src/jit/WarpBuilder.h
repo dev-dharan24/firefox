@@ -36,7 +36,6 @@ namespace jit {
   _(StrictSetElemSuper)                  \
   /* Generators / Async (bug 1317690) */ \
   _(IsGenClosing)                        \
-  _(Resume)                              \
   /* Misc */                             \
   _(DelName)                             \
   _(SetIntrinsic)                        \

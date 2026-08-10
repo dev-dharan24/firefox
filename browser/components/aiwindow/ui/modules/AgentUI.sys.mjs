@@ -27,6 +27,8 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   MonitorAgent:
     "moz-src:///browser/components/aiwindow/models/agents/MonitorAgent.sys.mjs",
+  MonitorUIUtils:
+    "moz-src:///browser/components/aiwindow/ui/modules/MonitorUIUtils.sys.mjs",
   IntervalSchedule:
     "moz-src:///browser/components/aiwindow/models/agents/Schedule.sys.mjs",
   DailySchedule:
@@ -37,6 +39,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/models/agents/Monitor.sys.mjs",
   TOTAL_NUM_MONITORS:
     "moz-src:///browser/components/aiwindow/models/agents/Monitor.sys.mjs",
+  isAllowedWatchUrl:
+    "moz-src:///browser/components/aiwindow/models/agents/Monitor.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "console", () =>
@@ -44,6 +48,12 @@ ChromeUtils.defineLazyGetter(lazy, "console", () =>
     prefix: "AgentUI",
     maxLogLevelPref: "browser.smartwindow.agentUI.logLevel",
   })
+);
+
+ChromeUtils.defineLazyGetter(
+  lazy,
+  "l10n",
+  () => new Localization(["preview/aiWindow.ftl"], true)
 );
 
 /**
@@ -59,21 +69,23 @@ export const AGENT_UI_TYPES = Object.freeze({
  * Kept in sync with the UI_UPDATE_TYPES map in ai-chat-content.mjs
  */
 export const AGENT_UPDATE_TYPES = Object.freeze({
-  CREATE_MONITOR: "create-monitor",
-  CANCEL_MONITOR: "cancel-monitor",
-  UPDATE_MONITOR: "update-monitor",
-  DELETE_MONITOR: "delete-monitor",
-  PAUSE_MONITOR: "pause-monitor",
-  CHECK_MONITOR: "check-monitor",
+  CREATE_WATCH: "create-watch",
+  CANCEL_WATCH: "cancel-watch",
+  UPDATE_WATCH: "update-watch",
+  DELETE_WATCH: "delete-watch",
+  PAUSE_WATCH: "pause-watch",
+  CHECK_WATCH: "check-watch",
 });
 
 export const AGENT_COMMANDS = Object.freeze({
-  MONITOR: "monitor",
+  WATCH: "watch",
 });
 
 // Default cadence for a newly created monitor
 const DEFAULT_MONITOR_CHECK_MINUTES = 60;
 const PREF_AGENT_ENABLED = "browser.smartwindow.agent.enabled";
+// Address of the tasks page, passed to chat messages as the $url variable.
+const TASKS_PAGE_URL = "about:smartwindowtasks";
 
 /**
  * Handles interactive updates from agent cards embedded in chat
@@ -115,12 +127,13 @@ export class AgentUI {
    * @private
    */
   static #UPDATE_TYPE_HANDLERS = {
-    [AGENT_UPDATE_TYPES.CREATE_MONITOR]: this.handleCreateMonitor.bind(this),
-    [AGENT_UPDATE_TYPES.CANCEL_MONITOR]: this.#handleCancelMonitor.bind(this),
-    [AGENT_UPDATE_TYPES.UPDATE_MONITOR]: this.#handleUpdateMonitor.bind(this),
-    [AGENT_UPDATE_TYPES.DELETE_MONITOR]: this.#handleDeleteMonitor.bind(this),
-    [AGENT_UPDATE_TYPES.PAUSE_MONITOR]: this.#handlePauseMonitor.bind(this),
-    [AGENT_UPDATE_TYPES.CHECK_MONITOR]: this.#handleCheckMonitor.bind(this),
+    /* TODO: Bug 2060609 - match naming monitor -> watch */
+    [AGENT_UPDATE_TYPES.CREATE_WATCH]: this.handleCreateMonitor.bind(this),
+    [AGENT_UPDATE_TYPES.CANCEL_WATCH]: this.#handleCancelMonitor.bind(this),
+    [AGENT_UPDATE_TYPES.UPDATE_WATCH]: this.#handleUpdateMonitor.bind(this),
+    [AGENT_UPDATE_TYPES.DELETE_WATCH]: this.#handleDeleteMonitor.bind(this),
+    [AGENT_UPDATE_TYPES.PAUSE_WATCH]: this.#handlePauseMonitor.bind(this),
+    [AGENT_UPDATE_TYPES.CHECK_WATCH]: this.#handleCheckMonitor.bind(this),
   };
 
   /**
@@ -129,7 +142,7 @@ export class AgentUI {
    * @private
    */
   static #COMMAND_HANDLERS = {
-    [AGENT_COMMANDS.MONITOR]: this.#handleMonitorCommand.bind(this),
+    [AGENT_COMMANDS.WATCH]: this.#handleMonitorCommand.bind(this),
   };
 
   /**
@@ -151,20 +164,26 @@ export class AgentUI {
       conversation.emit("chat-conversation:message-update", userMessage);
     }
 
-    const monitors = await lazy.MonitorAgent.listMonitors();
-    if (monitors.length >= lazy.TOTAL_NUM_MONITORS) {
-      // TODO: Bug 2054529 - localize this string
-      conversation.addAssistantMessage(
-        "text",
-        `You've hit the limit of ${lazy.TOTAL_NUM_MONITORS} monitors. Remove one at about:tools to start a new one.`
+    if (!lazy.isAllowedWatchUrl(url)) {
+      conversation.addAssistantWithL10nMessage(
+        "smartwindow-agent-monitor-page-not-watchable"
       );
       return;
     }
 
-    // TODO: Bug 2054529 - localize this string
+    const monitors = await lazy.MonitorAgent.listMonitors();
+    if (monitors.length >= lazy.TOTAL_NUM_MONITORS) {
+      conversation.addAssistantWithL10nMessage(
+        "smartwindow-agent-monitor-limit-reached",
+        { count: lazy.TOTAL_NUM_MONITORS },
+        { l10nName: "tasks", href: TASKS_PAGE_URL }
+      );
+      return;
+    }
+
     conversation.addAssistantMessage(
       "text",
-      "Looks like a product page — I've set this up to watch the price. Tweak anything, then start it."
+      lazy.l10n.formatValueSync("smartwindow-agent-monitor-setup")
     );
     conversation.addUIToolToCurrentMessage(`monitor-${crypto.randomUUID()}`, {
       uiType: AGENT_UI_TYPES.MONITOR_ITEM,
@@ -204,9 +223,16 @@ export class AgentUI {
       return false;
     }
 
-    // TODO: Bug 2054529 - localize this string
-    const monitorName = args.pageTitle || "this page";
-    message.content.body = `Watching ${monitorName}. You'll hear from me if ${args.prompt} — it lives at about:tools.`;
+    const monitorName =
+      args.pageTitle ||
+      lazy.l10n.formatValueSync("smartwindow-agent-monitor-default-name");
+    message.content.body = "";
+    message.content.l10nId = "smartwindow-agent-monitor-watching";
+    message.content.l10nArgs = {
+      monitorName,
+      schedule: this.#formatScheduleSummary(updateData?.schedule),
+    };
+    message.content.link = { l10nName: "tasks", href: TASKS_PAGE_URL };
     message.toolUIData = {
       ...message.toolUIData,
       properties: {
@@ -217,14 +243,33 @@ export class AgentUI {
           url: args.watchUrls[0] ?? "",
           watchUrls: args.watchUrls,
           condition: args.prompt,
-          status: { label: "Watching", kind: "watching" },
+          status: this.#statusForKind("watching"),
           schedule: updateData?.schedule,
+          expanded: updateData?.autoExpandAndCheck === true, // Auto-expand if requested
         },
       },
     };
     conversation.emit("chat-conversation:message-update", message);
     // Mark the message complete so it renders the assistant footer
     conversation.emit("chat-conversation:message-complete", message);
+
+    // If auto-expand and check was requested, trigger a check-now after a short delay
+    if (updateData?.autoExpandAndCheck) {
+      // Wait for the UI to update
+      Services.tm.dispatchToMainThread(async () => {
+        try {
+          await lazy.MonitorAgent.runNow(monitorId);
+          // The check will trigger a MONITOR_AGENTS_CHANGED_TOPIC notification
+          // which will update the card's history automatically
+        } catch (error) {
+          lazy.console.error(
+            "AgentUI: failed to run initial monitor check",
+            error
+          );
+        }
+      });
+    }
+
     return true;
   }
 
@@ -289,20 +334,52 @@ export class AgentUI {
    * @param {AgentHandlerContext} context
    * @returns {Promise<boolean>}
    */
-  static async #handleDeleteMonitor({ message, updateData, conversation }) {
+  static async #handleDeleteMonitor({
+    message,
+    updateData,
+    conversation,
+    window,
+  }) {
     const id = updateData?.id;
     if (!id) {
       lazy.console.warn("AgentUI: cannot delete a monitor without an id");
       return false;
     }
 
-    try {
-      await lazy.MonitorAgent.deleteMonitor(id);
-    } catch (error) {
-      lazy.console.error("AgentUI: failed to delete monitor", error);
+    // Get the browsing context from the window
+    const browsingContext = window?.gBrowser?.selectedBrowser?.browsingContext;
+    if (!browsingContext) {
+      lazy.console.warn(
+        "AgentUI: cannot get browsing context for confirmation dialog"
+      );
       return false;
     }
 
+    const result = await lazy.MonitorUIUtils.deleteMonitorWithConfirmation(
+      browsingContext,
+      id
+    );
+
+    if (!result.success) {
+      lazy.console.error("AgentUI: failed to delete monitor", result.error);
+      return false;
+    }
+
+    if (result.cancelled) {
+      // User cancelled, don't remove the card
+      return true;
+    }
+
+    const agent = message?.toolUIData?.properties?.agent ?? {};
+    const monitorName =
+      agent.monitorName ||
+      lazy.l10n.formatValueSync("smartwindow-agent-monitor-default-name");
+    message.content.body = "";
+    message.content.l10nId = "smartwindow-agent-monitor-deleted";
+    message.content.l10nArgs = { monitorName };
+    message.content.link = null;
+
+    // User confirmed and deletion succeeded, remove the card
     await conversation.updateToolUI(message, null, null);
     return true;
   }
@@ -322,6 +399,7 @@ export class AgentUI {
     }
 
     const paused = !!updateData?.paused;
+
     try {
       await lazy.MonitorAgent.updateMonitor(id, { enabled: !paused });
     } catch (error) {
@@ -330,10 +408,7 @@ export class AgentUI {
     }
 
     const agent = message?.toolUIData?.properties?.agent ?? {};
-    // TODO: Bug 2054529 - localize these strings
-    const status = paused
-      ? { label: "Paused", kind: "paused" }
-      : { label: "Watching", kind: "watching" };
+    const status = this.#statusForKind(paused ? "paused" : "watching");
     message.toolUIData = {
       ...message.toolUIData,
       properties: {
@@ -462,9 +537,9 @@ export class AgentUI {
         continue;
       }
 
+      // Pass raw history data - let the component handle formatting
       const history = (monitor.history ?? [])
         .filter(entry => entry.status === "success" || entry.status === "error")
-        .map(entry => this.#toHistoryRow(entry))
         .reverse();
 
       if (JSON.stringify(history) === JSON.stringify(agent.history ?? [])) {
@@ -483,50 +558,19 @@ export class AgentUI {
   }
 
   /**
-   * Maps a completed monitor run entry to a card history row
+   * Builds a card status chip for a monitor state
    *
-   * @param {object} entry - A monitor history entry '{ checkedAt, status,
-   *   conditionMet, ... }'
-   * @returns {{ when: string, flag?: string, note?: string, low?: boolean }}
+   * @param {"watching"|"paused"} kind
+   * @returns {{ label: string, kind: string }}
    * @private
    */
-  static #toHistoryRow(entry) {
-    const when = this.#formatCheckedAt(entry.checkedAt);
-    // TODO: Bug 2054529 - localize these strings
-    if (entry.status === "error") {
-      return { when, note: "Check failed. Check again later.", low: true };
-    }
-    if (entry.conditionMet) {
-      return { when, flag: "notified" };
-    }
+  static #statusForKind(kind) {
     return {
-      when,
-      note: "Checked, didn't meet your alert. Check again later.",
-      low: true,
+      label: lazy.l10n.formatValueSync(
+        `smartwindow-agent-monitor-status-${kind}`
+      ),
+      kind,
     };
-  }
-
-  /**
-   * Formats a run's timestamp
-   *
-   * @param {string} [iso] - ISO timestamp of the run
-   * @returns {string}
-   * @private
-   */
-  static #formatCheckedAt(iso) {
-    const date = iso ? new Date(iso) : new Date();
-    const now = new Date();
-    // TODO: Bug 2054529 - localize these strings
-    if (now - date < 60000) {
-      return "Just now";
-    }
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    }
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
   }
 
   /**
@@ -548,6 +592,8 @@ export class AgentUI {
       pageTitle:
         updateData?.monitorName || agent.monitorName || agent.pageTitle || "",
       schedule: this.#buildSchedule(updateData?.schedule),
+      // AgentUI is primarily a chat feature, so we can use this as the source for now
+      source: "in_line_chat",
     };
   }
 
@@ -571,6 +617,40 @@ export class AgentUI {
       default:
         return new lazy.IntervalSchedule(DEFAULT_MONITOR_CHECK_MINUTES);
     }
+  }
+
+  /**
+   * Formats a localized, readable cadence for a schedule (e.g.
+   * "daily at 9:00 AM" or "weekly on Monday at 9:00 AM")
+   *
+   * @param {object} [schedule] - '{ frequency: "daily"|"weekly", time: "HH:MM",
+   *   weekday: string }' from the card submit event
+   * @returns {string} The localized cadence
+   * @private
+   */
+  static #formatScheduleSummary(schedule) {
+    const [hour, minute] = String(schedule?.time ?? "")
+      .split(":")
+      .map(Number);
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+      return "";
+    }
+    const when = new Date();
+    when.setHours(hour, minute, 0, 0);
+    if (schedule.frequency === "weekly") {
+      const offset = (Number(schedule.weekday) - when.getDay() + 7) % 7;
+      when.setDate(when.getDate() + offset);
+      return lazy.l10n.formatValueSync(
+        "smartwindow-agent-monitor-schedule-weekly",
+        // DATETIME needs a numeric timestamp
+        { time: when.getTime() }
+      );
+    }
+    return lazy.l10n.formatValueSync(
+      "smartwindow-agent-monitor-schedule-daily",
+      // DATETIME needs a numeric timestamp
+      { time: when.getTime() }
+    );
   }
 
   /**
@@ -614,7 +694,10 @@ export class AgentUI {
     conversation,
     window,
   }) {
-    if (!Services.prefs.getBoolPref(PREF_AGENT_ENABLED, false)) {
+    if (
+      !lazy.MonitorUIUtils.isMonitorRegionSupported() ||
+      !Services.prefs.getBoolPref(PREF_AGENT_ENABLED, false)
+    ) {
       return false;
     }
 

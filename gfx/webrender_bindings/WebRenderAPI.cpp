@@ -109,16 +109,18 @@ void TransactionBuilder::RemovePipeline(PipelineId aPipelineId) {
 }
 
 void TransactionBuilder::SetDisplayList(
-    Epoch aEpoch, wr::WrPipelineId pipeline_id,
+    Epoch aEpoch, wr::IdNamespace aIdNamespace, wr::WrPipelineId pipeline_id,
     wr::BuiltDisplayListDescriptor dl_descriptor,
     wr::Vec<uint8_t>& dl_items_data, wr::Vec<uint8_t>& dl_spatial_tree) {
-  wr_transaction_set_display_list(mTxn, aEpoch, pipeline_id, dl_descriptor,
-                                  &dl_items_data.inner, &dl_spatial_tree.inner);
+  wr_transaction_set_display_list(mTxn, aEpoch, aIdNamespace, pipeline_id,
+                                  dl_descriptor, &dl_items_data.inner,
+                                  &dl_spatial_tree.inner);
 }
 
 void TransactionBuilder::ClearDisplayList(Epoch aEpoch,
+                                          wr::IdNamespace aIdNamespace,
                                           wr::WrPipelineId aPipelineId) {
-  wr_transaction_clear_display_list(mTxn, aEpoch, aPipelineId);
+  wr_transaction_clear_display_list(mTxn, aEpoch, aIdNamespace, aPipelineId);
 }
 
 void TransactionBuilder::GenerateFrame(const VsyncId& aVsyncId, bool aPresent,
@@ -1229,8 +1231,9 @@ void DisplayListBuilder::DumpSerializedDisplayList() {
   wr_dump_serialized_display_list(mWrState);
 }
 
-void DisplayListBuilder::Begin() {
-  wr_api_begin_builder(mWrState);
+void DisplayListBuilder::Begin(int32_t aAppUnitsPerDevPixel) {
+  MOZ_ASSERT(aAppUnitsPerDevPixel > 0);
+  wr_api_begin_builder(mWrState, aAppUnitsPerDevPixel);
 
   mASRToSpatialIdMap.clear();
   mCurrentSpaceAndClipChain = wr::RootScrollNodeWithChain();
@@ -1561,15 +1564,13 @@ void DisplayListBuilder::PushImage(
     bool aIsBackfaceVisible, bool aForceAntiAliasing,
     wr::ImageRendering aFilter, wr::ImageKey aImage, bool aPremultipliedAlpha,
     const wr::ColorF& aColor, bool aPreferCompositorSurface,
-    bool aSupportsExternalCompositing,
-    const Maybe<wr::DeviceIntRect>& aSubRect) {
+    bool aSupportsExternalCompositing) {
   WRDL_LOG("PushImage b=%s cl=%s\n", mWrState, ToString(aBounds).c_str(),
            ToString(aClip).c_str());
   wr_dp_push_image(mWrState, aBounds, aClip, aIsBackfaceVisible,
                    aForceAntiAliasing, &mCurrentSpaceAndClipChain, aFilter,
                    aImage, aPremultipliedAlpha, aColor,
-                   aPreferCompositorSurface, aSupportsExternalCompositing,
-                   aSubRect.ptrOr(nullptr));
+                   aPreferCompositorSurface, aSupportsExternalCompositing);
 }
 
 void DisplayListBuilder::PushRepeatingImage(

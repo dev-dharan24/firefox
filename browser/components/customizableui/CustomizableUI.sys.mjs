@@ -5251,6 +5251,12 @@ var CustomizableUIInternal = {
         );
         continue;
       }
+      // Remove all springs located in the tabs toolbar when vertical tabs are enabled
+      // there's one by default but the user could add as many as they want
+      if (this.isSpecialWidget(widgetId) && widgetId.includes("spring")) {
+        this.removeWidgetFromArea(widgetId);
+        continue;
+      }
       // if this is a extension, those are handled in a toolbarvisibilitychange handler in browser-addons.js
       if (CustomizableUI.isWebExtensionWidget(widgetId)) {
         lazy.log.debug(`Skipping a webextension saved placement ${widgetId}`);
@@ -5432,6 +5438,12 @@ var CustomizableUIInternal = {
             id,
             CustomizableUI.AREA_VERTICAL_TABSTRIP
           );
+          continue;
+        }
+        // Remove all springs located in the tabs toolbar when vertical tabs are enabled
+        // there's one by default but the user could add as many as they want
+        if (this.isSpecialWidget(id) && id.includes("spring")) {
+          this.removeWidgetFromArea(id);
           continue;
         }
         // We add the tab strip placements later in the case they have a custom position
@@ -7287,6 +7299,11 @@ function WidgetSingleWrapper(aWidget, aNode) {
   });
 
   this.__defineGetter__("overflowed", function () {
+    // A widget that isn't built in this window (e.g. showInPrivateBrowsing:false
+    // in a private window) can't be overflowed.
+    if (!aNode) {
+      return false;
+    }
     return aNode.getAttribute("overflowedItem") == "true";
   });
 

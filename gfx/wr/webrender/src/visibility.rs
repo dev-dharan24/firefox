@@ -60,8 +60,7 @@ use crate::util::MaxRect;
 
 pub struct FrameVisibilityContext<'a> {
     pub spatial_tree: &'a SpatialTree,
-    pub global_screen_world_rect: WorldRect,
-    pub global_device_pixel_scale: DevicePixelScale,
+    pub global_screen_device_rect: DeviceRect,
     pub debug_flags: DebugFlags,
     pub scene_properties: &'a SceneProperties,
     pub config: FrameBuilderConfig,
@@ -214,9 +213,9 @@ pub struct PrimitiveDrawHeader {
 
     /// Local-space rect of the primitive after device-pixel snapping has
     /// been applied. Populated for every prim each frame by the visibility
-    /// pass (snapping `PrimitiveInstance.unsnapped_prim_rect` against the
+    /// pass (snapping `PrimitiveInstance.unsnapped_pattern_rect` against the
     /// surface raster node) before any visibility / prepare consumer reads it.
-    pub snapped_local_rect: LayoutRect,
+    pub snapped_pattern_rect: LayoutRect,
 }
 
 impl PrimitiveDrawHeader {
@@ -230,7 +229,7 @@ impl PrimitiveDrawHeader {
             clip_task_index: ClipTaskIndex::INVALID,
             kind_scratch: KindScratchHandle::None,
             compositor_surface_kind: CompositorSurfaceKind::Blit,
-            snapped_local_rect: LayoutRect::zero(),
+            snapped_pattern_rect: LayoutRect::zero(),
         }
     }
 
@@ -249,7 +248,7 @@ impl PrimitiveDrawHeader {
 pub fn update_prim_visibility(
     pic_index: PictureIndex,
     parent_surface_index: Option<SurfaceIndex>,
-    world_culling_rect: &WorldRect,
+    root_culling_rect: &DeviceRect,
     store: &PrimitiveStore,
     is_root_tile_cache: bool,
     frame_context: &FrameVisibilityContext,
@@ -372,14 +371,14 @@ pub fn update_prim_visibility(
                 != ClipNodeId::INVALID;
 
             let policy = prim_instance.snap_policy(snaps, frame_state.data_stores);
-            let snapped_local_rect =
-                snapper.snap_rect_rounded(&prim_instance.unsnapped_prim_rect, policy.rect);
+            let snapped_pattern_rect =
+                snapper.snap_rect_rounded(&prim_instance.unsnapped_pattern_rect, policy.rect);
 
             // The draw header is accumulated here and pushed only once the
             // primitive is known to be drawn, so culled primitives cost nothing.
             let mut draw = PrimitiveDrawHeader::new();
             draw.prim_instance_index = PrimitiveInstanceIndex(prim_instance_index as u32);
-            draw.snapped_local_rect = snapped_local_rect;
+            draw.snapped_pattern_rect = snapped_pattern_rect;
 
             // Picture / tile-cache leaves carry `max_rect` (snapping it would
             // overflow the snap transform); pass those through. Otherwise the
@@ -426,7 +425,7 @@ pub fn update_prim_visibility(
                 update_prim_visibility(
                     pic_index,
                     Some(surface_index),
-                    world_culling_rect,
+                    root_culling_rect,
                     store,
                     false,
                     frame_context,
@@ -449,7 +448,7 @@ pub fn update_prim_visibility(
 
             let local_coverage_rect = frame_state.data_stores.get_local_prim_coverage_rect(
                 prim_instance,
-                draw.snapped_local_rect,
+                draw.snapped_pattern_rect,
                 &store.pictures,
                 frame_state.surfaces,
             );

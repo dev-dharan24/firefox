@@ -95,6 +95,7 @@
   display: flex;
   align-items: center;
 
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   &:has(input:disabled) {
     color: var(--theme-text-color-inactive);
   }
@@ -124,6 +125,7 @@
   user-select: none;
 }
 
+/* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
 #pseudo-classes-element-specific label:has(input:disabled) {
   display: none;
 }
@@ -264,6 +266,7 @@
 
   /* Because of the overflow hidden, the outline that would be set on the child link
      would not be visible, so we need to set it here */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   &:focus-within:has(a:focus-visible) {
     outline: var(--theme-focus-outline);
   }
@@ -774,6 +777,7 @@
     }
 
     /* the overridden class is set on a parent element of the ruleview-highlight one */
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
     .ruleview-overridden:has(&) {
       text-decoration-color: var(--theme-contrast-color);
     }
@@ -891,6 +895,7 @@
 }
 
 /* When hovering the selector warnings icon, highlight the selector it applies to */
+/* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
 .ruleview-selector:has(.ruleview-selector-warnings:hover) {
   background-color: var(--theme-warning-background);
   /* We're not using --theme-warning-border to make it more visible */
@@ -1016,6 +1021,7 @@
   padding-inline-start: 0;
 }
 
+/* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
 .emulation-container:has(> #emulation-print-heading) {
   display: flex;
 }

@@ -18,10 +18,9 @@ class LocaleObject : public NativeObject {
   static const JSClass class_;
   static const JSClass protoClass_;
 
-  static constexpr auto LANGUAGE_TAG_SLOT = TypedSlot<ValueType::String>(0);
-  static constexpr auto BASENAME_SLOT = TypedSlot<ValueType::String>(1);
-  static constexpr auto UNICODE_EXTENSION_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(2);
+  JS_DEFINE_TYPED_SLOT(0, LANGUAGE_TAG_SLOT, String);
+  JS_DEFINE_TYPED_SLOT(1, BASENAME_SLOT, String);
+  JS_DEFINE_TYPED_SLOT(2, UNICODE_EXTENSION_SLOT, String, Undefined);
   static constexpr uint32_t SLOT_COUNT = 3;
 
   void initialize(JSLinearString* languageTag, JSLinearString* baseName,

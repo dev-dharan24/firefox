@@ -32,6 +32,7 @@ web-platform-tests:
     - web-platform-tests-webcodecs
     - web-platform-tests-eme
     - web-platform-tests-aam
+    - web-platform-tests-webrtc
 
 web-platform-tests-2404-tsan:
     - web-platform-tests
@@ -43,6 +44,7 @@ web-platform-tests-2404-tsan:
     - web-platform-tests-webcodecs
     - web-platform-tests-eme
     - web-platform-tests-aam
+    - web-platform-tests-webrtc
 
 web-platform-tests-backlog:
     - web-platform-tests-backlog
@@ -324,6 +326,7 @@ windows11-64-2009-ccov-tests:
     - web-platform-tests-wdspec
     - web-platform-tests-webcodecs
     - web-platform-tests-eme
+    - web-platform-tests-webrtc
 
 windows11-24h2-tests:
     - crashtest
@@ -462,6 +465,7 @@ macosx1500-64-tests:
     - web-platform-tests-canvas
     - web-platform-tests-webcodecs
     - web-platform-tests-eme
+    - web-platform-tests-webrtc
 
 macosx1500-aarch64-tests:
     - cppunittest
@@ -496,6 +500,7 @@ macosx1500-aarch64-tests:
     - web-platform-tests-canvas
     - web-platform-tests-crashtest
     - web-platform-tests-eme
+    - web-platform-tests-webrtc
     - web-platform-tests-print-reftest
     - web-platform-tests-reftest
     - web-platform-tests-wdspec
@@ -509,6 +514,13 @@ macosx1500-aarch64-tests:
 # omitted. web-platform-tests is also omitted pending Bug 2038639 (GPU process
 # leak in APZCTreeManager::CheckerboardFlushObservers on headless macOS).
 # Suites can be re-added as headless support improves.
+#
+# In particular, no browser-chrome flavor suite belongs here: browser-test.js
+# calls SimpleTest.waitForFocus before every test, which awaits a focus event
+# with no timeout, and window activation never completes on these workers. That
+# hangs the browser before the first test and burns the full harness timeout on
+# every retry. See Bug 2059365 (mochitest-remote) and Bug 2050174 (the
+# underlying activation issue).
 macosx1500-aarch64-vms-tests:
     - cppunittest
     - crashtest
@@ -518,7 +530,6 @@ macosx1500-aarch64-vms-tests:
     - marionette-unittest
     - mochitest-chrome
     - mochitest-plain
-    - mochitest-remote
     - telemetry-tests-client
     - xpcshell
 
@@ -586,6 +597,7 @@ android14-x86_64-tests:
     - web-platform-tests-wdspec
     - web-platform-tests-webcodecs
     - web-platform-tests-eme
+    - web-platform-tests-webrtc
     - xpcshell
 
 android-hw-aarch64-opt-unittests:

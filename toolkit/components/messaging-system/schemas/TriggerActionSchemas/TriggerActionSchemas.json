@@ -466,30 +466,6 @@
           "properties": {
             "id": {
               "type": "string",
-              "enum": ["cookieBannerDetected"]
-            }
-          },
-          "additionalProperties": false,
-          "required": ["id"],
-          "description": "Happens when Firefox detects a cookie consent banner that could otherwise be handled by Cookie Banner Handling"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "enum": ["cookieBannerHandled"]
-            }
-          },
-          "additionalProperties": false,
-          "required": ["id"],
-          "description": "Happens when Firefox automatically engages with a cookie consent banner"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
               "enum": ["messagesLoaded"]
             }
           },

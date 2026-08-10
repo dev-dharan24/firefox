@@ -43,7 +43,7 @@ struct LBCacheEntry {
 // The MruCache size should be a prime number that is slightly less than a
 // power of two.
 class LineBreakCache : public MruCache<detail::LBCacheKey, detail::LBCacheEntry,
-                                       LineBreakCache, 4093> {
+                                       LineBreakCache, 4096> {
  public:
   static void Initialize();
   static void Shutdown();

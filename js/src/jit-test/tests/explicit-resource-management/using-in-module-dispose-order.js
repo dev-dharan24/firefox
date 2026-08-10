@@ -16,7 +16,7 @@ using y = {
 }
 `);
 
-moduleLink(m);
+moduleLoadAndLink(m);
 moduleEvaluate(m);
 
 assertArrayEq(globalThis.callOrder, ["y", "x"]);

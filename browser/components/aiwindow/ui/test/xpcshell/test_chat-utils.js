@@ -41,6 +41,28 @@ class RowStub {
   }
 }
 
+const MESSAGE_ROW_FIELDS = {
+  message_id: "123456789012",
+  created_date: 0,
+  parent_message_id: "123456",
+  revision_root_message_id: "1234",
+  ordinal: 0,
+  is_active_branch: true,
+  role: 0,
+  model_id: "a model id",
+  params: null,
+  usage: null,
+  content: '{ "some": "content data" }',
+  conv_id: "123456789012",
+  page_url: "https://www.firefox.com",
+  turn_index: 0,
+  memories_enabled: false,
+  memories_flag_source: 0,
+  memories_applied: null,
+  web_search_queries: null,
+  page_history_deleted: false,
+};
+
 add_task(function test_parseConversationRow() {
   const now = Date.now();
   const testRow = new RowStub({
@@ -121,6 +143,7 @@ add_task(function test_parseConversationRow() {
   const tool_results = JSON.stringify({
     0: [{ toolCallId: "t1", uiType: "ai-action-result" }], // 0 == TOOL_RESULT_TYPE.TOOL_UI
     1: [{ url: "history url 1" }, { url: "history url 2" }], // 1 == TOOL_RESULT_TYPE.HISTORY_RESULTS
+    2: [{ url: "citation url 1", title: "C1" }], // 2 == TOOL_RESULT_TYPE.CITATIONS
   });
 
   const testRow = new RowStub({
@@ -179,7 +202,23 @@ add_task(function test_parseConversationRow() {
       { url: "history url 1" },
       { url: "history url 2" },
     ]);
+    soft.deepEqual(message.citations, [{ url: "citation url 1", title: "C1" }]);
   });
+});
+
+add_task(function test_parseConversationRow_withoutCitations() {
+  const testRow = new RowStub({
+    ...MESSAGE_ROW_FIELDS,
+    tool_results: JSON.stringify({ 1: [{ url: "history url 1" }] }),
+  });
+
+  const message = parseMessageRows([testRow])[0];
+
+  Assert.deepEqual(
+    message.citations,
+    [],
+    "citations parses as an empty array when no citation rows exist"
+  );
 });
 
 add_task(function test_missingField_parseConversationRow() {

@@ -94,7 +94,7 @@ bool js::CreateDisposableResource(JSContext* cx, JS::Handle<JS::Value> objVal,
   if (!disposableRecord) {
     return false;
   }
-  result.set(ObjectValue(*disposableRecord));
+  result.setObject(*disposableRecord);
 
   return true;
 }
@@ -128,7 +128,7 @@ bool js::CreateDisposableResource(JSContext* cx, JS::Handle<JS::Value> obj,
   if (!disposableRecord) {
     return false;
   }
-  result.set(ObjectValue(*disposableRecord));
+  result.setObject(*disposableRecord);
 
   return true;
 }
@@ -235,7 +235,7 @@ bool js::GetDisposeMethod(JSContext* cx, JS::Handle<JS::Value> objVal,
           }
           asyncWrapper->initExtendedSlot(
               uint8_t(SyncDisposalClosureSlots::Method), syncDisposeMethod);
-          disposeMethod.set(JS::ObjectValue(*asyncWrapper));
+          disposeMethod.setObject(*asyncWrapper);
         }
       }
 

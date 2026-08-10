@@ -91,7 +91,8 @@ static EnterJitStatus JS_HAZ_JSNATIVE_CALLER EnterJit(JSContext* cx,
     GeneratorResumeState& resumeState = *state.asGeneratorResume();
     AbstractGeneratorObject* genObj = resumeState.generator();
     ResumeFrameArgs::init(resumeArgv, resumeState.resumeValue(),
-                          ObjectValue(*genObj), resumeState.resumeKind());
+                          ObjectValue(*genObj), resumeState.resumeKind(),
+                          genObj->resumeIndex());
     numActualArgs = 0;
     constructing = false;
     maxArgc = std::size(resumeArgv);
@@ -113,6 +114,13 @@ static EnterJitStatus JS_HAZ_JSNATIVE_CALLER EnterJit(JSContext* cx,
     calleeToken = CalleeToToken(state.script());
   }
 
+#ifdef ENABLE_PORTABLE_BASELINE_INTERP
+  // This must happen before we mark the generator as running below.
+  if (!pbl::PortablebaselineInterpreterStackCheck(cx, state, numActualArgs)) {
+    return EnterJitStatus::NotEntered;
+  }
+#endif
+
   RootedValue result(cx, Int32Value(numActualArgs));
   {
     AssertRealmUnchanged aru(cx);
@@ -120,6 +128,10 @@ static EnterJitStatus JS_HAZ_JSNATIVE_CALLER EnterJit(JSContext* cx,
 
     if (state.isGeneratorResume()) {
       activation.setEnteredForGeneratorResume();
+
+      // Mark the generator as running. This clobbers the resume index slot so
+      // all code between this point and entering JIT code must be infallible.
+      state.asGeneratorResume()->generator()->setRunning();
     }
 
 #ifndef ENABLE_PORTABLE_BASELINE_INTERP
@@ -139,9 +151,6 @@ static EnterJitStatus JS_HAZ_JSNATIVE_CALLER EnterJit(JSContext* cx,
 #  ifdef DEBUG
     nogc.reset();
 #  endif
-    if (!pbl::PortablebaselineInterpreterStackCheck(cx, state, numActualArgs)) {
-      return EnterJitStatus::NotEntered;
-    }
     unsigned numFormals =
         state.isInvoke() ? state.script()->function()->nargs() : 0;
     if (!pbl::PortableBaselineTrampoline(cx, maxArgc, maxArgv, numFormals,

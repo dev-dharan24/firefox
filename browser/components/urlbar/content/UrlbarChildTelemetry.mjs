@@ -2,12 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const lazy = {};
-
-ChromeUtils.defineESModuleGetters(lazy, {
-  UrlbarTelemetryUtils:
-    "chrome://browser/content/urlbar/UrlbarTelemetryUtils.mjs",
-});
+import { UrlbarTelemetryUtils } from "chrome://browser/content/urlbar/UrlbarTelemetryUtils.mjs";
 
 /**
  * @import {UrlbarChildController} from "chrome://browser/content/urlbar/UrlbarChildController.mjs"
@@ -80,7 +75,7 @@ export class UrlbarChildTelemetry {
       if (this.#startEventInfo.interactionType == "topsites") {
         this.#startEventInfo.interactionType =
           interactionType ||
-          lazy.UrlbarTelemetryUtils.startInteractionType(event, searchString);
+          UrlbarTelemetryUtils.startInteractionType(event, searchString);
         this.#startEventInfo.searchString = searchString;
       } else if (
         this.#startEventInfo.interactionType == "returned" &&
@@ -116,7 +111,7 @@ export class UrlbarChildTelemetry {
       timeStamp: event.timeStamp || ChromeUtils.now(),
       interactionType:
         interactionType ||
-        lazy.UrlbarTelemetryUtils.startInteractionType(event, searchString),
+        UrlbarTelemetryUtils.startInteractionType(event, searchString),
       searchString,
     };
   }
@@ -141,21 +136,18 @@ export class UrlbarChildTelemetry {
     // This should never throw, or it may break the urlbar.
     try {
       this.#handlingRecord = true;
-      let snapshot = lazy.UrlbarTelemetryUtils.collectSnapshot(
+      let snapshot = UrlbarTelemetryUtils.collectSnapshot(
         event,
         details,
         this.#startEventInfo
       );
       if (snapshot) {
         let { input, view } = this.#controller;
-        let engagementData = lazy.UrlbarTelemetryUtils.engagementData(
-          input,
-          view
-        );
-        let smartbarData = lazy.UrlbarTelemetryUtils.smartbarData(input);
+        let engagementData = UrlbarTelemetryUtils.engagementData(input, view);
+        let smartbarData = UrlbarTelemetryUtils.smartbarData(input);
 
         let { built, previousSearchWords } =
-          lazy.UrlbarTelemetryUtils.buildRecordedEngagement(
+          UrlbarTelemetryUtils.buildRecordedEngagement(
             snapshot,
             engagementData,
             smartbarData,
@@ -169,7 +161,7 @@ export class UrlbarChildTelemetry {
         let disableBuilt = engagementData.visibleResults.some(
           r => r.providerName == "UrlbarProviderQuickSuggest"
         )
-          ? lazy.UrlbarTelemetryUtils.buildRecordedDisableCandidate(
+          ? UrlbarTelemetryUtils.buildRecordedDisableCandidate(
               snapshot,
               engagementData,
               smartbarData,
@@ -187,7 +179,7 @@ export class UrlbarChildTelemetry {
             );
 
         this.#controller.recordEngagement(
-          lazy.UrlbarTelemetryUtils.recordedEngagementToWire({
+          UrlbarTelemetryUtils.recordedEngagementToWire({
             built,
             disableBuilt,
             method: snapshot.method,
@@ -269,7 +261,7 @@ export class UrlbarChildTelemetry {
     // Record at most one exposure per result, like the parent recorder.
     if (!this.#exposureResults.has(result)) {
       this.#exposureResults.add(result);
-      let { resultType, keyword } = lazy.UrlbarTelemetryUtils.exposureEntry(
+      let { resultType, keyword } = UrlbarTelemetryUtils.exposureEntry(
         result,
         queryContext
       );
@@ -296,7 +288,7 @@ export class UrlbarChildTelemetry {
       return {
         resultType,
         keyword,
-        terminal: lazy.UrlbarTelemetryUtils.exposureTerminal(
+        terminal: UrlbarTelemetryUtils.exposureTerminal(
           result,
           queryContext,
           visibleResults
@@ -329,15 +321,15 @@ export class UrlbarChildTelemetry {
     // session and closes the view, and the await yields to it.
     let startEventInfo = this.#startEventInfo;
     let { input, view } = this.#controller;
-    let engagementData = lazy.UrlbarTelemetryUtils.engagementData(input, view);
-    let smartbarData = lazy.UrlbarTelemetryUtils.smartbarData(input);
+    let engagementData = UrlbarTelemetryUtils.engagementData(input, view);
+    let smartbarData = UrlbarTelemetryUtils.smartbarData(input);
 
     // Another engagement while already tracking could itself be a bounce.
     if (this.#bounceStates.has(browserId)) {
       await this.handleBounceEventTrigger(browserId);
     }
 
-    let snapshot = lazy.UrlbarTelemetryUtils.collectBounceSnapshot(
+    let snapshot = UrlbarTelemetryUtils.collectBounceSnapshot(
       event,
       details,
       startEventInfo,
@@ -351,7 +343,7 @@ export class UrlbarChildTelemetry {
     if (snapshot) {
       searchSource = snapshot.searchSource;
       let searchMode = snapshot.searchMode ?? engagementData.searchMode;
-      let { interaction } = lazy.UrlbarTelemetryUtils.getInteractionType(
+      let { interaction } = UrlbarTelemetryUtils.getInteractionType(
         "bounce",
         snapshot.startEventInfo,
         searchSource,
@@ -359,7 +351,7 @@ export class UrlbarChildTelemetry {
         searchMode,
         this.#previousSearchWords
       );
-      built = lazy.UrlbarTelemetryUtils.buildEventInfo({
+      built = UrlbarTelemetryUtils.buildEventInfo({
         method: "bounce",
         action: snapshot.action,
         interaction,

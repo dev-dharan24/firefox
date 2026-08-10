@@ -117,9 +117,6 @@ support-files = [
 ["browser_ext_popup_bug1906132.js"]
 
 ["browser_ext_popup_corners.js"]
-skip-if = [
-  "nova", # Bug 2057844
-]
 
 ["browser_ext_popup_focus.js"]
 

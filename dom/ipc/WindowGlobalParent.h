@@ -196,7 +196,7 @@ class WindowGlobalParent final : public WindowContext,
 
   already_AddRefed<mozilla::dom::Promise> DrawSnapshot(
       const DOMRect* aRect, double aScale, const nsACString& aBackgroundColor,
-      bool aResetScrollPosition, mozilla::ErrorResult& aRv);
+      const DrawSnapshotOptions& aOptions, mozilla::ErrorResult& aRv);
 
   already_AddRefed<mozilla::dom::Promise> RequestDocumentLanguageMetadata(
       const DocumentLanguageMetadataRequestOptions& aOptions,

@@ -32,42 +32,44 @@ object MainMenuSelectors {
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.library_bookmarks),
         description = "Main menu Bookmarks button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        // requiresScroll: below the fold in the landscape browser main menu; a no-op in portrait
+        // where the item is already displayed (mozSwipeTo returns before swiping).
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     val HISTORY_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.library_history),
         description = "Main menu History button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     val DOWNLOADS_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.library_downloads),
         description = "Main menu Downloads button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     val PASSWORDS_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.browser_menu_passwords),
         description = "Main menu Passwords button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     val SIGN_IN_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.browser_menu_sign_in),
         description = "Main menu Sign in button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     val SETTINGS_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.browser_menu_settings),
         description = "Main menu Settings button",
-        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems"),
+        groups = listOf("requiredForPage", "homePageMainMenuItems", "browserViewMainMenuItems", "requiresScroll"),
     )
 
     // UIAutomator, not Compose: with shouldUseExpandedToolbar the menu renders differently and the Compose
@@ -150,6 +152,76 @@ object MainMenuSelectors {
         groups = listOf("browserViewMainMenuItems"),
     )
 
+    val REPORT_BROKEN_SITE_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        value = getStringResource(R.string.browser_menu_webcompat_reporter_2),
+        description = "Main menu Report broken site button",
+        groups = listOf("browserViewMainMenuMoreItems"),
+    )
+
+    // The Extensions row opens its submenu in a new window, so match it by res-id at the device level
+    // (the node sets testTagsAsResourceId) rather than through Compose. Mirrors the legacy
+    // itemWithResId("mainMenu.extensions").clickAndWaitForNewWindow. EXTENSIONS_BUTTON above is the
+    // Compose-text twin, used for verifying the row is present rather than for opening it.
+    val EXTENSIONS_BUTTON_UIAUTOMATOR = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+        value = MenuDialogTestTag.EXTENSIONS,
+        description = "Main menu Extensions button (UIAutomator)",
+        groups = listOf(),
+    )
+
+    val EXTENSIONS_CHEVRON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_TAG,
+        value = MenuDialogTestTag.EXTENSIONS_OPTION_CHEVRON,
+        description = "Main menu Extensions expand/collapse chevron",
+        groups = listOf(),
+    )
+
+    val TRY_RECOMMENDED_EXTENSION_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION_SUBSTRING,
+        value = "Extensions Try a recommended extension",
+        description = "Main menu Extensions - Try a recommended extension button",
+        groups = listOf(),
+    )
+
+    val DISCOVER_MORE_EXTENSIONS_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_TEXT,
+        value = getStringResource(R.string.browser_menu_discover_more_extensions),
+        description = "Main menu Discover more extensions button",
+        groups = listOf("expandedExtensionsMenuItems"),
+    )
+
+    // Shown in the expanded Extensions submenu once at least one extension is installed; opens the
+    // full add-ons manager. Mirrors the legacy clickManageExtensionsButtonFromRedesignedMainMenu.
+    val MANAGE_EXTENSIONS_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_TEXT,
+        value = getStringResource(R.string.browser_menu_manage_extensions),
+        description = "Main menu Manage extensions button",
+        groups = listOf(),
+    )
+
+    // The "Add <addon>" install icon on a recommended addon row in the expanded Extensions submenu.
+    // Keyed on the addon name because there is no test tag on the install icon (see AddonMenuItem);
+    // matched at the device level like the legacy installRecommendedAddon (itemWithDescription).
+    @Suppress("ktlint:standard:function-naming", "FunctionName")
+    fun RECOMMENDED_ADDON_INSTALL_BUTTON(addonTitle: String = "") = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_DESCRIPTION_CONTAINS,
+        value = getStringResource(R.string.browser_menu_extension_plus_icon_content_description_2, addonTitle),
+        description = "Install recommended addon '$addonTitle' button",
+        groups = listOf(),
+    )
+
+    // Keyed on the addon row rather than the addon name: which addons AMO recommends is server-driven,
+    // so matching names would couple the test to remote data. Must be the row tag, not
+    // RECOMMENDED_ADDON_ITEM_TITLE — that one is applied via labelModifier, so the row's merged
+    // semantics hide it and onAllNodesWithTag (merged tree) cannot see it.
+    val RECOMMENDED_ADDON_ITEM = Selector(
+        strategy = SelectorStrategy.COMPOSE_ON_ALL_NODES_BY_TAG_ON_FIRST,
+        value = MenuDialogTestTag.RECOMMENDED_ADDON_ITEM,
+        description = "Recommended addon row in the expanded Extensions submenu",
+        groups = listOf("expandedExtensionsMenuItems"),
+    )
+
     // TODO (M. Barone 3/20/2026): add getting 'appName' to our base helpers
     val DEFAULT_BROWSER_BANNER_TITLE = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
@@ -182,10 +254,10 @@ object MainMenuSelectors {
         groups = listOf("requiresScroll"),
     )
 
-    val CHANGE_WALLPAPER_BUTTON = Selector(
+    val CUSTOMIZE_HOMEPAGE_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
-        value = getStringResource(R.string.browser_menu_change_wallpaper),
-        description = "Change wallpaper Settings button",
+        value = getStringResource(R.string.browser_menu_customize_homepage),
+        description = "Customize homepage Settings button",
         groups = listOf("homePageMainMenuItems"),
     )
 
@@ -260,15 +332,21 @@ object MainMenuSelectors {
         groups = listOf(),
     )
 
+    // Only present when the browser is showing reader view.
+    val CUSTOMIZE_READER_VIEW_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_CONTENT_DESCRIPTION,
+        value = getStringResource(R.string.browser_menu_customize_reader_view_2),
+        description = "Main menu Customize Reader View button",
+        groups = listOf(),
+    )
+
+    // Order matters: mozVerifyElementsByGroup verifies in this declaration order. In the landscape
+    // browser main menu the list scrolls, so the always-visible items must be verified first and the
+    // requiresScroll items last, in on-screen top-to-bottom order (History -> ... -> Settings) — once
+    // we swipe down to reach them the top row leaves the viewport and can no longer be asserted.
     val all = listOf(
         NEW_PRIVATE_TAB_BUTTON,
         EXTENSIONS_BUTTON,
-        BOOKMARKS_BUTTON,
-        HISTORY_BUTTON,
-        DOWNLOADS_BUTTON,
-        PASSWORDS_BUTTON,
-        SIGN_IN_BUTTON,
-        SETTINGS_BUTTON,
         BOOKMARK_THIS_PAGE_BUTTON,
         EDIT_BOOKMARK_BUTTON,
         FIND_IN_PAGE_BUTTON,
@@ -284,7 +362,21 @@ object MainMenuSelectors {
         DESKTOP_SITE_ON,
         DESKTOP_SITE_OFF,
         MORE_BUTTON,
-        CHANGE_WALLPAPER_BUTTON,
+        CUSTOMIZE_HOMEPAGE_BUTTON,
+        REPORT_BROKEN_SITE_BUTTON,
+        EXTENSIONS_BUTTON_UIAUTOMATOR,
+        EXTENSIONS_CHEVRON,
+        TRY_RECOMMENDED_EXTENSION_BUTTON,
+        DISCOVER_MORE_EXTENSIONS_BUTTON,
+        MANAGE_EXTENSIONS_BUTTON,
+        RECOMMENDED_ADDON_INSTALL_BUTTON(),
+        RECOMMENDED_ADDON_ITEM,
+        HISTORY_BUTTON,
+        BOOKMARKS_BUTTON,
+        DOWNLOADS_BUTTON,
+        PASSWORDS_BUTTON,
+        SIGN_IN_BUTTON,
+        SETTINGS_BUTTON,
         SAVE_TO_COLLECTIONS_BUTTON,
         ADD_TO_SHORTCUTS_BUTTON,
         TRANSLATE_BUTTON,
@@ -293,6 +385,7 @@ object MainMenuSelectors {
         PRINT_BUTTON,
         REMOVE_FROM_SHORTCUTS_BUTTON,
         ADD_TO_HOMESCREEN_BUTTON,
+        CUSTOMIZE_READER_VIEW_BUTTON,
         OPEN_IN_APP_BUTTON,
         OPEN_IN_APP_NAME_BUTTON(),
     )

@@ -919,6 +919,15 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // not.
   inline void PushCalleeToken(Register callee, bool constructing);
 
+  // Push the argument Values for a generator/async resume frame: the
+  // ResumeFrameArgs, then |undefined| for the callee's formals and for |this|.
+  template <typename KindT, typename ValueT>
+  inline void pushGeneratorResumeArgsAndFormals(const Address& resumeIndex,
+                                                const KindT& resumeKind,
+                                                Register generator,
+                                                const ValueT& resumeValue,
+                                                Register nformals);
+
   // Unpack a callee token located at the |token| address, and return the
   // JSFunction pointer in the |dest| register.
   inline void loadFunctionFromCalleeToken(Address token, Register dest);
@@ -1910,6 +1919,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
   void branchIfObjectNotExtensible(Register obj, Register scratch,
                                    Label* label);
 
+  void branchIfNotSuspendedGenerator(Register obj, Register scratch,
+                                     Register spectreRegToZero, Label* label);
+
   void branchTestObjectNeedsProxyResultValidation(Condition condition,
                                                   Register obj,
                                                   Register scratch,
@@ -2302,11 +2314,11 @@ class MacroAssembler : public MacroAssemblerSpecific {
  public:
   // ========================================================================
   // Memory access primitives.
-  inline FaultingCodeOffset storeDouble(FloatRegister src,
-                                        const Address& dest) PER_SHARED_ARCH;
-  inline FaultingCodeOffset storeDouble(FloatRegister src,
-                                        const BaseIndex& dest) PER_SHARED_ARCH;
-  inline FaultingCodeOffset storeDouble(FloatRegister src, const Operand& dest)
+  inline FaultingCodeRange storeDouble(FloatRegister src,
+                                       const Address& dest) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeDouble(FloatRegister src,
+                                       const BaseIndex& dest) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeDouble(FloatRegister src, const Operand& dest)
       DEFINED_ON(x86_shared);
 
   template <class T>
@@ -2314,18 +2326,18 @@ class MacroAssembler : public MacroAssemblerSpecific {
 
   using MacroAssemblerSpecific::boxDouble;
 
-  inline FaultingCodeOffset storeFloat32(FloatRegister src,
-                                         const Address& dest) PER_SHARED_ARCH;
-  inline FaultingCodeOffset storeFloat32(FloatRegister src,
-                                         const BaseIndex& dest) PER_SHARED_ARCH;
-  inline FaultingCodeOffset storeFloat32(FloatRegister src, const Operand& dest)
+  inline FaultingCodeRange storeFloat32(FloatRegister src,
+                                        const Address& dest) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeFloat32(FloatRegister src,
+                                        const BaseIndex& dest) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeFloat32(FloatRegister src, const Operand& dest)
       DEFINED_ON(x86_shared);
 
-  inline FaultingCodeOffset storeFloat16(FloatRegister src, const Address& dest,
-                                         Register scratch) PER_SHARED_ARCH;
-  inline FaultingCodeOffset storeFloat16(FloatRegister src,
-                                         const BaseIndex& dest,
-                                         Register scratch) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeFloat16(FloatRegister src, const Address& dest,
+                                        Register scratch) PER_SHARED_ARCH;
+  inline FaultingCodeRange storeFloat16(FloatRegister src,
+                                        const BaseIndex& dest,
+                                        Register scratch) PER_SHARED_ARCH;
 
   template <typename T>
   void storeUnboxedValue(const ConstantOrRegister& value, MIRType valueType,
@@ -3295,22 +3307,22 @@ class MacroAssembler : public MacroAssemblerSpecific {
   inline void loadUnalignedSimd128(const Operand& src, FloatRegister dest)
       DEFINED_ON(x86_shared);
 
-  inline FaultingCodeOffset loadUnalignedSimd128(const Address& src,
-                                                 FloatRegister dest)
+  inline FaultingCodeRange loadUnalignedSimd128(const Address& src,
+                                                FloatRegister dest)
       DEFINED_ON(x86_shared, arm64);
 
-  inline FaultingCodeOffset loadUnalignedSimd128(const BaseIndex& src,
-                                                 FloatRegister dest)
+  inline FaultingCodeRange loadUnalignedSimd128(const BaseIndex& src,
+                                                FloatRegister dest)
       DEFINED_ON(x86_shared, arm64);
 
   // Store
 
-  inline FaultingCodeOffset storeUnalignedSimd128(FloatRegister src,
-                                                  const Address& dest)
+  inline FaultingCodeRange storeUnalignedSimd128(FloatRegister src,
+                                                 const Address& dest)
       DEFINED_ON(x86_shared, arm64);
 
-  inline FaultingCodeOffset storeUnalignedSimd128(FloatRegister src,
-                                                  const BaseIndex& dest)
+  inline FaultingCodeRange storeUnalignedSimd128(FloatRegister src,
+                                                 const BaseIndex& dest)
       DEFINED_ON(x86_shared, arm64);
 
   // Floating point negation
@@ -3760,7 +3772,17 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // ========================================================================
   // wasm support
 
-  FaultingCodeOffset wasmTrapInstruction() PER_SHARED_ARCH;
+  uint8_t getByteAtOffset(size_t offset) const;
+
+  FaultingCodeRange wasmTrapInstruction() PER_SHARED_ARCH;
+
+  // Call here to register a trapping instruction in the metadata.
+  void appendAndVerify(wasm::Trap trap, wasm::TrapMachineInsn insn,
+                       FaultingCodeRange fcr, const wasm::TrapSiteDesc& desc);
+
+  // Alternative variant that hardwires the trap kind as Trap::OutOfBounds.
+  void appendAndVerify(const wasm::MemoryAccessDesc& access,
+                       wasm::TrapMachineInsn insn, FaultingCodeRange fcr);
 
   void wasmTrap(wasm::Trap trap, const wasm::TrapSiteDesc& trapSiteDesc);
 
@@ -4065,10 +4087,10 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // destType. See each function for the register allocation requirements, as
   // well as which registers will be preserved.
   //
-  // If this function returns a valid FaultingCodeOffset, then you must emit a
+  // If this function returns a valid FaultingCodeRange, then you must emit a
   // trap site to catch the bad cast. It will never return a valid
-  // FaultingCodeOffset when signalNullChecks is false.
-  FaultingCodeOffset branchWasmRefIsSubtype(
+  // FaultingCodeRange when signalNullChecks is false.
+  FaultingCodeRange branchWasmRefIsSubtype(
       Register ref, wasm::MaybeRefType sourceType, wasm::RefType destType,
       Label* label, bool onSuccess, bool signalNullChecks, Register superSTV,
       Register scratch1, Register scratch2);
@@ -4085,10 +4107,10 @@ class MacroAssembler : public MacroAssemblerSpecific {
   // `ref` and `superSTV` are preserved. Scratch registers are
   // clobbered.
   //
-  // If this function returns a valid FaultingCodeOffset, then you must emit a
+  // If this function returns a valid FaultingCodeRange, then you must emit a
   // trap site to catch the bad cast. It will never return a valid
-  // FaultingCodeOffset when signalNullChecks is false.
-  FaultingCodeOffset branchWasmRefIsSubtypeAny(
+  // FaultingCodeRange when signalNullChecks is false.
+  FaultingCodeRange branchWasmRefIsSubtypeAny(
       Register ref, wasm::RefType sourceType, wasm::RefType destType,
       Label* label, bool onSuccess, bool signalNullChecks, Register superSTV,
       Register scratch1, Register scratch2);
@@ -4196,8 +4218,8 @@ class MacroAssembler : public MacroAssemblerSpecific {
                                 const Address& dst, Register scratch);
 
   // Branch if the object `src` is or is not a WasmGcObject.
-  FaultingCodeOffset branchObjectIsWasmGcObject(bool isGcObject, Register src,
-                                                Register scratch, Label* label);
+  FaultingCodeRange branchObjectIsWasmGcObject(bool isGcObject, Register src,
+                                               Register scratch, Label* label);
 
   // `typeDefData` will be preserved. `instance` and `result` may be the same
   // register, in which case `instance` will be clobbered.
@@ -5316,6 +5338,9 @@ class MacroAssembler : public MacroAssemblerSpecific {
  private:
   TrampolinePtr preBarrierTrampoline(MIRType type);
 
+ public:
+  // Call the pre-barrier for |address| without first checking whether the zone
+  // needs a barrier. Callers must have done that check themselves.
   template <typename T>
   void unguardedCallPreBarrier(const T& address, MIRType type) {
     Label done;
@@ -5337,7 +5362,6 @@ class MacroAssembler : public MacroAssemblerSpecific {
     bind(&done);
   }
 
- public:
   template <typename T>
   void guardedCallPreBarrier(const T& address, MIRType type) {
     Label done;

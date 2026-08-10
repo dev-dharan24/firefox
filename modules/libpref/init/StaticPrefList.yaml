@@ -969,12 +969,6 @@
   value: 500
   mirror: always
 
-# Whether to use rounded external scroll offsets.
-- name: apz.rounded_external_scroll_offset
-  type: bool
-  value: false
-  mirror: always
-
 # Whether to async scroll CSS anchor pos.
 - name: apz.async_scroll_css_anchor_pos
   type: bool
@@ -1067,6 +1061,18 @@
   type: String
   value: "#FF6666"
   mirror: never
+
+# When set, every alert with an actionable (content) principal that is shown or
+# closed is reported to the parent-process observer service, on the topics
+# "web-notification-shown" and "web-notification-closed", with the
+# nsIAlertNotification as the subject. Private-browsing alerts are never
+# reported. Reporting is inert unless something registers for the topics; this
+# is a kill switch for that capability, not a feature gate, and no consumer
+# should write it. Consumers gate themselves.
+- name: browser.alerts.capture.enabled
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
 
 - name: browser.anchor_color
   type: String
@@ -2508,78 +2514,6 @@
   mirror: always
 
 #---------------------------------------------------------------------------
-# Prefs starting with "cookiebanners."
-#---------------------------------------------------------------------------
-
-# Controls the cookie banner handling mode in normal browsing.
-# 0: Disables all cookie banner handling.
-# 1: Reject-all if possible, otherwise do nothing.
-# 2: Reject-all if possible, otherwise accept-all.
-- name: cookiebanners.service.mode
-  type: uint32_t
-  value: 0
-  mirror: always
-
-# When set to true, cookie banners are detected and detection events are
-# dispatched, but they will not be handled. Requires the service to be enabled
-# for the desired mode via pref cookiebanners.service.mode*
-- name: cookiebanners.service.detectOnly
-  type: bool
-  value: false
-  mirror: always
-
-# Controls the cookie banner handling mode in private browsing. Same mode
-# options as the normal browsing pref above.
-- name: cookiebanners.service.mode.privateBrowsing
-  type: uint32_t
-  value: 0
-  mirror: always
-
-# Enables use of global CookieBannerRules, which apply to all sites. This is
-# used for click rules that can handle common Consent Management Providers
-# (CMP).
-# Enabling this (when the cookie handling feature is enabled) may negatively
-# impact site performance since it requires us to run rule-defined query
-# selectors for every page.
-- name: cookiebanners.service.enableGlobalRules
-  type: bool
-  value: true
-  mirror: always
-
-# Whether global rules are allowed to run in sub-frames. Running query selectors
-# in every sub-frame may negatively impact performance, but is required for some
-# CMPs.
-- name: cookiebanners.service.enableGlobalRules.subFrames
-  type: bool
-  value: true
-  mirror: always
-
-# Enables the cookie banner cookie injector. The cookie banner cookie injector
-# depends on the `cookiebanners.service.mode` pref above.
-- name: cookiebanners.cookieInjector.enabled
-  type: bool
-  value: true
-  mirror: always
-
-# By default, how many seconds in the future cookies should expire after they
-# have been injected. Defaults to 12 months. Individual cookie rules may
-# override this.
-- name: cookiebanners.cookieInjector.defaultExpiryRelative
-  type: uint32_t
-  value: 31536000
-  mirror: always
-
-# How many times per site and site load to check for cookie banners after which
-# the mechanism is considered on cooldown for the site in the current browsing
-# session. If the threshold is set to zero, banner clicking won't be considered
-# as being on cooldown regardless of how many times the site is loaded. The
-# maximum value for the retry is 255, any value over than that will be capped.
-- name: cookiebanners.bannerClicking.maxTriesPerSiteAndSession
-  type: uint32_t
-  value: 3
-  mirror: always
-
-#---------------------------------------------------------------------------
 # Prefs starting with "datareporting."
 #---------------------------------------------------------------------------
 
@@ -2687,13 +2621,15 @@
 # https://w3c.github.io/audio-session/
 - name: dom.audio_session.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
-# Audio Session API: enables the state changes for Audio Session.
+# Audio Session API: enables the state changes for Audio Session. Separate from
+# the pref above so the state surface can be turned off on its own, without
+# withdrawing the whole API.
 - name: dom.audio_session.state_enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 # While the platform has interrupted the tab's audio (an audio-focus loss that
@@ -2701,7 +2637,7 @@
 # (media element, Web Audio, Web Speech) on its own until the interrupt ends.
 - name: dom.audio_session.block_start_during_interrupt.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 # Checks if offscreen animation throttling is enabled.
@@ -3782,6 +3718,13 @@
   value: false
   mirror: always
 #endif
+
+# This is a temporary preference intended to allow relaxing the new
+# LoadedOriginSet checks from bug 2055554 if they start causing issues.
+- name: dom.ipc.validatePrincipal.validateSiteLoaded
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
 
 # If this is true, any JS actor with safeForUntrustedWebProcess set to false
 # won't be allowed in a process that can hold web content.
@@ -7922,11 +7865,6 @@
     mirror: always
 #endif
 
-- name: gfx.font_rendering.colr_v1.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-
 - name: gfx.font_rendering.opentype_svg.enabled
   type: RelaxedAtomicBool
   value: true
@@ -8896,6 +8834,12 @@
   value: true
   mirror: once
 
+- name: gfx.webrender.shared-instance-buffer
+  type: bool
+  rust: true
+  value: @IS_NOT_XP_WIN@
+  mirror: once
+
 # Use vsync events generated by hardware
 - name: gfx.work-around-driver-bugs
   type: bool
@@ -9729,7 +9673,7 @@
   type: bool
   value: @IS_NIGHTLY_BUILD@
   mirror: always
-  set_spidermonkey_pref: always
+  set_spidermonkey_pref: startup
 
   # Experimental support for import text in JavaScript.
 - name: javascript.options.experimental.import_text
@@ -9815,6 +9759,7 @@
   value: false
   mirror: always
   set_spidermonkey_pref: startup
+
 #endif  // NIGHTLY_BUILD
 
   # Capture stack traces for OOM
@@ -10695,14 +10640,6 @@
 # https://drafts.csswg.org/css-color-5/#relative-alpha
 - name: layout.css.alpha-color-function.enabled
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
-  mirror: always
-  rust: true
-
-# Whether to enable CSS Anchor Positioning support.
-# https://drafts.csswg.org/css-anchor-position-1/
-- name: layout.css.anchor-positioning.enabled
-  type: RelaxedAtomicBool
   value: true
   mirror: always
   rust: true
@@ -10747,6 +10684,14 @@
   type: RelaxedAtomicBool
   value: true
   mirror: always
+
+# Whether the `display` property is animatable (CSS Display Animations).
+# https://github.com/w3c/csswg-drafts/issues/6429
+- name: layout.css.display-animations.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+  rust: true
 
 # Override DPI. A value of -1 means use the maximum of 96 and the system DPI.
 # A value of 0 means use the system DPI. A positive value is used as the DPI.
@@ -10976,6 +10921,14 @@
   mirror: always
   rust: true
 
+# Is support for CSS calc() typed arithmetic (unit multiplication/division) enabled?
+# https://drafts.csswg.org/css-values-4/#calc-type-checking
+- name: layout.css.calc-typed-arithmetic.enabled
+  type: RelaxedAtomicBool
+  value: @IS_NIGHTLY_BUILD@
+  mirror: always
+  rust: true
+
 # Is support for light-dark() on images in content enabled?
 - name: layout.css.light-dark.images.enabled
   type: RelaxedAtomicBool
@@ -11005,34 +10958,6 @@
   value: 1
 #endif
   mirror: always
-
-# Is support for the @font-palette-values rule and font-palette property enabled?
-- name: layout.css.font-palette.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-  rust: true
-
-# Is support for variation fonts enabled?
-- name: layout.css.font-variations.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-  rust: true
-
-# Is support for the tech() function in the @font-face src descriptor enabled?
-- name: layout.css.font-tech.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-  rust: true
-
-# Is support for font-variant-emoji enabled?
-- name: layout.css.font-variant-emoji.enabled
-  type: RelaxedAtomicBool
-  value: true
-  mirror: always
-  rust: true
 
 # Visibility level of font families available to CSS font-matching:
 #   1 - only base system fonts
@@ -11352,6 +11277,13 @@
 - name: layout.css.stylo-local-work-queue.in-main-thread
   type: RelaxedAtomicUint32
   value: 32
+  mirror: always
+  rust: true
+
+# Is the at-rule() function in @supports enabled?
+- name: layout.css.supports.at-rule.enabled
+  type: RelaxedAtomicBool
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
   rust: true
 
@@ -11858,7 +11790,7 @@
 # Per-domain blocklist for ::-webkit-scrollbar pseudo element
 - name: layout.css.fake-webkit-scrollbar.disabled-domains
   type: DataMutexString
-  value: "discord.com,shitposter.world,gemini.google.com"
+  value: "discord.com,shitposter.world,gemini.google.com,content.powerapps.com"
   mirror: always
   rust: true
 
@@ -14089,7 +14021,7 @@
  # media-playback focus regardless of the type, preserving existing behaviour.
 - name: media.geckoview.audio_session_type.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: @IS_NIGHTLY_BUILD@
   mirror: always
 
 - name: media.mediacontrol.testingevents.enabled
@@ -16541,8 +16473,10 @@
   # See https://bugzilla.mozilla.org/show_bug.cgi?id=1979279 for details.
   value: 1
 #else
-  # Current industry standard. Likely worth tuning.
-  value: 10
+  # The Linux kernel caps a single GSO send at UDP_MAX_SEGMENTS (64), which
+  # quinn-udp reports via max_gso_segments(). Match that limit so the OS
+  # capability, not this pref, is the effective ceiling.
+  value: 64
 #endif
   mirror: always
   rust: true
@@ -18890,7 +18824,7 @@
 # Whether or not to enable the test trust anchor list when verifying PDF signatures
 - name: security.pdf_signature_verification.enable_test_trust_anchors
   type: RelaxedAtomicBool
-  value: @IS_NIGHTLY_BUILD@
+  value: false
   mirror: always
   rust: true
 
@@ -19398,19 +19332,13 @@
 # See https://svgwg.org/svg2-draft/single-page.html#types-SVGBoundingBoxOptions
 - name: svg.new-getBBox.enabled
   type: bool
-  value: @IS_NIGHTLY_BUILD@
+  value: true
   mirror: always
 
 # Whether we use Moz2D Path::GetStrokedBounds to get the stroke bounds.
 - name: svg.Moz2D.strokeBounds.enabled
   type: bool
-  value: @IS_NIGHTLY_BUILD@
-  mirror: always
-
-# Whether SVGAElement.text is enabled.
-- name: svg.SVGAElement.text.enabled
-  type: bool
-  value: false
+  value: true
   mirror: always
 
 # Whether SVGImageElement loading is forced to be sync.

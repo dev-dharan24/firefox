@@ -488,7 +488,7 @@ export const AIWindowUI = {
   },
 
   /**
-   * Toggle the "Group my tabs" panel anchored to its toolbar button.
+   * Toggle the "Organize Tabs" panel anchored to its toolbar button.
    *
    * @param {Window} win
    */

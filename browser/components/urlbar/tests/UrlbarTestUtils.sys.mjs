@@ -1052,6 +1052,16 @@ class UrlbarInputTestUtils {
    *   The expected search mode object.
    */
   async assertSearchMode(window, expectedSearchMode) {
+    // Entering and exiting search mode resolves the engine through the engine
+    // store, which is asynchronous on the message path, so let the mode settle
+    // before asserting.
+    await lazy.TestUtils.waitForCondition(
+      () => !!this.#urlbar(window).searchMode == !!expectedSearchMode
+    ).catch(() => {
+      // waitForCondition rejects once it stops polling. The mode never reached
+      // the expected state, which the assertions below report precisely.
+    });
+
     this.Assert.equal(
       !!this.#urlbar(window).searchMode,
       this.#urlbar(window).hasAttribute("searchmode"),
@@ -1292,11 +1302,23 @@ class UrlbarInputTestUtils {
       searchMode.entry = "oneoff";
     }
 
-    let oneOff = buttons.find(o =>
-      searchMode.engineName
-        ? o.engine.name == searchMode.engineName
-        : o.source == searchMode.source
-    );
+    // A rebuild replaces the one-off buttons, so one found before it runs is
+    // detached by the time it would be clicked. Resolve the button after the
+    // rebuild settles and confirm it is still in the document.
+    let oneOff;
+    await lazy.TestUtils.waitForCondition(() => {
+      if (oneOffs._rebuilding) {
+        return false;
+      }
+      oneOff = oneOffs
+        .getSelectableButtons(true)
+        .find(o =>
+          searchMode.engineName
+            ? o.engine.name == searchMode.engineName
+            : o.source == searchMode.source
+        );
+      return oneOff?.isConnected;
+    }, "Waiting for a connected one-off button for the search mode");
     this.Assert.ok(oneOff, "Found one-off button for search mode");
     this.EventUtils.synthesizeMouseAtCenter(oneOff, {}, window);
     await this.promiseSearchComplete(window);
@@ -1347,7 +1369,7 @@ class UrlbarInputTestUtils {
     if (Services.prefs.getBoolPref("browser.urlbar.trimURLs")) {
       return lazy.UrlbarPrefs.getScotchBonnetPref("trimHttps")
         ? "https://"
-        : "http://"; // eslint-disable-line @microsoft/sdl/no-insecure-url
+        : "http://"; // eslint-disable-line sdl/no-insecure-url
     }
     return "";
   }
@@ -1769,6 +1791,61 @@ class UrlbarInputTestUtils {
       ".searchmode-switcher"
     );
     return searchModeSwitcherButton.getAttribute("iconsrc");
+  }
+
+  /**
+   * Reads the image behind an icon URL, so that icons can be compared by what
+   * they show rather than by how they are addressed.
+   *
+   * @param {?string} url
+   * @returns {Promise<?string>}
+   *   The image's bytes, or null if there is no URL or it couldn't be read.
+   */
+  async #readIconImage(url) {
+    if (!url) {
+      return null;
+    }
+    try {
+      let buffer = await (await fetch(url)).arrayBuffer();
+      return new Uint8Array(buffer).join();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Whether the search mode switcher is showing the given icon. Its iconsrc can
+   * be a different string for the same image: over the message path an icon's
+   * bytes cross the actor boundary and are addressed anew on the content side.
+   *
+   * @param {Window} win
+   * @param {?string} expected
+   *   The URL of the expected image.
+   * @returns {Promise<boolean>}
+   */
+  async searchModeSwitcherIconIs(win, expected) {
+    let actual = this.getSearchModeSwitcherIcon(win);
+    if (actual == expected) {
+      return true;
+    }
+    let image = await this.#readIconImage(actual);
+    return !!image && image == (await this.#readIconImage(expected));
+  }
+
+  /**
+   * Asserts that the search mode switcher is showing the given icon.
+   * See searchModeSwitcherIconIs.
+   *
+   * @param {Window} win
+   * @param {?string} expected
+   * @param {string} message
+   */
+  async assertSearchModeSwitcherIcon(win, expected, message) {
+    let matches = await this.searchModeSwitcherIconIs(win, expected);
+    this.Assert?.ok(
+      matches,
+      `${message} (showing ${this.getSearchModeSwitcherIcon(win)})`
+    );
   }
 
   async openTrustPanel(win) {

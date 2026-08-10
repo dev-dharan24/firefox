@@ -1000,6 +1000,55 @@ choose-bookmark =
     .label = Use Bookmark…
     .accesskey = B
 
+home-homepage-title =
+    .label = Homepage
+
+home-homepage-new-windows =
+    .label = New windows
+
+home-homepage-new-tabs =
+    .label = New tabs
+
+# This option leads to the "Custom Homepage" subpage
+home-homepage-custom-homepage-button =
+    .label = Choose a specific site
+
+# Subheader on the Custom Homepage subpage. Followed by a form to enter URLs and a list of URLs already saved, if any.
+home-custom-homepage-card-header =
+    .label = Website address(es)
+
+home-custom-homepage-address =
+    .placeholder = Enter address
+home-custom-homepage-address-button =
+    .label = Add address
+
+# Shown when no custom websites/URLs to use as a homepage have been added yet
+home-custom-homepage-no-results =
+    .label = No websites added yet.
+
+home-custom-homepage-delete-address-button =
+    .aria-label = Delete address
+    .title = Delete address
+
+# Further options to use when setting the home page. Two action buttons are placed in line with this prompt
+# to replace the current home page with a currently open page or bookmark.
+home-custom-homepage-replace-with-prompt =
+    .label = Replace with
+
+# Button that appears in-line after text "Replace with" (home-custom-homepage-replace-with-prompt)
+home-custom-homepage-current-pages-button =
+    .label = Current opened pages
+
+# Button that appears in-line after text "Replace with" (home-custom-homepage-replace-with-prompt)
+home-custom-homepage-bookmarks-button =
+    .label = Bookmarks…
+
+# Dropdown option shown when an extension replaces the contents of new windows or tabs.
+# Variables:
+#   $extension (string) - Name of the extension
+home-prefs-homepage-extension-option =
+    .label = Extension ({ $extension })
+
 ## Home Section - Firefox Home Content Customization
 
 home-prefs-content-header2 = { -firefox-home-brand-name } Content
@@ -1881,14 +1930,6 @@ sitedata-cookies-exceptions3 =
     .accesskey = x
     .description = Choose how specific sites handle cookies and site data.
 
-## Privacy Section - Cookie Banner Blocking
-
-cookie-banner-blocker-header = Cookie Banner Blocker
-cookie-banner-blocker-description = When a site asks if they can use cookies in private browsing mode, { -brand-short-name } automatically refuses for you. Only on supported sites.
-cookie-banner-learn-more = Learn more
-cookie-banner-blocker-checkbox-label =
-    .label = Automatically refuse cookie banners
-
 ## Privacy Section - Content Blocking
 
 content-blocking-enhanced-tracking-protection = Enhanced Tracking Protection
@@ -2736,3 +2777,16 @@ security-privacy-issue-warning-ech2 =
 security-privacy-issue-warning-proxy-autodetection =
   .label = Proxy auto-configuration is enabled
   .description = Proxy auto-configuration could let untrusted networks to monitor your activity.
+
+## Referrals Section
+
+# The header in settings with link to the referral page, where the user can invite others to
+# use the browser. "Share" here means recommending or referring the browser
+referrals-section-header =
+  .label = Share { -brand-short-name }
+  .description = Invite someone to choose the browser that puts privacy first.
+
+# Link that opens the referral page, where the user can invite others to
+# use the browser. "Share" here means recommending or referring the browser
+referrals-link =
+  .label = Share { -brand-short-name }

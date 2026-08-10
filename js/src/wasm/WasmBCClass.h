@@ -1793,12 +1793,12 @@ struct BaseCompiler final {
   // null pointer dereferences/accesses.
   struct NoNullCheck {
     static void emitNullCheck(BaseCompiler* bc, RegRef rp) {}
-    static void emitTrapSite(BaseCompiler* bc, FaultingCodeOffset fco,
+    static void emitTrapSite(BaseCompiler* bc, FaultingCodeRange fcr,
                              TrapMachineInsn tmi) {}
   };
   struct SignalNullCheck {
     static void emitNullCheck(BaseCompiler* bc, RegRef rp);
-    static void emitTrapSite(BaseCompiler* bc, FaultingCodeOffset fco,
+    static void emitTrapSite(BaseCompiler* bc, FaultingCodeRange fcr,
                              TrapMachineInsn tmi);
   };
 

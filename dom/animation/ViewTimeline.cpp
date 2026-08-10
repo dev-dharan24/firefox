@@ -107,8 +107,7 @@ already_AddRefed<ViewTimeline> ViewTimeline::Constructor(
 
   // The spec doesn't provide the default value for element, so we use null
   // subject to align the behavior with other browsers.
-  RefPtr<Element> subject =
-      aOptions.mSubject.WasPassed() ? &aOptions.mSubject.Value() : nullptr;
+  RefPtr<Element> subject = aOptions.mSubject;
 
   StyleScrollAxis axis;
   switch (aOptions.mAxis) {

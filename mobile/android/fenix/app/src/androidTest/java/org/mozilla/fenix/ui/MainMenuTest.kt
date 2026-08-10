@@ -247,6 +247,11 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080151
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyRecommendedExtensionsListWhileNoExtensionIsInstalledTest"],
+        bug = 2060288,
+        since = "2026-08",
+    )
     @SmokeTest
     @Test
     fun verifyRecommendedExtensionsListWhileNoExtensionIsInstalledTest() {
@@ -263,6 +268,11 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080160
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyTheExtensionsMenuListAfterRemovingAnExtensionTest"],
+        bug = 2061643,
+        since = "2026-08",
+    )
     @SmokeTest
     @Test
     fun verifyTheExtensionsMenuListAfterRemovingAnExtensionTest() {
@@ -301,6 +311,11 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080163
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyTheExtensionsMenuListAfterRemovingAnExtensionTest"],
+        bug = 2061643,
+        since = "2026-08",
+    )
     @SmokeTest
     @Test
     fun verifyTheManageExtensionsItemTest() {
@@ -739,6 +754,7 @@ class MainMenuTest {
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080101
     @Converted(
         replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.CustomTabsTest#verifyTheFindInPageMenuItemInACustomTabTest"],
+        bug = 2057409,
         since = "2026-07",
     )
     @SmokeTest
@@ -912,6 +928,11 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080112
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyTheReportBrokenSiteSubMenuOptionTest"],
+        bug = 2060267,
+        since = "2026-08",
+    )
     @SmokeTest
     @Test
     fun verifyTheReportBrokenSiteSubMenuOptionTest() {
@@ -1338,6 +1359,15 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080134
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyTheExtensionsMainMenuListTest"],
+        bug = 2060267,
+        since = "2026-08",
+        notes = "Legacy verifyTheRecommendedAddons asserted three named addons, each with its own " +
+            "\"Add <addon>\" install button, retrying against a hardcoded candidate list. The port asserts " +
+            "that a recommended-addon row is present instead, since which addons AMO recommends is " +
+            "server-driven. The per-addon install-button check did not carry over.",
+    )
     @SmokeTest
     @Test
     fun verifyTheExtensionsMainMenuListTest() {
@@ -1355,7 +1385,6 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080135
-    @Ignore("Disabling to ease uplift. See bug 2049060.")
     @Test
     fun verifyTheMoreMainMenuListTest() {
         val firstTestPage = mockWebServer.firstForeignWebPageAsset
@@ -1371,6 +1400,7 @@ class MainMenuTest {
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080137
     @Converted(
         replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.MainMenuTest#verifyTheBookmarksMainMenuItemTest"],
+        bug = 2057417,
         since = "2026-07",
     )
     @SmokeTest
@@ -1421,6 +1451,7 @@ class MainMenuTest {
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080096
     @Converted(
         replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.CustomTabsTest#verifyTheMainMenuBackButtonFromCustomTabTest"],
+        bug = 2057414,
         since = "2026-07",
     )
     @SmokeTest
@@ -1449,6 +1480,11 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/4245663
+    @Converted(
+        replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.CustomTabsTest#verifyTheMainMenuBackButtonLongClickFromCustomTabTest"],
+        bug = 2060267,
+        since = "2026-08",
+    )
     @SmokeTest
     @Test
     fun verifyTheMainMenuBackButtonLongClickFromCustomTabTest() {
@@ -1480,6 +1516,7 @@ class MainMenuTest {
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080097
     @Converted(
         replacedBy = ["org.mozilla.fenix.ui.efficiency.tests.CustomTabsTest#verifyTheMainMenuForwardButtonFromCustomTabTest"],
+        bug = 2057414,
         since = "2026-07",
     )
     @SmokeTest
@@ -1580,7 +1617,6 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/3080110
-    @Ignore("Disabling to ease uplift. See bug 2049060.")
     @SmokeTest
     @Test
     fun verifyTheMoreMainMenuSubListTest() {
@@ -1595,7 +1631,7 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/4036009
-    @Ignore("Disabling to ease uplift. See bug 2049060.")
+    @Ignore("Will be fixed in bug 2059592")
     @SmokeTest
     @Test
     fun verifyTheMoreMainMenuSummarizePageButtonTest() {
@@ -1616,7 +1652,7 @@ class MainMenuTest {
     }
 
     // TestRail link: https://mozilla.testrail.io/index.php?/cases/view/4036011
-    @Ignore("Disabling to ease uplift. See bug 2049060.")
+    @Ignore("Will be fixed in bug 2059592")
     @SmokeTest
     @Test
     fun verifyTheMoreMainMenuSummarizePageButtonFunctionalityTest() {

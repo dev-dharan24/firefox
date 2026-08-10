@@ -2244,7 +2244,8 @@
      */ \
     MACRO(CheckResumeKind, check_resume_kind, NULL, 1, 3, 1, JOF_BYTE) \
     /*
-     * Resume execution of a generator, async function, or async generator.
+     * Resume execution of a generator function. Async functions and modules are
+     * resumed without going through this op.
      *
      * This behaves something like a call instruction. It pushes a stack frame
      * (the one saved when `gen` was suspended, rather than a fresh one) and

@@ -35,9 +35,6 @@ run-if = [
 ["browser_ext_themes_arrowpanels.js"]
 
 ["browser_ext_themes_autocomplete_popup.js"]
-skip-if = [
-  "nova", # Bug 2057887
-]
 
 ["browser_ext_themes_chromeparity.js"]
 
@@ -78,9 +75,6 @@ skip-if = [
 ["browser_ext_themes_separators.js"]
 
 ["browser_ext_themes_sidebars.js"]
-skip-if = [
-  "nova", # Bug 2057933
-]
 
 ["browser_ext_themes_static_onUpdated.js"]
 
@@ -97,9 +91,6 @@ skip-if = [
 ["browser_ext_themes_toolbar_fields.js"]
 
 ["browser_ext_themes_toolbar_fields_focus.js"]
-skip-if = [
-  "nova", # Bug 2057938
-]
 
 ["browser_ext_themes_toolbarbutton_colors.js"]
 

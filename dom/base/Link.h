@@ -125,6 +125,10 @@ class Link : public nsISupports {
   void SetLinkState(State, bool aNotify);
   void SetHrefAttribute(nsIURI* aURI);
 
+  // Keeps the owning document's set of speculation rules link candidates in
+  // sync as this link is bound/unbound or gains/loses its href.
+  void UpdateSpeculationRulesLink(bool aHasHref);
+
   mutable nsCOMPtr<nsIURI> mCachedURI;
 
   Element* const mElement;

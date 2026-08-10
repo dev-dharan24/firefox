@@ -159,13 +159,13 @@ void DocGroup::AddDocument(Document* aDocument) {
   MOZ_ASSERT_IF(
       aDocument->GetBrowsingContext(),
       aDocument->GetBrowsingContext()->Group() == mBrowsingContextGroup);
-  mDocuments.AppendElement(aDocument);
+  mDocuments.Insert(aDocument);
 }
 
 void DocGroup::RemoveDocument(Document* aDocument) {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(mDocuments.Contains(aDocument));
-  mDocuments.RemoveElement(aDocument);
+  mDocuments.Remove(aDocument);
 
   if (mDocuments.IsEmpty()) {
     mBrowsingContextGroup = nullptr;

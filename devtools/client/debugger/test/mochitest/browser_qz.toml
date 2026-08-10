@@ -99,6 +99,11 @@ fail-if = [
 
 ["browser_dbg-stepping.js"]
 
+["browser_dbg-stylesheets.js"]
+fail-if = [
+  "a11y_checks", # Bug 1849028 clicked element may not be focusable and/or labeled
+]
+
 ["browser_dbg-tabs-keyboard.js"]
 
 ["browser_dbg-tabs-pretty-print.js"]

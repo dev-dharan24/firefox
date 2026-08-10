@@ -1745,6 +1745,7 @@ VARIABLES = {
 
         Refer to the documentation of ``GENERATED_FILES``; for the most part things work the same.
         The two major differences are:
+
         1. The function in the Python script will be passed an additional keyword argument `locale`
            which provides the locale in use, i.e. ``en-US``.
         2. The ``inputs`` list may contain paths to files that will be taken from the locale
@@ -2512,6 +2513,7 @@ VARIABLES = {
         element of the list, GYP_DIRS may be accessed as a dictionary
         (GYP_DIRS[foo]). The object this returns has attributes that need to be
         set to further specify gyp processing:
+
             - input, gives the path to the root gyp configuration file for that
               object directory.
             - variables, a dictionary containing variables and values to pass
@@ -2533,7 +2535,8 @@ VARIABLES = {
               to setting ``DIST_INSTALL = True`` on those targets, but selective
               rather than affecting every target in the gyp directory.
 
-        Typical use looks like:
+        Typical use looks like::
+
             GYP_DIRS += ['foo', 'bar']
             GYP_DIRS['foo'].input = 'foo/foo.gyp'
             GYP_DIRS['foo'].variables = {
@@ -2789,10 +2792,12 @@ VARIABLES = {
         which subdirectory they should be exported to. For example,
         to export ``foo.py`` to ``_tests/foo``, append to
         ``TEST_HARNESS_FILES`` like so::
+
            TEST_HARNESS_FILES.foo += ['foo.py']
 
         Files from topsrcdir and the objdir can also be installed by prefixing
         the path(s) with a '/' character and a '!' character, respectively::
+
            TEST_HARNESS_FILES.path += ['/build/bar.py', '!quux.py']
         """,
     ),

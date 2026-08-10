@@ -1632,6 +1632,7 @@ export class AIWindow extends MozLitElement {
       role: "assistant-message-complete",
       content: { id: lastAssistant?.id },
       historyResults: this.#conversation?.getHistoryResultsSnapshot() ?? [],
+      citations: lastAssistant?.citations ?? [],
     });
   };
 
@@ -2256,6 +2257,7 @@ export class AIWindow extends MozLitElement {
       // renders the grid even if the streaming-time dispatch was delayed or
       // missed (its delivery races the message lifecycle).
       historyResults: this.#conversation?.getHistoryResultsSnapshot() ?? [],
+      citations: msg?.citations ?? [],
     });
     const followupCount = msg?.tokens?.followup?.length;
     if (followupCount) {
@@ -2988,7 +2990,7 @@ export class AIWindow extends MozLitElement {
    * actor after it resolves assets requested by a rendered grid.
    *
    * @param {string} conversationId
-   * @param {Array<{url: string, image: ?string, hasFavicon: boolean}>} assets
+   * @param {Array<{url: string, image: ?string, requestedThumbnail?: boolean, hasFavicon: boolean}>} assets
    */
   applyHistoryAssets(conversationId, assets) {
     if (this.conversationId !== conversationId) {

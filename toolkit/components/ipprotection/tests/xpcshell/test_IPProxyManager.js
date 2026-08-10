@@ -999,6 +999,56 @@ add_task(async function test_IPPProxyManager_rotateProxyPass_changes_pass() {
   IPProtectionService.uninit();
 });
 
+/**
+ * fromResponse anchors a proxy pass to the local clock at receipt: the pass is
+ * valid from now for the token's lifetime (exp - nbf), regardless of how far
+ * Guardian's clock has drifted from ours. This preserves rotation scheduling
+ * even for a token that looks long-expired to a skewed client, and is what
+ * prevents the 0ms rotation-reschedule loop.
+ */
+add_task(async function test_ProxyPass_fromResponse_reanchors_to_now() {
+  const now = Temporal.Now.instant();
+  const cases = [
+    {
+      desc: "large drift (client clock ~2h ahead of a 1h token)",
+      from: now.subtract({ hours: 2 }),
+      until: now.subtract({ hours: 1 }),
+    },
+    {
+      desc: "accurate clock (freshly issued 24h token)",
+      from: now.subtract({ seconds: 30 }),
+      until: now.add({ hours: 24 }),
+    },
+  ];
+
+  for (const { desc, from, until } of cases) {
+    const token = createProxyPassToken(from, until);
+    const response = { ok: true, json: async () => ({ token }) };
+
+    const pass = await ProxyPass.fromResponse(response);
+    Assert.ok(pass, `${desc}: fromResponse returns a pass`);
+
+    const lifetimeMs = until.epochMilliseconds - from.epochMilliseconds;
+    const expectedFromMs = Temporal.Now.instant().epochMilliseconds;
+
+    Assert.less(
+      Math.abs(pass.from.epochMilliseconds - expectedFromMs),
+      1000,
+      `${desc}: from is re-anchored to now`
+    );
+    Assert.less(
+      Math.abs(pass.until.epochMilliseconds - (expectedFromMs + lifetimeMs)),
+      1000,
+      `${desc}: the token lifetime is preserved`
+    );
+    Assert.ok(pass.isValid(), `${desc}: pass is valid`);
+    Assert.ok(
+      !pass.shouldRotate(),
+      `${desc}: a just-received pass does not want immediate rotation`
+    );
+  }
+});
+
 add_task(async function test_IPPProxyManager_stop_during_rotation() {
   let sandbox = sinon.createSandbox();
   setupStubs({ validProxyPass: true });

@@ -2604,11 +2604,9 @@ class MousePointer extends Pointer {
     });
     mouseEvent.update(state, inputSource);
 
-    if (mouseEvent.ctrlKey) {
-      if (lazy.AppInfo.isMac) {
-        mouseEvent.button = 2;
-        state.clickTracker.reset();
-      }
+    if (mouseEvent.ctrlKey && lazy.AppInfo.isMac) {
+      mouseEvent.button = 2;
+      state.clickTracker.reset();
     } else {
       mouseEvent.clickCount = state.clickTracker.count + 1;
     }

@@ -107,6 +107,8 @@ run-if = [
   "os == 'win'", # Forced-colors is only supported on Windows
 ]
 
+["browser_html_linux_theme_colors_checkbox.js"]
+
 ["browser_html_list_view.js"]
 skip-if = [
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && opt && a11y_checks && swgl", # Bug 1781893

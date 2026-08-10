@@ -126,17 +126,6 @@ void SVGAElement::SetType(const nsAString& aType, mozilla::ErrorResult& rv) {
   SetAttr(nsGkAtoms::type, aType, rv);
 }
 
-void SVGAElement::GetText(nsAString& aText, mozilla::ErrorResult& rv) const {
-  if (NS_WARN_IF(
-          !nsContentUtils::GetNodeTextContent(this, true, aText, fallible))) {
-    rv.Throw(NS_ERROR_OUT_OF_MEMORY);
-  }
-}
-
-void SVGAElement::SetText(const nsAString& aText, mozilla::ErrorResult& rv) {
-  rv = nsContentUtils::SetNodeTextContent(this, aText, false);
-}
-
 //----------------------------------------------------------------------
 // nsIContent methods
 

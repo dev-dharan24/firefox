@@ -79,7 +79,9 @@
 
     /** toolbar **/
     --toolbar-background-color: color-mix(in srgb, -moz-dialog 85%, var(--color-white));
+    --toolbar-field-background-color: light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30));
     --toolbar-field-background-color-focus: Field;
+    --toolbar-field-border-color: var(--border-color-transparent);
     --toolbar-field-text-color: inherit;
     --toolbar-field-text-color-focus: FieldText;
     --toolbar-text-color: -moz-dialogtext;
@@ -150,7 +152,9 @@
 
       /** toolbar **/
       --toolbar-background-color: light-dark(#f9f9fb, rgb(43, 42, 51));
+      --toolbar-field-background-color: light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30));
       --toolbar-field-background-color-focus: light-dark(var(--color-white), rgb(66, 65, 77));
+      --toolbar-field-border-color: var(--border-color-transparent);
       --toolbar-field-text-color: light-dark(var(--color-gray-100), var(--color-gray-0));
       --toolbar-field-text-color-focus: light-dark(var(--color-black), var(--color-gray-0));
       --toolbar-text-color: light-dark(var(--color-gray-100), var(--color-gray-0));
@@ -204,7 +208,9 @@
 
       /** toolbar **/
       --toolbar-background-color: color-mix(in srgb, -moz-dialog 85%, var(--color-white));
+      --toolbar-field-background-color: light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30));
       --toolbar-field-background-color-focus: Field;
+      --toolbar-field-border-color: var(--border-color-transparent);
       --toolbar-field-border-color-focus: color-mix(in srgb, var(--focus-outline-color) 50%, transparent);
       --toolbar-field-text-color: inherit;
       --toolbar-field-text-color-focus: FieldText;
@@ -215,6 +221,8 @@
 
       /** toolbox **/
       --toolbox-background-color-inactive: -moz-headerbarinactive;
+      /* This gradient is only used for Nova */
+      --toolbox-background-gradient: image(transparent);
       --toolbox-text-color: -moz-headerbartext;
       --toolbox-text-color-inactive: -moz-headerbarinactivetext;
     }
@@ -256,7 +264,9 @@
 
         /** toolbar **/
         --toolbar-background-color: var(--background-color-box);
+        --toolbar-field-background-color: var(--toolbar-background-color);
         --toolbar-field-background-color-focus: var(--background-color-box);
+        --toolbar-field-border-color: light-dark(var(--color-gray-20), var(--color-gray-60));
         --toolbar-field-border-color-focus: var(--focus-outline-color);
         --toolbar-field-text-color: light-dark(var(--color-violet-desaturated-70), var(--color-violet-desaturated-10));
         --toolbar-field-text-color-focus: var(--toolbar-field-text-color);
@@ -267,6 +277,12 @@
 
         /** toolbox **/
         --toolbox-background-color-inactive: transparent;
+        /* This gradient is only used for Nova */
+        --toolbox-background-gradient: linear-gradient(
+          96deg,
+          color-mix(var(--toolbox-background-color-gradient-leading) 50%, transparent) 39.84%,
+          color-mix(var(--toolbox-background-color-gradient-trailing) 50%, transparent) 101.72%
+        );
         --toolbox-text-color: var(--text-color);
         --toolbox-text-color-inactive: var(--text-color-deemphasized);
       }

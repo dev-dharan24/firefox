@@ -176,6 +176,8 @@ details {
   border-radius: var(--card-cover-image-border-radius);
 }
 
+/* TODO: Probably opt-into this instead with a class or something */
+/* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
 :host(:has([slot="cover-image"])) {
   .moz-card {
     padding-block-start: var(--card-cover-image-padding);

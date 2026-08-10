@@ -1202,6 +1202,16 @@ void LIRGenerator::visitTest(MTest* test) {
     return;
   }
 
+  if (opd->isIsSuspendedGenerator() && opd->isEmittedAtUses()) {
+    MDefinition* object = opd->toIsSuspendedGenerator()->object();
+    MOZ_ASSERT(object->type() == MIRType::Object);
+
+    auto* lir = new (alloc()) LIsSuspendedGeneratorAndBranch(
+        ifTrue, ifFalse, useRegister(object), temp());
+    add(lir, test);
+    return;
+  }
+
   if (opd->isWasmRefTestAbstract() && opd->isEmittedAtUses()) {
     MWasmRefTestAbstract* refTest = opd->toWasmRefTestAbstract();
 
@@ -4473,12 +4483,7 @@ void LIRGenerator::visitArrayLength(MArrayLength* ins) {
 
 void LIRGenerator::visitSetArrayLength(MSetArrayLength* ins) {
   MOZ_ASSERT(ins->elements()->type() == MIRType::Elements);
-  MOZ_ASSERT(ins->index()->type() == MIRType::Int32);
-
-  MOZ_ASSERT(ins->index()->isConstant());
-  add(new (alloc()) LSetArrayLength(useRegister(ins->elements()),
-                                    useRegisterOrConstant(ins->index())),
-      ins);
+  add(new (alloc()) LSetArrayLength(useRegister(ins->elements())), ins);
 }
 
 void LIRGenerator::visitFunctionLength(MFunctionLength* ins) {
@@ -4696,11 +4701,9 @@ void LIRGenerator::visitInitializedLength(MInitializedLength* ins) {
 
 void LIRGenerator::visitSetInitializedLength(MSetInitializedLength* ins) {
   MOZ_ASSERT(ins->elements()->type() == MIRType::Elements);
-  MOZ_ASSERT(ins->index()->type() == MIRType::Int32);
-
-  MOZ_ASSERT(ins->index()->isConstant());
-  add(new (alloc()) LSetInitializedLength(useRegister(ins->elements()),
-                                          useRegisterOrConstant(ins->index())),
+  LDefinition temp0 =
+      ins->needsPreBarrier() ? temp() : LDefinition::BogusTemp();
+  add(new (alloc()) LSetInitializedLength(useRegister(ins->elements()), temp0),
       ins);
 }
 
@@ -6721,6 +6724,26 @@ void LIRGenerator::visitIsObject(MIsObject* ins) {
   define(lir, ins);
 }
 
+void LIRGenerator::visitIsSuspendedGenerator(MIsSuspendedGenerator* ins) {
+  MOZ_ASSERT(ins->object()->type() == MIRType::Object);
+
+  // Try to emit LIsSuspendedGeneratorAndBranch. IsSuspendedGenerator loads the
+  // generator's resume index so we also make sure the MTest instruction is the
+  // next instruction, to prevent moving the load past a store.
+  if (CanEmitAtUseForSingleTest(ins)) {
+    MInstructionIterator next(ins->block()->begin(ins));
+    next++;
+    if (*next == ins->usesBegin()->consumer()->toDefinition()) {
+      emitAtUses(ins);
+      return;
+    }
+  }
+
+  auto* lir = new (alloc())
+      LIsSuspendedGenerator(useRegisterAtStart(ins->object()), temp());
+  defineReuseInput(lir, ins, 0);
+}
+
 void LIRGenerator::visitIsNullOrUndefined(MIsNullOrUndefined* ins) {
   if (CanEmitAtUseForSingleTest(ins)) {
     emitAtUses(ins);
@@ -7680,6 +7703,17 @@ void LIRGenerator::visitAsyncAwait(MAsyncAwait* ins) {
   MOZ_ASSERT(ins->generator()->type() == MIRType::Object);
   auto* lir = new (alloc()) LAsyncAwait(useBoxAtStart(ins->value()),
                                         useRegisterAtStart(ins->generator()));
+  defineReturn(lir, ins);
+  assignSafepoint(lir, ins);
+}
+
+void LIRGenerator::visitGeneratorResume(MGeneratorResume* ins) {
+  MOZ_ASSERT(ins->generator()->type() == MIRType::Object);
+
+  auto* lir = new (alloc()) LGeneratorResume(
+      useFixedAtStart(ins->generator(), CallTempReg0),
+      useBoxFixedAtStart(ins->value(), CallTempReg1, CallTempReg2),
+      tempFixed(CallTempReg3), tempFixed(CallTempReg4));
   defineReturn(lir, ins);
   assignSafepoint(lir, ins);
 }

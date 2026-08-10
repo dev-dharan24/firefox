@@ -27,6 +27,7 @@ import org.mozilla.fenix.ui.efficiency.helpers.Selector
 import org.mozilla.fenix.ui.efficiency.navigation.NavigationRegistry
 import org.mozilla.fenix.ui.efficiency.navigation.NavigationStep
 import org.mozilla.fenix.ui.efficiency.selectors.BrowserPageSelectors
+import org.mozilla.fenix.ui.efficiency.selectors.DownloadsSelectors
 import org.mozilla.fenix.ui.efficiency.selectors.HomeSelectors
 import org.mozilla.fenix.ui.efficiency.selectors.MainMenuSelectors
 import org.mozilla.fenix.ui.efficiency.selectors.SearchBarSelectors
@@ -146,6 +147,21 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         return this
     }
 
+    fun verifyTranslationSheetWithReload(url: String, attempts: Int = 3): BrowserPage {
+        for (attempt in 1..attempts) {
+            try {
+                mozVerify(BrowserPageSelectors.TRANSLATION_SHEET, timeout = waitingTimeLong)
+                mozVerifyElementsByGroup("notTranslatedPageTranslationSheet")
+                return this
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i("BrowserPage", "verifyTranslationSheetWithReload: translation sheet absent on attempt $attempt, reloading")
+                navigateToPage(url, forceNavigation = true)
+            }
+        }
+        return this
+    }
+
     fun verifyHttpsOnlyErrorPage(): BrowserPage {
         return verifyPageContent("Secure site not available")
             .verifyPageContent("Most likely, the website simply does not support HTTPS.")
@@ -168,6 +184,62 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
         return this
     }
 
+    // --- Downloads from a web page ---
+
+    /**
+     * Click the download link named [fileName] and wait for the download prompt, reloading [url]
+     * between attempts.
+     *
+     * Mirrors the legacy BrowserRobot.clickDownloadLink, which retried the click three times with a
+     * page refresh in between: the link can be tapped before the page is fully interactive, in which
+     * case the tap lands but no prompt opens — waiting longer on the same document never helps.
+     */
+    fun clickDownloadLink(fileName: String, url: String, attempts: Int = 3): BrowserPage {
+        for (attempt in 1..attempts) {
+            try {
+                mozClick(DownloadsSelectors.DOWNLOAD_LINK(fileName))
+                mozVerify(DownloadsSelectors.DOWNLOAD_DIALOG_TITLE, timeout = waitingTimeLong)
+                return this
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i("BrowserPage", "clickDownloadLink: no download prompt for '$fileName' on attempt $attempt, reloading")
+                navigateToPage(url, forceNavigation = true)
+            }
+        }
+        return this
+    }
+
+    /**
+     * Assert the full download prompt, not just its title: legacy verifyDownloadPrompt checked the
+     * dialog, its Cancel button and its Download button were all displayed.
+     */
+    fun verifyDownloadPrompt(): BrowserPage {
+        mozVerify(DownloadsSelectors.DOWNLOAD_DIALOG_TITLE, timeout = waitingTimeLong)
+        mozVerify(DownloadsSelectors.DOWNLOAD_DIALOG_CANCEL_BUTTON)
+        mozVerify(DownloadsSelectors.DOWNLOAD_DIALOG_CONFIRM_BUTTON)
+        return this
+    }
+
+    /** Confirm the download prompt, starting the download. */
+    fun clickDownloadPromptConfirmButton(): BrowserPage {
+        mozClick(DownloadsSelectors.DOWNLOAD_DIALOG_CONFIRM_BUTTON)
+        return this
+    }
+
+    /**
+     * Assert the "Download completed" snackbar for [fileName] — the completion text, the "Open"
+     * action (tag and label) and the file name itself, as legacy verifyDownloadCompleteSnackbar did.
+     */
+    fun verifyDownloadCompleteSnackbar(fileName: String): BrowserPage {
+        // The snackbar only appears once the file has actually transferred, so this waits on the
+        // network, not on rendering.
+        mozVerify(DownloadsSelectors.DOWNLOAD_COMPLETE_SNACKBAR, timeout = waitingTimeLong)
+        mozVerify(DownloadsSelectors.DOWNLOAD_SNACK_BAR_OPEN_BUTTON)
+        mozVerify(DownloadsSelectors.DOWNLOAD_SNACK_BAR_OPEN_ACTION_LABEL)
+        mozVerify(DownloadsSelectors.FILE_NAME_TEXT(fileName))
+        return this
+    }
+
     fun clickSubmitLoginButton(): BrowserPage {
         mozClick(BrowserPageSelectors.SUBMIT_LOGIN_BUTTON)
         return this
@@ -185,6 +257,51 @@ class BrowserPage(composeRule: AndroidComposeTestRule<HomeActivityIntentTestRule
 
     fun continueToHttpSite(): BrowserPage {
         return clickPageContent("Continue to HTTP Site")
+    }
+
+    /**
+     * Type a username/password into the web login form. Submitting the form GETs to itself, so after
+     * the first save the page reloads; typing the next set of credentials while that reload is still in
+     * flight silently loses them (and the following submit then re-saves the previous login instead of
+     * the new one). Each attempt therefore waits for the reloaded form to be present, enters the
+     * credentials, and asserts the username actually stuck — re-entering if the reload wiped it.
+     * Mirrors the legacy setPageObjectText (waitForExists + retry-with-refresh) sequence.
+     */
+    fun setLoginFormCredentials(username: String, password: String, attempts: Int = 4): BrowserPage {
+        for (attempt in 1..attempts) {
+            mozVerify(BrowserPageSelectors.USERNAME_WEB_FIELD, timeout = waitingTimeLong)
+            mozClearAndEnterText(username, BrowserPageSelectors.USERNAME_WEB_FIELD)
+            mozClearAndEnterText(password, BrowserPageSelectors.PASSWORD_WEB_FIELD)
+            try {
+                mozVerify(BrowserPageSelectors.PREFILLED_USERNAME(username), timeout = 3_000)
+                return this
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i("BrowserPage", "setLoginFormCredentials: username '$username' didn't stick on attempt $attempt, re-entering")
+            }
+        }
+        return this
+    }
+
+    /**
+     * Open the saved-login suggestions bar over the web form's username field. Focusing the field is
+     * what summons the bar, but the first focus sometimes autofills the field directly without ever
+     * showing it, so we re-focus and retry. Mirrors the legacy BrowserRobot.clickSuggestedLoginsButton,
+     * which re-clicked the username field for the same reason.
+     */
+    fun clickSuggestedLoginsBar(attempts: Int = 3): BrowserPage {
+        for (attempt in 1..attempts) {
+            mozClick(BrowserPageSelectors.USERNAME_WEB_FIELD)
+            try {
+                mozVerify(BrowserPageSelectors.SUGGESTED_LOGINS_BAR, timeout = 3_000)
+                mozClick(BrowserPageSelectors.SUGGESTED_LOGINS_BAR)
+                return this
+            } catch (e: AssertionError) {
+                if (attempt == attempts) throw e
+                Log.i("BrowserPage", "clickSuggestedLoginsBar: bar absent on attempt $attempt, re-focusing username")
+            }
+        }
+        return this
     }
 
     fun verifyUrl(url: String): BrowserPage {

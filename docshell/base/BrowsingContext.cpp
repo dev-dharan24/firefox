@@ -2343,8 +2343,6 @@ nsresult BrowsingContext::LoadURI(nsDocShellLoadState* aLoadState,
       // is created.
       Canonical()->AttemptSpeculativeLoadInParent(aLoadState);
 
-      cp->TransmitBlobDataIfBlobURL(aLoadState->URI(), mOriginAttributes);
-
 #ifdef ANDROID
       uint32_t appLinkLaunchType = aLoadState->GetAppLinkLaunchType();
       Canonical()->SetAndroidAppLinkLaunchType(appLinkLaunchType);

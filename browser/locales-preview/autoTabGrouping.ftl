@@ -2,32 +2,33 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-## Group My Tabs Panel
-## The panel opened from the "Group my tabs" toolbar button, which suggests
+## Organize Tabs Toolbar Button
+
+smartwindow-organize-tabs-button =
+    .label = Organize Tabs
+    .tooltiptext = Organize Tabs
+
+## Organize Tabs Panel
+## The panel opened from the "Organize Tabs" toolbar button, which suggests
 ## groups for the window's open tabs and creates the ones the user picks.
 
-smartwindow-group-tabs-panel-heading = Group my tabs
-# Shown while the on-device model clusters the open tabs into suggestions.
-# "Finding groups" means forming new groups from these tabs, not searching for
-# tab groups that already exist.
-smartwindow-group-tabs-loading = Finding groups…
+smartwindow-group-tabs-panel-heading = Organize Tabs
+# Shown while the on-device model clusters the open tabs into suggestions. It is
+# forming new groups from these tabs, not searching for tab groups that already
+# exist.
+smartwindow-group-tabs-loading = Checking tabs for useful groups…
 # Shown when clustering produced no group worth suggesting.
-smartwindow-group-tabs-empty = No suggestions right now
-smartwindow-group-tabs-create-all = Create all suggested groups
+smartwindow-group-tabs-empty = No tab groups to suggest right now. Check again later.
+# Shown in place of suggestions when every group the model found has already
+# been created.
+smartwindow-group-tabs-all-sorted = Nice work organizing your tabs
+smartwindow-group-tabs-create-all = Create Groups
 smartwindow-group-tabs-suggested-heading = Suggested groups
-# Title of the flyout that previews a single suggested group; activating it
-# creates that group.
-smartwindow-group-tabs-flyout-create = Create group
-# Flyout subtitle. $groupLabel is the suggested group's name, $tabCount the
-# number of tabs it would contain.
-smartwindow-group-tabs-flyout-subtitle =
-    { $tabCount ->
-        [one] { $groupLabel } · { $tabCount } tab
-       *[other] { $groupLabel } · { $tabCount } tabs
-    }
-# A tab listed in the flyout. $siteName is derived from the tab's domain
-# (e.g. "Github"); $title is the page title.
-smartwindow-group-tabs-flyout-tab = { $siteName } · { $title }
+# Accessible name for the flyout that lists the tabs of one suggested group.
+# Activating a tab in the list switches to it. $groupLabel is the suggested
+# group's name.
+smartwindow-group-tabs-flyout-list =
+    .aria-label = Tabs in { $groupLabel }
 # Accessible name for a suggested-group row. Activating the row creates the
 # group. $groupLabel is the suggested group's name, $tabCount the number of
 # tabs it would contain.
@@ -39,6 +40,14 @@ smartwindow-group-tabs-suggestion =
         }
 # Heading for the list of groups the user just created (and can still undo).
 smartwindow-group-tabs-just-created-heading = Just created
-# Footer action that dissolves every group in the "Just created" list. The tabs
-# stay open; only the grouping is removed.
-smartwindow-group-tabs-ungroup = Ungroup
+# Action that dissolves every group in the "Just created" list. The tabs stay
+# open; only the grouping is removed.
+smartwindow-group-tabs-ungroup = Ungroup Tabs
+# Action that closes this window's duplicate tabs, keeping the most recently
+# used tab of each set. Only shown when there are duplicates to close, and
+# $tabCount is exactly how many tabs activating it closes.
+smartwindow-group-tabs-close-duplicates =
+    { $tabCount ->
+        [one] Close { $tabCount } Duplicate Tab
+       *[other] Close { $tabCount } Duplicate Tabs
+    }

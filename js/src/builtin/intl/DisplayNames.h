@@ -34,14 +34,10 @@ class DisplayNamesObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto CALENDAR =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto OPTIONS =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(2);
-  static constexpr auto LOCALE_DISPLAY_NAMES_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(3);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, CALENDAR, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, OPTIONS, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, LOCALE_DISPLAY_NAMES_SLOT, Private, Undefined);
   static constexpr uint32_t SLOT_COUNT = 4;
 
   // Estimated memory use for ULocaleDisplayNames (see IcuMemoryUsage).

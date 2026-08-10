@@ -69,5 +69,6 @@ tasks:
                 - sysroot-x86_64-linux-gnu
                 - sysroot-wasm32-wasi
                 - terser
+                - newtab-node-modules
         optimization:
             skip-unless-expanded: null

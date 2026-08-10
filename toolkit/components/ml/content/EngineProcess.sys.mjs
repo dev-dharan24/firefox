@@ -164,6 +164,13 @@ export const FEATURES = {
     engineId: "smart-tab-topic-engine",
     fluentId: "mlmodel-smart-tab-topic-engine",
   },
+  // Smart Window auto tab grouping: a separate topic-model slot so its naming
+  // model can be updated independently of the shared smart-tab-topic model.
+  // see browser/components/aiwindow/ui/modules/AutoTabGroupingSuggestions.sys.mjs
+  "smart-window-tab-topic": {
+    engineId: "smart-window-tab-topic-engine",
+    fluentId: "mlmodel-smart-tab-topic-engine",
+  },
   // see toolkit/components/formautofill/shared/FormAutofillML.sys.mjs
   "formfill-classification": {
     engineId: "formfill-classification-engine",
@@ -199,6 +206,9 @@ export const FEATURES = {
     engineId: "smart-intent-en-fr",
   },
   chat: {
+    engineId: "smart-openai",
+  },
+  "smart-form-fill": {
     engineId: "smart-openai",
   },
   "title-generation": {
@@ -1140,6 +1150,13 @@ export class PipelineOptions {
  */
 export class EngineProcess {
   /**
+   * The cached native ONNX runtime availability request.
+   *
+   * @type {Promise<boolean> | null}
+   */
+  static #nativeOnnxRuntimeAvailabilityPromise = null;
+
+  /**
    * Get a reference to all running "inference" processes.
    *
    * @returns {sequence<nsIDOMProcessParent>}
@@ -1180,6 +1197,69 @@ export class EngineProcess {
   }
 
   /**
+   * Resolves to true if the native ONNX runtime is available, otherwise false.
+   *
+   * @returns {Promise<boolean>}
+   */
+  static requestIsNativeOnnxRuntimeAvailable() {
+    if (!Services.prefs.getBoolPref("browser.ml.enable")) {
+      return Promise.resolve(false);
+    }
+
+    if (!EngineProcess.#nativeOnnxRuntimeAvailabilityPromise) {
+      EngineProcess.#nativeOnnxRuntimeAvailabilityPromise =
+        EngineProcess.#requestNativeOnnxRuntimeAvailability();
+    }
+
+    const availabilityPromise =
+      EngineProcess.#nativeOnnxRuntimeAvailabilityPromise;
+    return availabilityPromise.catch(() => {
+      if (
+        EngineProcess.#nativeOnnxRuntimeAvailabilityPromise ===
+        availabilityPromise
+      ) {
+        // We weren't able to determine the availability definitively,
+        // so we shouldn't block future retry attempts.
+        EngineProcess.#nativeOnnxRuntimeAvailabilityPromise = null;
+      }
+
+      return false;
+    });
+  }
+
+  /**
+   * Clears the cached native ONNX runtime availability for tests.
+   */
+  static resetNativeOnnxRuntimeAvailabilityForTests() {
+    if (!Cu.isInAutomation) {
+      throw new Error("This function is only available in automation.");
+    }
+    EngineProcess.#nativeOnnxRuntimeAvailabilityPromise = null;
+  }
+
+  /**
+   * Requests native ONNX runtime availability from the inference process.
+   *
+   * @returns {Promise<boolean>}
+   */
+  static async #requestNativeOnnxRuntimeAvailability() {
+    const keepAlive =
+      await ChromeUtils.ensureHeadlessContentProcess("inference");
+
+    if (!keepAlive?.domProcess?.canSend) {
+      keepAlive?.invalidateKeepAlive();
+      throw new Error("Could not start the MLEngine inference process.");
+    }
+
+    try {
+      const actor = keepAlive.domProcess.getActor("MLEngine");
+      return await actor.requestIsNativeOnnxRuntimeAvailable();
+    } finally {
+      keepAlive.invalidateKeepAlive();
+    }
+  }
+
+  /**
    * @returns {Promise<JSProcessActorParent>}
    */
   static async #getEngineActor({ actorName }) {
@@ -1192,6 +1272,13 @@ export class EngineProcess {
     }
 
     try {
+      // The inference engine starts system-principal ChromeWorker instances
+      // within the content process, so needs to be marked as having loaded that
+      // principal. Remove this when we stop using system workers for inference.
+      keepAlive.domProcess.aboutToLoadOrigin(
+        Services.scriptSecurityManager.getSystemPrincipal()
+      );
+
       const actor = keepAlive.domProcess.getActor(actorName);
 
       // keep track of the childID for the inference process, so we can observe its shutdowns.

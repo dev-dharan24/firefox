@@ -30,12 +30,9 @@ class SegmenterObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto GRANULARITY_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(1);
-  static constexpr auto SEGMENTER_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(2);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE_SLOT, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, GRANULARITY_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, SEGMENTER_SLOT, Private, Undefined);
   static constexpr uint32_t SLOT_COUNT = 3;
 
   bool isLocaleResolved() const {
@@ -162,18 +159,12 @@ class SegmentsObject : public NativeObject {
  public:
   static const JSClass class_;
 
-  static constexpr auto SEGMENTER_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(0);
-  static constexpr auto STRING_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto STRING_CHARS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(2);
-  static constexpr auto INDEX_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(3);
-  static constexpr auto GRANULARITY_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(4);
-  static constexpr auto BREAK_ITERATOR_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(5);
+  JS_DEFINE_TYPED_SLOT(0, SEGMENTER_SLOT, Object, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, STRING_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, STRING_CHARS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, INDEX_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, GRANULARITY_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(5, BREAK_ITERATOR_SLOT, Private, Undefined);
   static constexpr uint32_t SLOT_COUNT = 6;
 
   static_assert(STRING_SLOT.index() == INTL_SEGMENTS_STRING_SLOT,
@@ -271,18 +262,12 @@ class SegmentIteratorObject : public NativeObject {
  public:
   static const JSClass class_;
 
-  static constexpr auto SEGMENTER_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Null, ValueType::Undefined>(0);
-  static constexpr auto STRING_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto STRING_CHARS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(2);
-  static constexpr auto INDEX_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(3);
-  static constexpr auto GRANULARITY_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(4);
-  static constexpr auto BREAK_ITERATOR_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(5);
+  JS_DEFINE_TYPED_SLOT(0, SEGMENTER_SLOT, Object, Null, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, STRING_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, STRING_CHARS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, INDEX_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, GRANULARITY_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(5, BREAK_ITERATOR_SLOT, Private, Undefined);
   static constexpr uint32_t SLOT_COUNT = 6;
 
   static_assert(STRING_SLOT.index() == INTL_SEGMENT_ITERATOR_STRING_SLOT,

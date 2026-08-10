@@ -898,11 +898,6 @@ nsresult nsPrintJob::SetupToPrintContent() {
     endPage = std::min(mNumPrintablePages, std::max(endPage, ranges[i + 1]));
   }
 
-  uint64_t browsingContextId = 0;
-  if (auto* bc = mPrintObject->mDocument->GetBrowsingContext()) {
-    browsingContextId = bc->Id();
-  }
-
   nsresult rv = NS_OK;
   // BeginDocument may pass back a FAILURE code
   // i.e. On Windows, if you are printing to a file and hit "Cancel"
@@ -920,7 +915,8 @@ nsresult nsPrintJob::SetupToPrintContent() {
     }
 #endif
     rv = printData->mPrintDC->BeginDocument(
-        docTitleStr, fileNameStr, browsingContextId, startPage, endPage);
+        docTitleStr, fileNameStr, mPrintObject->mDocument->GetWindowContext(),
+        startPage, endPage);
   }
 
   if (mIsCreatingPrintPreview) {

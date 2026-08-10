@@ -103,7 +103,25 @@ export const MonitorAgent = {
     return Array.from(gMonitors.values(), monitor => monitor.toSerializable());
   },
 
-  async createMonitor({ prompt, watchUrls, pageTitle = "", schedule }) {
+  /**
+   * Creates a new monitor to watch specified URLs for condition changes.
+   *
+   * @param {object} options - Configuration for the new monitor
+   * @param {string} options.prompt - The condition to monitor for
+   * @param {string[]} options.watchUrls - Array of URLs to watch
+   * @param {string} [options.pageTitle=""] - Optional title for the monitor
+   * @param {object} options.schedule - Schedule configuration (type, hours, etc.)
+   * @param {string} [options.source="unknown"] - Source of monitor creation for telemetry (e.g., "in_line_chat", "about_page", "test")
+   * @returns {Promise<string>} The ID of the created monitor
+   * @throws {Error} If the maximum number of monitors has been reached
+   */
+  async createMonitor({
+    prompt,
+    watchUrls,
+    pageTitle = "",
+    schedule,
+    source = "unknown",
+  }) {
     await this._ensureLoaded();
     if (gMonitors.size >= TOTAL_NUM_MONITORS) {
       throw new Error(
@@ -125,7 +143,9 @@ export const MonitorAgent = {
       throw error;
     }
     monitor.scheduleNextRun();
-    Glean.smartWindow.monitorCreate.record(monitorTelemetryExtra(monitor));
+    const telemetryData = monitorTelemetryExtra(monitor);
+    telemetryData.source = source;
+    Glean.smartWindow.monitorCreate.record(telemetryData);
     return monitor.id;
   },
 
@@ -383,6 +403,13 @@ export const MonitorAgent = {
           // Notification body clicked.
           if (!subject) {
             if (url) {
+              // Record telemetry for opening URL
+              const telemetryData = {
+                ...monitorTelemetryExtra(monitor),
+                click_type: "open_url",
+              };
+              Glean.smartWindow.monitorNotificationClick.record(telemetryData);
+
               this._openWatchedUrl(url);
             }
             return;
@@ -391,6 +418,13 @@ export const MonitorAgent = {
           const action = subject.QueryInterface(Ci.nsIAlertAction).action;
 
           if (action === NOTIFICATION_ACTIONS.SNOOZE) {
+            // Record telemetry for snooze action
+            const telemetryData = {
+              ...monitorTelemetryExtra(monitor),
+              click_type: "snooze",
+            };
+            Glean.smartWindow.monitorNotificationClick.record(telemetryData);
+
             this.snoozeMonitor(id).catch(error =>
               lazy.log.error("Failed to snooze monitor", error)
             );
@@ -398,6 +432,13 @@ export const MonitorAgent = {
           }
 
           if (action === NOTIFICATION_ACTIONS.DISMISS) {
+            // Record telemetry for dismiss action
+            const telemetryData = {
+              ...monitorTelemetryExtra(monitor),
+              click_type: "dismiss",
+            };
+            Glean.smartWindow.monitorNotificationClick.record(telemetryData);
+
             this.muteMonitorNotifications(id).catch(error =>
               lazy.log.error("Failed to mute monitor notifications", error)
             );
@@ -416,6 +457,11 @@ export const MonitorAgent = {
       });
 
       alertsService.showAlert(alert, observer);
+
+      // Record telemetry for notification being sent (after successful showAlert)
+      Glean.smartWindow.monitorNotificationSend.record(
+        monitorTelemetryExtra(monitor)
+      );
     } catch (error) {
       lazy.log.error("Failed to show monitor notification", error);
     }

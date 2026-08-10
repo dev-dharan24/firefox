@@ -1436,7 +1436,7 @@ export class SpecialPowersParent extends JSWindowActorParent {
             aMessage.data;
 
           return browsingContext.currentWindowGlobal
-            .drawSnapshot(rect, 1.0, background, resetScrollPosition)
+            .drawSnapshot(rect, 1.0, background, { resetScrollPosition })
             .then(async image => {
               let hiddenFrame = new lazy.HiddenFrame();
               let win = await hiddenFrame.get();

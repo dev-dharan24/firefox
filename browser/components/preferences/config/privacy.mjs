@@ -456,10 +456,6 @@ Preferences.addAll([
   { id: "dom.security.https_first", type: "bool" },
   { id: "dom.security.https_first_pbm", type: "bool" },
 
-  // Cookie Banner Handling
-  { id: "cookiebanners.ui.desktop.enabled", type: "bool" },
-  { id: "cookiebanners.service.mode.privateBrowsing", type: "int" },
-
   // DoH
   { id: "network.trr.mode", type: "int" },
   { id: "network.trr.uri", type: "string" },

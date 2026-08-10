@@ -220,9 +220,9 @@ For example, open test.py, and look for the line referring to the test
 you want to run:
 
 ```python
-tpmanifest = '${talos}/page_load_test/svgx/svgx.manifest'
-tpcycles = 1 # run a single cycle
-tppagecycles = 25 # load each page 25 times before moving onto the next page
+tpmanifest = "${talos}/page_load_test/svgx/svgx.manifest"
+tpcycles = 1  # run a single cycle
+tppagecycles = 25  # load each page 25 times before moving onto the next page
 ```
 
 ### Heavy

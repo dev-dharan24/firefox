@@ -91,6 +91,7 @@ spotlight
 private-browsing
 multi-message
 menu-message
+sidebar-chatbot-promo
 ```
 
 ## Detailed Docs

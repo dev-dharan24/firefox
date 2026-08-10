@@ -21,6 +21,9 @@ browser-main-private-suffix-for-content = Private Browsing
 # "PRIVATE_BROWSING_SHORTCUT_TITLE" in custom.properties
 private-browsing-shortcut-text-2 = { -brand-shortcut-name } Private Browsing
 
+# This MUST match the translation of "BRIEF_APP_DESC" in custom.properties
+browser-shortcut-description = Fast and private web browsing
+
 ##
 
 # Variables

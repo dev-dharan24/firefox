@@ -27,6 +27,7 @@ use crate::scene_builder_thread::SceneBuilderRequest;
 use crate::texture_cache::TextureCacheConfig;
 
 const WINDOW_SIZE: DeviceIntSize = DeviceIntSize::new(64, 64);
+const AU_PER_DEV_PX: f32 = 60.0;
 
 struct TestNotifier;
 
@@ -114,7 +115,7 @@ impl TestWindow {
     /// builder so this lands in `process_transaction`.
     fn build_scene(&mut self) -> Barrier {
         let mut builder = DisplayListBuilder::new(self.pipeline_id);
-        builder.begin();
+        builder.begin(AU_PER_DEV_PX);
         let space_and_clip = SpaceAndClipInfo::root_scroll(self.pipeline_id);
         let rect = LayoutRect::from_size(LayoutSize::new(32.0, 32.0));
         builder.push_rect(
@@ -131,7 +132,7 @@ impl TestWindow {
         let mut txn = Transaction::new();
         txn.use_scene_builder_thread();
         txn.set_root_pipeline(self.pipeline_id);
-        txn.set_display_list(self.epoch, builder.end());
+        txn.set_display_list(self.epoch, self.api.get_namespace_id(), builder.end());
         txn.generate_frame(0, true, false, RenderReasons::TESTING);
         self.epoch.0 += 1;
         let barrier = Self::arm_barrier(&mut txn);

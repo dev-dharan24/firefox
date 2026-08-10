@@ -1938,6 +1938,7 @@ bool ScriptLoader::ProcessInlineScript(nsIScriptElement* aElement,
 
   if (request->IsSpeculationRulesRequest()) {
     MOZ_ASSERT(StaticPrefs::dom_speculation_rules_enabled());
+    mDocument->SetUseCounter(eUseCounter_custom_SpeculationRulesScriptTag);
 
     // https://html.spec.whatwg.org/#prepare-the-script-element
     // Step 34.2. Switch on el's type:

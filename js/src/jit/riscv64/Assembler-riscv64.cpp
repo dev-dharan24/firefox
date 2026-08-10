@@ -51,8 +51,13 @@ namespace jit {
 
 bool Assembler::FLAG_riscv_debug = false;
 
-// Size of the instruction stream, in bytes.
+// Size of the instruction stream, in bytes.  Note this doesn't take
+// into account the size of any un-flushed constant pools.
 size_t Assembler::size() const { return m_buffer.size(); }
+
+// Returns the size of the buffer we can currently read, hence ignoring any
+// un-flushed data in currently-under-construction constant pool(s).
+size_t Assembler::readableSize() const { return m_buffer.size(); }
 
 bool Assembler::swapBuffer(wasm::Bytes& bytes) {
   // For now, specialize to the one use case. As long as wasm::Bytes is a
@@ -1317,11 +1322,8 @@ void Assembler::retarget(Label* label, Label* target) {
 }
 
 bool Assembler::appendRawCode(const uint8_t* code, size_t numBytes) {
-  if (m_buffer.oom()) {
-    return false;
-  }
-  m_buffer.putBytes(numBytes, code);
-  return !m_buffer.oom();
+  flush();
+  return m_buffer.appendRawCode(code, numBytes);
 }
 
 void Assembler::ToggleCall(CodeLocationLabel inst_, bool enabled) {

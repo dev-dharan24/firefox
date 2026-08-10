@@ -719,6 +719,8 @@ var gBrowserInit = {
       document.documentElement.setAttribute("sessionrestored", "true");
     });
 
+    Referrals.maybeLockPref();
+
     this.delayedStartupFinished = true;
     _resolveDelayedStartup();
     Services.obs.notifyObservers(window, "browser-delayed-startup-finished");

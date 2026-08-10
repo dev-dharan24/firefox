@@ -1647,12 +1647,6 @@ interface nsILoadInfo : nsISupports
   [noscript, notxpcom, nostdcall, binaryname(SetInterceptionInfo)]
   void binarySetInterceptionInfo(in nsIInterceptionInfo info);
 
-  /**
-   * Whether nsICookieInjector has injected a cookie for this request to
-   * handle a cookie banner. This is only done for top-level requests.
-   */
-  [infallible] attribute boolean hasInjectedCookieForCookieBannerHandling;
-
   cenum SchemelessInputType : 8 {
     SchemelessInputTypeUnset = 0,
     SchemelessInputTypeSchemeful = 1,

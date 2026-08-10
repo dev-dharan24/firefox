@@ -1,4 +1,4 @@
-# Preferences
+# Remote protocol preferences
 
 There are a couple of preferences associated with the Remote Agent:
 

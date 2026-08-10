@@ -7,6 +7,7 @@
 // happens when calling these functions. They don't do much inspection of
 // profiler internals.
 
+#include "mozilla/ProfileChunkedBuffer.h"
 #include "mozilla/ProfilerPlatformMacros.h"
 #include "mozilla/ProfilerThreadPlatformData.h"
 #include "mozilla/ProfilerThreadRegistration.h"
@@ -2530,6 +2531,7 @@ TEST(GeckoProfiler, Markers)
       schema.AddKeyFormat("key with percentage", MS::Format::Percentage);
       schema.AddKeyFormat("key with integer", MS::Format::Integer);
       schema.AddKeyFormat("key with decimal", MS::Format::Decimal);
+      schema.AddKeyFormat("key with hexadecimal", MS::Format::Hexadecimal);
       schema.AddStaticLabelValue("static label", "static value");
       schema.AddKeyFormat("key with unique string", MS::Format::UniqueString);
       schema.AddKeyFormat("key with sanitized string",
@@ -3679,7 +3681,7 @@ TEST(GeckoProfiler, Markers)
             EXPECT_EQ_JSON(schema["tableLabel"], String, "table label");
             EXPECT_EQ_JSON(schema["colorField"], String, "color");
 
-            ASSERT_EQ(data.size(), 19u);
+            ASSERT_EQ(data.size(), 20u);
 
             ASSERT_TRUE(data[0u].isObject());
             EXPECT_EQ_JSON(data[0u]["key"], String, "key with url");
@@ -3747,37 +3749,42 @@ TEST(GeckoProfiler, Markers)
             EXPECT_EQ_JSON(data[12u]["format"], String, "decimal");
 
             ASSERT_TRUE(data[13u].isObject());
-            EXPECT_EQ_JSON(data[13u]["label"], String, "static label");
-            EXPECT_EQ_JSON(data[13u]["value"], String, "static value");
+            EXPECT_EQ_JSON(data[13u]["key"], String, "key with hexadecimal");
+            EXPECT_TRUE(data[13u]["label"].isNull());
+            EXPECT_EQ_JSON(data[13u]["format"], String, "hexadecimal");
 
             ASSERT_TRUE(data[14u].isObject());
-            EXPECT_EQ_JSON(data[14u]["key"], String, "key with unique string");
-            EXPECT_TRUE(data[14u]["label"].isNull());
-            EXPECT_EQ_JSON(data[14u]["format"], String, "unique-string");
+            EXPECT_EQ_JSON(data[14u]["label"], String, "static label");
+            EXPECT_EQ_JSON(data[14u]["value"], String, "static value");
 
             ASSERT_TRUE(data[15u].isObject());
-            EXPECT_EQ_JSON(data[15u]["key"], String,
-                           "key with sanitized string");
+            EXPECT_EQ_JSON(data[15u]["key"], String, "key with unique string");
             EXPECT_TRUE(data[15u]["label"].isNull());
-            EXPECT_EQ_JSON(data[15u]["format"], String, "sanitized-string");
+            EXPECT_EQ_JSON(data[15u]["format"], String, "unique-string");
 
             ASSERT_TRUE(data[16u].isObject());
-            EXPECT_EQ_JSON(data[16u]["key"], String, "key with label hidden");
-            EXPECT_EQ_JSON(data[16u]["label"], String, "label");
-            EXPECT_EQ_JSON(data[16u]["format"], String, "string");
-            EXPECT_EQ_JSON(data[16u]["hidden"], Bool, true);
+            EXPECT_EQ_JSON(data[16u]["key"], String,
+                           "key with sanitized string");
+            EXPECT_TRUE(data[16u]["label"].isNull());
+            EXPECT_EQ_JSON(data[16u]["format"], String, "sanitized-string");
 
             ASSERT_TRUE(data[17u].isObject());
-            EXPECT_EQ_JSON(data[17u]["key"], String, "key hidden");
-            EXPECT_TRUE(data[17u]["label"].isNull());
+            EXPECT_EQ_JSON(data[17u]["key"], String, "key with label hidden");
+            EXPECT_EQ_JSON(data[17u]["label"], String, "label");
             EXPECT_EQ_JSON(data[17u]["format"], String, "string");
             EXPECT_EQ_JSON(data[17u]["hidden"], Bool, true);
 
             ASSERT_TRUE(data[18u].isObject());
-            EXPECT_EQ_JSON(data[18u]["key"], String, "color");
+            EXPECT_EQ_JSON(data[18u]["key"], String, "key hidden");
             EXPECT_TRUE(data[18u]["label"].isNull());
             EXPECT_EQ_JSON(data[18u]["format"], String, "string");
             EXPECT_EQ_JSON(data[18u]["hidden"], Bool, true);
+
+            ASSERT_TRUE(data[19u].isObject());
+            EXPECT_EQ_JSON(data[19u]["key"], String, "color");
+            EXPECT_TRUE(data[19u]["label"].isNull());
+            EXPECT_EQ_JSON(data[19u]["format"], String, "string");
+            EXPECT_EQ_JSON(data[19u]["hidden"], Bool, true);
 
           } else if (nameString == "markers-gtest-base-unique-string") {
             EXPECT_EQ(display.size(), 2u);
@@ -5360,6 +5367,34 @@ TEST(GeckoProfiler, NoMarkerStacks)
   profiler_stop();
 
   ASSERT_TRUE(!profiler_get_profile());
+}
+
+TEST(GeckoProfiler, CaptureBacktraceIsRightSized)
+{
+  const char* filters[] = {"GeckoMain"};
+
+  profiler_start(PROFILER_DEFAULT_ENTRIES, PROFILER_DEFAULT_INTERVAL,
+                 ProfilerFeature::StackWalk, filters, std::size(filters), 0);
+
+  mozilla::UniquePtr<mozilla::ProfileChunkedBuffer> backtrace =
+      profiler_capture_backtrace();
+  ASSERT_TRUE(!!backtrace);
+
+  // Stacks are captured into a buffer that can hold the deepest possible stack,
+  // but callers may keep a captured backtrace alive for a long time, so it
+  // should only retain as much memory as the stack actually needed.
+  mozilla::Maybe<size_t> bufferLength = backtrace->BufferLength();
+  ASSERT_TRUE(bufferLength.isSome());
+  EXPECT_LT(
+      *bufferLength,
+      size_t(mozilla::ProfileBufferChunkManager::scExpectedMaximumStackSize));
+
+  // The backtrace should still contain the whole captured stack.
+  mozilla::ProfileChunkedBuffer::State state = backtrace->GetState();
+  EXPECT_GT(state.mRangeEnd, state.mRangeStart);
+  EXPECT_EQ(state.mFailedPutBytes, 0u);
+
+  profiler_stop();
 }
 
 // Microbenchmarks measuring marker insertion speed while the profiler is

@@ -3,14 +3,23 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 "use strict";
-const PB_INDICATOR_SELECTOR = ".private-browsing-indicator-with-label";
+
+const LABELED_INDICATOR_SELECTOR = ".private-browsing-indicator-with-label";
+const BUTTON_INDICATOR_SELECTOR = ".private-browsing-indicator-button";
 
 // The private browsing indicator lives in two possible spots:
 // - Inside #TabsToolbar (shown with icon + label, for horizontal tabs)
 // - Inside #nav-bar (shown with icon only, for vertical tabs)
 //
-// These tests make sure at least one copy is always visible in a
+// Nova replaces the labeled indicator with the icon-only button, but both use
+// the same placement rules, so the layout tests below assert against whichever
+// variant is active. They make sure at least one copy is always visible in a
 // private window, no matter the tabs/titlebar/menubar layout.
+function getIndicatorSelector() {
+  return isNovaEnabled()
+    ? BUTTON_INDICATOR_SELECTOR
+    : LABELED_INDICATOR_SELECTOR;
+}
 
 add_task(async function test_indicator_horizontal_tabs() {
   await SpecialPowers.pushPrefEnv({
@@ -21,13 +30,12 @@ add_task(async function test_indicator_horizontal_tabs() {
   });
 
   const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  const selector = getIndicatorSelector();
 
   const tabsToolbarIndicator = win.document.querySelector(
-    `#TabsToolbar ${PB_INDICATOR_SELECTOR}`
+    `#TabsToolbar ${selector}`
   );
-  const navBarIndicator = win.document.querySelector(
-    `#nav-bar ${PB_INDICATOR_SELECTOR}`
-  );
+  const navBarIndicator = win.document.querySelector(`#nav-bar ${selector}`);
 
   ok(
     BrowserTestUtils.isVisible(tabsToolbarIndicator),
@@ -51,13 +59,12 @@ add_task(async function test_indicator_vertical_tabs() {
   });
 
   const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  const selector = getIndicatorSelector();
 
   const tabsToolbarIndicator = win.document.querySelector(
-    `#TabsToolbar ${PB_INDICATOR_SELECTOR}`
+    `#TabsToolbar ${selector}`
   );
-  const navBarIndicator = win.document.querySelector(
-    `#nav-bar ${PB_INDICATOR_SELECTOR}`
-  );
+  const navBarIndicator = win.document.querySelector(`#nav-bar ${selector}`);
 
   ok(
     BrowserTestUtils.isHidden(tabsToolbarIndicator),
@@ -78,13 +85,12 @@ add_task(async function test_indicator_tabs_in_titlebar() {
   });
 
   const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  const selector = getIndicatorSelector();
 
   const tabsToolbarIndicator = win.document.querySelector(
-    `#TabsToolbar ${PB_INDICATOR_SELECTOR}`
+    `#TabsToolbar ${selector}`
   );
-  const navBarIndicator = win.document.querySelector(
-    `#nav-bar ${PB_INDICATOR_SELECTOR}`
-  );
+  const navBarIndicator = win.document.querySelector(`#nav-bar ${selector}`);
 
   ok(
     BrowserTestUtils.isVisible(tabsToolbarIndicator) ||
@@ -100,13 +106,12 @@ add_task(async function test_indicator_with_menubar_shown() {
   CustomizableUI.setToolbarVisibility("toolbar-menubar", true);
 
   const win = await BrowserTestUtils.openNewBrowserWindow({ private: true });
+  const selector = getIndicatorSelector();
 
   const tabsToolbarIndicator = win.document.querySelector(
-    `#TabsToolbar ${PB_INDICATOR_SELECTOR}`
+    `#TabsToolbar ${selector}`
   );
-  const navBarIndicator = win.document.querySelector(
-    `#nav-bar ${PB_INDICATOR_SELECTOR}`
-  );
+  const navBarIndicator = win.document.querySelector(`#nav-bar ${selector}`);
 
   ok(
     BrowserTestUtils.isVisible(tabsToolbarIndicator) ||
@@ -121,7 +126,10 @@ add_task(async function test_indicator_with_menubar_shown() {
 add_task(async function test_indicator_not_shown_in_normal_window() {
   const win = await BrowserTestUtils.openNewBrowserWindow();
 
-  const indicators = win.document.querySelectorAll(PB_INDICATOR_SELECTOR);
+  const indicators = win.document.querySelectorAll(
+    `${LABELED_INDICATOR_SELECTOR}, ${BUTTON_INDICATOR_SELECTOR}`
+  );
+  ok(indicators.length, "Found indicator elements to check");
 
   for (const indicator of indicators) {
     ok(
@@ -133,14 +141,14 @@ add_task(async function test_indicator_not_shown_in_normal_window() {
   await BrowserTestUtils.closeWindow(win);
 });
 
-// The button + info panel below are currently gated on the design-refresh pref;
-// this is expected to become the default indicator.
+// The button + info panel below are gated on the design-refresh pref, so the
+// tests set it explicitly rather than relying on the channel default.
 const NOVA_PREF = "browser.nova.enabled";
 
 function getVisibleIndicatorButton(win) {
-  return [
-    ...win.document.querySelectorAll(".private-browsing-indicator-button"),
-  ].find(el => BrowserTestUtils.isVisible(el));
+  return [...win.document.querySelectorAll(BUTTON_INDICATOR_SELECTOR)].find(
+    el => BrowserTestUtils.isVisible(el)
+  );
 }
 
 // In a private window, the icon-only indicator button is shown and clicking it

@@ -223,9 +223,11 @@ class Assembler : public AssemblerShared,
 
   void finish() {
     MOZ_ASSERT(!isFinished);
+    flush();
     isFinished = true;
   }
 
+  void flush() { m_buffer.flushPool(); }
   void flushBuffer() { m_buffer.flushPool(); }
 
   void enterNoPool(size_t maxInst, size_t maxNewDeadlines = 0) {
@@ -237,8 +239,12 @@ class Assembler : public AssemblerShared,
   void leaveNoNops() { m_buffer.leaveNoNops(); }
 
   bool swapBuffer(wasm::Bytes& bytes);
-  // Size of the instruction stream, in bytes.
+  // Size of the instruction stream, in bytes.  Note this doesn't take
+  // into account the size of any un-flushed constant pools.
   size_t size() const;
+  // Returns the size of the buffer we can currently read, hence ignoring any
+  // un-flushed data in currently-under-construction constant pool(s).
+  size_t readableSize() const;
   // Size of the data table, in bytes.
   size_t bytesNeeded() const;
   // Size of the jump relocation table, in bytes.

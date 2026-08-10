@@ -136,6 +136,7 @@ export class EditProfileCard extends MozLitElement {
     document.addEventListener("Profiles:CustomAvatarUpload", this);
     document.addEventListener("Profiles:AvatarSelected", this);
     document.addEventListener("ThemePickerThemeUpdated", this);
+    window.addEventListener("ThemePickerDeviceAppearanceUpdated", this);
 
     this.init().then(() => (this.initialized = true));
   }
@@ -148,6 +149,7 @@ export class EditProfileCard extends MozLitElement {
     document.removeEventListener("Profiles:CustomAvatarUpload", this);
     document.removeEventListener("Profiles:AvatarSelected", this);
     document.removeEventListener("ThemePickerThemeUpdated", this);
+    window.removeEventListener("ThemePickerDeviceAppearanceUpdated", this);
   }
 
   async init() {
@@ -279,7 +281,8 @@ export class EditProfileCard extends MozLitElement {
         this.updateAvatar(avatar);
         break;
       }
-      case "ThemePickerThemeUpdated": {
+      case "ThemePickerThemeUpdated":
+      case "ThemePickerDeviceAppearanceUpdated": {
         this.refreshProfile();
         break;
       }

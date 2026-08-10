@@ -60,6 +60,7 @@ let {
   uploadProfileArtifact: _uploadProfileArtifact,
   installProfilerDumpAndQuit: _installProfilerDumpAndQuit,
   setProfilerDumpTestName: _setProfilerDumpTestName,
+  shouldSaveFailureProfile: _shouldSaveFailureProfile,
 } = ChromeUtils.importESModule(
   "resource://testing-common/TestProfilerArtifact.sys.mjs"
 );
@@ -803,15 +804,7 @@ function _execute_test() {
     _Services.profiler.cancelScheduledDump();
   }
 
-  // If MOZ_PROFILER_SHUTDOWN is set, the profiler got started from --profiler
-  // and a profile will be shown even if there's no test failure.
-  if (
-    !_passed &&
-    runningInParent &&
-    _Services.env.exists("MOZ_UPLOAD_DIR") &&
-    !_Services.env.exists("MOZ_PROFILER_SHUTDOWN") &&
-    _Services.profiler.IsActive()
-  ) {
+  if (!_passed && runningInParent && _shouldSaveFailureProfile()) {
     if (_EXPECTED != "pass") {
       _testLogger.error(
         "Not uploading the profile as the test is expected to fail."

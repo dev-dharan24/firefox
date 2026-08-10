@@ -81,5 +81,6 @@ tasks:
                 - linux64-pkgconf
                 - sysroot-x86_64-linux-gnu
                 - sysroot-wasm32-wasi
+                - newtab-node-modules
         optimization:
             skip-unless-backstop: null

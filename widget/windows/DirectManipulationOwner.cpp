@@ -68,7 +68,7 @@ class DManipEventHandler : public IDirectManipulationViewportEventHandler,
     void ClearOwner() { mOwner = nullptr; }
 
    private:
-    virtual ~VObserver() {}
+    virtual ~VObserver() = default;
     DManipEventHandler* mOwner;
   };
 

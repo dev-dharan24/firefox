@@ -477,6 +477,7 @@ _ContextualIdentityService.prototype = {
       );
       this._identities.splice(position, 0, ...movedIdentities);
       this.saveSoon();
+      Services.obs.notifyObservers(null, "contextual-identity-reordered");
     }
 
     return !!movedIdentities.length;

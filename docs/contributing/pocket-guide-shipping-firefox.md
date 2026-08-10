@@ -188,7 +188,7 @@ Further Reading/Useful links:
 ### Enabling/Disabling code (Prefs)
 
 Within Firefox we allow the ability to enable/disable bits of code or entire features using
-{ref}`Preferences <preferences>`. There are many reasons why this is useful. For example:
+{ref}`Preferences <pocket-guide-preferences>`. There are many reasons why this is useful. For example:
 
 - Continual development over multiple release cycles without exposing partially-completed
   features to our users
@@ -367,7 +367,7 @@ when a test or a testsuite can intermittently fail.
 development collaboration tool suite. Read more about [Phabricator as a
 product](https://phacility.com/phabricator/).
 
-(preferences)=
+(pocket-guide-preferences)=
 
 **Preferences** - A preference is any value or defined behavior that can
 be set (e.g. enabled or disabled). Preference changes via user interface

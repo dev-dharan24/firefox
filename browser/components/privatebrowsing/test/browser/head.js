@@ -71,12 +71,10 @@ async function openTabAndWaitForRender() {
 const PROMO_SELECTORS = {
   legacy: {
     container: ".promo",
-    dismissButton: "#dismiss-btn",
     link: "#private-browsing-promo-link",
   },
   nova: {
     container: ".nova-promo-wrapper",
-    dismissButton: "#nova-dismiss-btn",
     link: "#nova-promo-link",
   },
 };
@@ -109,6 +107,36 @@ function isNovaEnabled() {
  */
 function getPromoSelectors() {
   return PROMO_SELECTORS[isNovaEnabled() ? "nova" : "legacy"];
+}
+
+/**
+ * Clicks the promo's dismiss button. Under Nova this is moz-promo's own close
+ * button, which lives in its shadow root and so can't be reached with a single
+ * selector from a content task.
+ *
+ * @param {MozBrowser} browser The about:privatebrowsing browser.
+ */
+async function clickPromoDismissButton(browser) {
+  await SpecialPowers.spawn(
+    browser,
+    [isNovaEnabled()],
+    async function (isNova) {
+      let button;
+      if (isNova) {
+        await ContentTaskUtils.waitForCondition(
+          () =>
+            (button = content.document
+              .getElementById("nova-promo")
+              ?.shadowRoot.querySelector("moz-button.close")),
+          "Waiting for the promo close button"
+        );
+      } else {
+        button = content.document.getElementById("dismiss-btn");
+      }
+      button.scrollIntoView({ block: "center" });
+      await EventUtils.synthesizeClick(button);
+    }
+  );
 }
 
 function getInfoL10n() {

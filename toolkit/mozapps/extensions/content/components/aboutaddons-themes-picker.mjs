@@ -115,12 +115,8 @@ export class AboutaddonsThemesPicker extends MozLitElement {
       // of this component explicitly (and it would render as `nothing` anyway).
       return;
     }
-    // TODO(Bug 2052034): lazily insert appExtensionFields.ftl in the doc here
-    // once the new theme names localized strings are being moved there from
-    // locales-preview/nova-aboutAddons.ftl to browser-level fluent file
-    // appExtensionFields.ftl.
-    //
-    // MozXULElement.insertFTLIfNeeded("browser/appExtensionFields.ftl");
+    // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
+    window.MozXULElement.insertFTLIfNeeded("browser/appExtensionFields.ftl");
     const [manager, installedThemes] = await Promise.all([
       lazy.getThemesList({ installSource: "about:addons" }),
       lazy.AddonManager.getAddonsByTypes(["theme"]),

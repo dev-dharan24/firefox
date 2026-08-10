@@ -438,3 +438,14 @@ export class UrlbarQueryContext {
     return wire;
   }
 }
+
+// In chrome window globals, we re-export the UrlbarQueryContext from the system
+// global. Otherwise, UrlbarQueryContexts created in a window global but cached
+// in the system global would leak the window.
+if (typeof ChromeUtils != "undefined" && typeof window != "undefined") {
+  // @ts-ignore
+  // eslint-disable-next-line no-class-assign
+  ({ UrlbarQueryContext } = ChromeUtils.importESModule(
+    "chrome://browser/content/urlbar/UrlbarQueryContext.mjs"
+  ));
+}

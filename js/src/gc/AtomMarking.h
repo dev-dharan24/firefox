@@ -39,9 +39,9 @@ class AtomRefRuntime {
  public:
   // The extent of all allocated and free words in atom reference bitmaps. This
   // monotonically increases and may be read from without locking.
-  mozilla::Atomic<size_t, mozilla::SequentiallyConsistent> allocatedWords;
+  mozilla::Atomic<size_t, mozilla::SequentiallyConsistent> allocatedWords{0};
 
-  AtomRefRuntime() : allocatedWords(0) {}
+  AtomRefRuntime() = default;
 
   // Allocate an index in the atom reference bitmap for a new arena.
   size_t allocateIndex(GCRuntime* gc);

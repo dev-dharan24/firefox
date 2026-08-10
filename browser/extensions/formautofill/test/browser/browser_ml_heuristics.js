@@ -54,13 +54,17 @@ add_setup(async function () {
   await SpecialPowers.pushPrefEnv({
     set: [
       ["extensions.formautofill.useml", true],
-      ["extensions.formautofill.useml.succeeded", false],
+      ["extensions.formautofill.useml.successful", false],
     ],
   });
+
+  // Earlier test files leave detected_address_form events behind, which
+  // assertTelemetry would otherwise read instead of the ones recorded here.
+  await clearGleanTelemetry();
 });
 
 add_heuristic_tests([
-  // This first test should run with "extensions.formautofill.useml.succeeded" set to false, so
+  // This first test should run with "extensions.formautofill.useml.successful" set to false, so
   // should use heuristics and not ML inference.
   {
     fixtureData: `
@@ -76,11 +80,10 @@ add_heuristic_tests([
       <p><label>email: <input type="email" id="email" name="email"/></label></p>`,
     onTestComplete: async () => {
       // Assign the preference after the test.
-      Services.prefs.setBoolPref(
-        "extensions.formautofill.useml.successful",
-        true
-      );
-      assertTelemetry({
+      await SpecialPowers.pushPrefEnv({
+        set: [["extensions.formautofill.useml.successful", true]],
+      });
+      await assertTelemetry({
         given_name: "0",
         family_name: "0",
         organization: "true",
@@ -125,7 +128,7 @@ add_heuristic_tests([
       <p><label>tel: <input type="text" id="tel" name="tel" autocomplete="tel" /></label></p>
       <p><label>email: <input type="email" id="email" name="email"/></label></p>`,
     onTestComplete: async () => {
-      assertTelemetry({
+      await assertTelemetry({
         given_name: "ml",
         family_name: "ml",
         organization: "true",

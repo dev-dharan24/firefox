@@ -193,7 +193,7 @@ namespace widget {
 
 #ifdef MOZ_PLACES
 class myDownloadObserver final : public nsIDownloadObserver {
-  ~myDownloadObserver() {}
+  ~myDownloadObserver() = default;
 
  public:
   NS_DECL_ISUPPORTS
@@ -585,7 +585,7 @@ class WinUtils {
       nsAString& aPath,
       PathTransformFlags aFlags = PathTransformFlags::Default);
 
-  static const size_t kMaxWhitelistedItems = 3;
+  static const size_t kMaxWhitelistedItems = 4;
   using WhitelistVec =
       Vector<std::pair<nsString, nsDependentString>, kMaxWhitelistedItems>;
 
@@ -685,7 +685,7 @@ class AsyncDeleteAllFaviconsFromDisk : public nsIRunnable {
   explicit AsyncDeleteAllFaviconsFromDisk(bool aIgnoreRecent = false);
 
  private:
-  virtual ~AsyncDeleteAllFaviconsFromDisk();
+  virtual ~AsyncDeleteAllFaviconsFromDisk() = default;
 
   int32_t mIcoNoDeleteSeconds;
   bool mIgnoreRecent;

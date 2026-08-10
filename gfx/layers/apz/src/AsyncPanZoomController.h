@@ -615,13 +615,13 @@ class AsyncPanZoomController {
    * Get the CompositorScrollUpdates to be sent to consumers for the current
    * composite.
    */
-  std::vector<CompositorScrollUpdate> GetCompositorScrollUpdates();
+  nsTArray<CompositorScrollUpdate> GetCompositorScrollUpdates();
 
  private:
   // Compositor scroll updates since the last time
   // SampleCompositedAsyncTransform() was called.
   // Access to this field should be protected by mRecursiveMutex.
-  std::vector<CompositorScrollUpdate> mUpdatesSinceLastSample;
+  nsTArray<CompositorScrollUpdate> mUpdatesSinceLastSample;
 
   CompositorScrollUpdate::Metrics GetCurrentMetricsForCompositorScrollUpdate(
       const RecursiveMutexAutoLock& aProofOfApzcLock) const;

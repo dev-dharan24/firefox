@@ -11,7 +11,6 @@ export class GeckoViewContent extends GeckoViewModule {
       "GeckoView:ClearMatches",
       "GeckoView:DisplayMatches",
       "GeckoView:FindInPage",
-      "GeckoView:HasCookieBannerRuleForBrowsingContextTree",
       "GeckoView:RestoreState",
       "GeckoView:ContainsFormData",
       "GeckoView:ProcessBackPressed",
@@ -54,9 +53,6 @@ export class GeckoViewContent extends GeckoViewModule {
     this.window.addEventListener("pagetitlechanged", this);
     this.window.addEventListener("pageinfo", this);
 
-    this.window.addEventListener("cookiebannerdetected", this);
-    this.window.addEventListener("cookiebannerhandled", this);
-
     Services.obs.addObserver(this, "oop-frameloader-crashed");
     Services.obs.addObserver(this, "ipc:content-shutdown");
   }
@@ -81,9 +77,6 @@ export class GeckoViewContent extends GeckoViewModule {
     this.window.removeEventListener("DOMWindowClose", this);
     this.window.removeEventListener("pagetitlechanged", this);
     this.window.removeEventListener("pageinfo", this);
-
-    this.window.removeEventListener("cookiebannerdetected", this);
-    this.window.removeEventListener("cookiebannerhandled", this);
 
     Services.obs.removeObserver(this, "oop-frameloader-crashed");
     Services.obs.removeObserver(this, "ipc:content-shutdown");
@@ -296,9 +289,6 @@ export class GeckoViewContent extends GeckoViewModule {
       case "GeckoView:IsPdfJs":
         aCallback.onSuccess(this.isPdfJs);
         break;
-      case "GeckoView:HasCookieBannerRuleForBrowsingContextTree":
-        this._hasCookieBannerRuleForBrowsingContextTree(aCallback);
-        break;
       case "GeckoView:ProcessBackPressed":
         this._processBackPressed(aCallback);
         break;
@@ -356,14 +346,6 @@ export class GeckoViewContent extends GeckoViewModule {
             previewImageUrl: aEvent.detail.previewImageURL,
           });
         }
-        break;
-      case "cookiebannerdetected":
-        this.eventDispatcher.sendRequest(
-          "GeckoView:CookieBannerEvent:Detected"
-        );
-        break;
-      case "cookiebannerhandled":
-        this.eventDispatcher.sendRequest("GeckoView:CookieBannerEvent:Handled");
         break;
     }
   }
@@ -507,13 +489,6 @@ export class GeckoViewContent extends GeckoViewModule {
 
   async _containsFormData(aCallback) {
     aCallback.onSuccess(await this.actor.containsFormData());
-  }
-
-  async _hasCookieBannerRuleForBrowsingContextTree(aCallback) {
-    const { browsingContext } = this.actor;
-    aCallback.onSuccess(
-      Services.cookieBanners.hasRuleForBrowsingContextTree(browsingContext)
-    );
   }
 
   _findInPage(aData, aCallback) {

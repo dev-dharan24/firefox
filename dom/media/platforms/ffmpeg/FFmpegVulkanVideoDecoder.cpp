@@ -146,8 +146,15 @@ namespace {
 
 // Cached instance-level Vulkan function pointers, shared across all decoders
 // for the lifetime of the process as long as the VkInstance doesn't change.
+// Keyed by (VkInstance, generation): the shared VkInstance is destroyed
+// once no decoder references it, and VkInstance is loader-owned heap
+// memory a later-created instance could, in principle, reuse the address
+// of. Keying on the address alone risks serving stale pointers from the
+// old, freed instance. Unconfirmed in practice; see
+// VulkanDeviceHolder::Generation().
 struct InstanceFunctionCache {
   VkInstance mInstance = VK_NULL_HANDLE;
+  uint64_t mGeneration = 0;
   PFN_vkGetDeviceProcAddr mGetDeviceProcAddr = nullptr;
   PFN_vkGetPhysicalDeviceProperties mGetPhysicalDeviceProperties = nullptr;
   PFN_vkGetPhysicalDeviceQueueFamilyProperties
@@ -171,9 +178,11 @@ constinit static StaticDataMutex<InstanceFunctionCache> sInstanceFnCache{
 
 void FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::
     LoadInstanceFunctions(PFN_vkGetInstanceProcAddr aGetProcAddr,
-                          VkInstance aInst, VkPhysicalDevice aPhysDev) {
+                          VkInstance aInst, VkPhysicalDevice aPhysDev,
+                          uint64_t aGeneration) {
   auto cache = sInstanceFnCache.Lock();
-  if (cache->mInstance == aInst && cache->mGetDeviceProcAddr) {
+  if (cache->mInstance == aInst && cache->mGeneration == aGeneration &&
+      cache->mGetDeviceProcAddr) {
     mGetDeviceProcAddr = cache->mGetDeviceProcAddr;
     mGetPhysicalDeviceProperties = cache->mGetPhysicalDeviceProperties;
     mGetPhysicalDeviceQueueFamilyProperties =
@@ -189,6 +198,11 @@ void FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::
     mInstanceFunctions = cache->mFnPtrs.Clone();
     return;
   }
+
+  FFMPEGV_LOG(
+      "[VULKAN] (Re)loading instance functions for instance {} (gen {}, "
+      "previously cached: instance {} gen {})",
+      (void*)aInst, aGeneration, (void*)cache->mInstance, cache->mGeneration);
 
   mInstanceFunctions.Clear();
   auto load = [&]<typename T>(T& fn, const char* name) {
@@ -213,6 +227,7 @@ void FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::
        "vkGetPhysicalDeviceExternalSemaphoreProperties");
 
   cache->mInstance = aInst;
+  cache->mGeneration = aGeneration;
   cache->mGetDeviceProcAddr = mGetDeviceProcAddr;
   cache->mGetPhysicalDeviceProperties = mGetPhysicalDeviceProperties;
   cache->mGetPhysicalDeviceQueueFamilyProperties =
@@ -245,7 +260,7 @@ void FFmpegVideoDecoder<
   load(mFreeCommandBuffers, "vkFreeCommandBuffers");
   load(mBeginCommandBuffer, "vkBeginCommandBuffer");
   load(mEndCommandBuffer, "vkEndCommandBuffer");
-  load(mGetDeviceQueue, "vkGetDeviceQueue");
+  load(mGetDeviceQueue2, "vkGetDeviceQueue2");
   load(mQueueSubmit, "vkQueueSubmit");
   load(mCmdPipelineBarrier, "vkCmdPipelineBarrier");
   load(mCmdCopyImage, "vkCmdCopyImage");
@@ -685,10 +700,11 @@ bool FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::
 bool FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::InitCtx(
     VkDevice aDevice, VkPhysicalDevice aPhysDev,
     PFN_vkGetInstanceProcAddr aGetProcAddr, VkInstance aInstance,
-    uint32_t aCopyQueueFamilyIndex) {
+    uint64_t aGeneration, uint32_t aCopyQueueFamilyIndex,
+    VkDeviceQueueCreateFlags aQueueCreateFlags) {
   // Load instance-level functions once
   if (!mGetDeviceProcAddr) {
-    LoadInstanceFunctions(aGetProcAddr, aInstance, aPhysDev);
+    LoadInstanceFunctions(aGetProcAddr, aInstance, aPhysDev, aGeneration);
   }
 
   // Reload mDevice-level functions when mDevice changes
@@ -771,7 +787,19 @@ bool FFmpegVideoDecoder<LIBAV_VER>::FFmpegVulkanVideoDecoder::InitCtx(
         FFMPEGV_LOG("Failed to create Vulkan command pool for queue {}", qi);
         return false;
       }
-      mGetDeviceQueue(aDevice, mQueueFamilyIndex, qi, &mCopyQueue[qi]);
+      VkDeviceQueueInfo2 queueInfo = {};
+      queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2;
+      queueInfo.flags = aQueueCreateFlags;
+      queueInfo.queueFamilyIndex = mQueueFamilyIndex;
+      queueInfo.queueIndex = qi;
+      mGetDeviceQueue2(aDevice, &queueInfo, &mCopyQueue[qi]);
+      if (mCopyQueue[qi] == VK_NULL_HANDLE) {
+        FFMPEGV_LOG(
+            "vkGetDeviceQueue2 returned NULL (family={}, index={}, "
+            "flags=0x{:x})",
+            mQueueFamilyIndex, qi, static_cast<unsigned>(aQueueCreateFlags));
+        return false;
+      }
       VkCommandBufferAllocateInfo cmdAllocInfo = {};
       cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
       cmdAllocInfo.commandPool = mCopyCmdPool[qi];

@@ -34,13 +34,10 @@ class TimeZoneObject : public NativeObject {
  public:
   static const JSClass class_;
 
-  static constexpr auto IDENTIFIER_SLOT = TypedSlot<ValueType::String>(0);
-  static constexpr auto PRIMARY_IDENTIFIER_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto OFFSET_MINUTES_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(2);
-  static constexpr auto INTL_TIMEZONE_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(3);
+  JS_DEFINE_TYPED_SLOT(0, IDENTIFIER_SLOT, String);
+  JS_DEFINE_TYPED_SLOT(1, PRIMARY_IDENTIFIER_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, OFFSET_MINUTES_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, INTL_TIMEZONE_SLOT, Private, Undefined);
   static constexpr uint32_t SLOT_COUNT = 4;
 
   // Estimated memory use for intl::TimeZone (see IcuMemoryUsage).

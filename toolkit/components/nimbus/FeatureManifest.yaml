@@ -634,6 +634,14 @@ urlbar:
       description: >-
         semantic similarity distance threshold (0.0 - 1.0)
         defaulted at 0.6.
+    semanticHistorySmartwindowDistanceThreshold:
+      type: string
+      setPref:
+        branch: user
+        pref: places.semanticHistory.smartwindow.distanceThreshold
+      description: >-
+        semantic similarity distance threshold (0.0 - 1.0) for Smart Window
+        history search only.
     semanticHistorySupportedRegions:
       type: string
       setPref:
@@ -1693,6 +1701,33 @@ newtabTrainhopAddon:
       setPref:
         branch: user
         pref: browser.newtabpage.trainhopAddon.version
+
+newtabTrainhopAddonDeployment:
+  description: |
+    Co-enrollment version of newtabTrainhopAddon used to deploy updated newtab
+    resources packaged as an xpi. Multiple overlapping enrollments are allowed and
+    the enrollment with the highest addon_version wins.
+  owner: mconley@mozilla.com
+  hasExposure: true
+  allowCoenrollment: true
+  exposureDescription: |
+    Exposure is sent when the trainhop addon version from a co-enrolled deployment is in use
+    (starting from the browser startup right after it has been downloaded and installed).
+  variables:
+    xpi_download_path:
+      type: string
+      description: |
+        Provide the path (relative to the base URL set in the `browser.newtabpage.trainhopAddon.xpiBaseURL`
+        about:config pref) from which the xpi should be downloaded.
+    addon_version:
+      type: string
+      description: |
+        Expected addon version (installing the xpi is cancelled if it mismatches the one set here).
+        The trainhop add-on version is also stored in an about:config pref, managed manually by
+        AboutNewTabResourceMapping to reflect the highest version across all active enrollments
+        (across both this feature and newtabTrainhopAddon). It is used on early application startup
+        to determine if the trainhop add-on version should be uninstalled (and not be used for the
+        newtab resources mapping to safely uninstall it later in the same application session).
 
 newtabTrainhopFirstStartup:
   description: |
@@ -4676,66 +4711,6 @@ bookmarks:
         pref: browser.toolbars.bookmarks.showOtherBookmarks
       description: Display state of the "Other Bookmarks" toolbar button.
 
-cookieBannerHandling:
-  description: Automatically handle cookie banners on the user's behalf.
-  owner: emz@mozilla.com
-  hasExposure: false
-  variables:
-    modeNormalBrowsing:
-      type: int
-      setPref:
-        branch: default
-        pref: cookiebanners.service.mode
-      description: >-
-        Controls the cookie banner handling mode in normal browsing.
-        Values: 0 - disabled, 1 - reject all, 2 - reject all with accept all fallback.
-    modePrivateBrowsing:
-      type: int
-      setPref:
-        branch: default
-        pref: cookiebanners.service.mode.privateBrowsing
-      description: >-
-        Controls the cookie banner handling mode in private browsing.
-        Values: 0 - disabled, 1 - reject all, 2 - reject all with accept all fallback.
-    enableGlobalRules:
-      type: boolean
-      setPref:
-        branch: default
-        pref: cookiebanners.service.enableGlobalRules
-      description: >-
-        Enables use of global CookieBannerRules, which apply to all sites.
-        This enables handling of CMPs across sites without the use of site-specific rules.
-    enableGlobalRulesSubFrames:
-      type: boolean
-      setPref:
-        branch: default
-        pref: cookiebanners.service.enableGlobalRules.subFrames
-      description: >-
-        Whether global rules are allowed to run in sub-frames. Running query
-        selectors in every sub-frame may negatively impact performance, but is
-        required for some CMPs.
-    enableDetectOnly:
-      type: boolean
-      setPref:
-        branch: default
-        pref: cookiebanners.service.detectOnly
-      description: >-
-        When set to true, cookie banners are detected and detection events are
-        dispatched, but they will not be handled.
-        This pref applies to both normal and private browsing windows.
-    enablePromo:
-      type: boolean
-      setPref:
-        branch: default
-        pref: browser.promo.cookiebanners.enabled
-      description: Enables the cookie banner promo in about:privatebrowsing.
-    enableDesktopFeatureCallout:
-      type: boolean
-      setPref:
-        branch: default
-        pref: cookiebanners.ui.desktop.showCallout
-      description: Enables the cookie banner feature callout on desktop.
-
 backgroundThreads:
   description: Prefs to control MacOS thread priorities for power savings.
   owner: kwright@mozilla.com
@@ -4756,36 +4731,6 @@ backgroundThreads:
       setPref:
         branch: user
         pref: threads.lower_mainthread_priority_in_background.enabled
-
-reportBrokenSite:
-  description: The Report Broken Site feature
-  owner: twisniewski@mozilla.com
-  hasExposure: false
-  variables:
-    enabled:
-      type: boolean
-      setPref:
-        branch: user
-        pref: ui.new-webcompat-reporter.enabled
-      description: >-
-        Whether Report Broken Site is enabled
-    sendMoreInfo:
-      type: boolean
-      setPref:
-        branch: user
-        pref: ui.new-webcompat-reporter.send-more-info-link
-      description: >-
-        Whether Report Broken Site shows the send more info link directing
-        users to webcompat.com (defaults to true for prerelease channels)
-    reasonDropdown:
-      type: int
-      setPref:
-        branch: user
-        pref: ui.new-webcompat-reporter.reason-dropdown
-      description: >-
-        0 = do not show the "reason" dropdown
-        1 = show an optional "reason" dropdown
-        2 = show a required "reason" dropdown
 
 phc:
   description: Prefs to control the Probabalistic Heap Checker (PHC)
@@ -6075,6 +6020,18 @@ contentSharing:
         branch: default
         pref: browser.contentsharing.server.url
       description: The URL of the content sharing server.
+
+urlbarShareButton:
+  description: Controls the share button in the url bar.
+  owner: nbaumgardner@mozilla.com
+  hasExposure: false
+  variables:
+    enabled:
+      type: boolean
+      setPref:
+        branch: default
+        pref: browser.urlbar.share-button.enabled
+      description: Whether the share button in the url bar is visible.
 
 referrals:
   description: Controls the Firefox referral program.

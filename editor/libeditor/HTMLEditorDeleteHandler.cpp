@@ -1931,6 +1931,9 @@ HTMLEditor::AutoDeleteRangesHandler::HandleDeleteTextAroundCollapsedRanges(
         "HTMLEditor::DeleteTextAndNormalizeSurroundingWhiteSpaces() failed");
     return caretPointOrError;
   }
+  // Remember that we did a ranged delete for the benefit of
+  // OnEndHandlingTopLevelEditSubActionInternal().
+  aHTMLEditor.TopLevelEditSubActionDataRef().mDidDeleteNonCollapsedRange = true;
   if (!needsToPutPaddingBRForLastEmptyLine) {
     return caretPointOrError;
   }
@@ -3361,7 +3364,8 @@ HTMLEditor::AutoDeleteRangesHandler::HandleDeleteNonCollapsedRanges(
     MOZ_ASSERT(aRangesToDelete.IsFirstRangeEditable(aEditingHost));
   }
 
-  // Remember that we did a ranged delete for the benefit of AfterEditInner().
+  // Remember that we did a ranged delete for the benefit of
+  // OnEndHandlingTopLevelEditSubActionInternal().
   aHTMLEditor.TopLevelEditSubActionDataRef().mDidDeleteNonCollapsedRange = true;
 
   // Figure out if the endpoints are in nodes that can be merged.  Adjust

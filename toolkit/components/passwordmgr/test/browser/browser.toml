@@ -54,7 +54,6 @@ support-files = ["form_disabled_readonly_passwordField.html"]
 ["browser_autocomplete_import.js"]
 https_first_disabled = true
 skip-if = [
-  "os == 'linux' && os_version == '22.04' && arch == 'x86_64' && opt && nova", # Bug 2057888
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && display == 'x11' && debug", # Bug 1775902
   "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && verify-standalone",
   "os == 'mac' && os_version == '10.15' && arch == 'x86_64'", # Bug 1775902
@@ -191,6 +190,8 @@ skip-if = [
 
 ["browser_doorhanger_target_blank.js"]
 support-files = ["subtst_notifications_12_target_blank.html"]
+
+["browser_doorhanger_urlbar_focus.js"]
 
 ["browser_doorhanger_username_edits.js"]
 

@@ -111,6 +111,11 @@
   & > ai-action-result + .chat-bubble-assistant {
     padding-block-start: 0;
     margin-block-start: calc(-2 * var(--space-small));
+
+    /* Spacing for an assistant turn that ends with a confirmation card. */
+    & .chat-bubble-inner:has(ai-action-confirmation) {
+      padding-block-start: var(--space-small);
+    }
   }
 
   /* The spinner has no internal padding, so align its icon with the shimmer

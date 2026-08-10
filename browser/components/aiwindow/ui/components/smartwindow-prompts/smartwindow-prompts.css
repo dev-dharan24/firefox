@@ -263,6 +263,7 @@
    * avoids a dedicated class since only these pills render a favicon
    * cluster. Fill and text colors match the regular pill; only the ring,
    * shimmer, and favicon cluster differ. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons) {
     --sw-prompt-fill-color: var(--prompt-button-background-color);
     /* RGB triplets (rather than full colors) since they're reused with
@@ -294,6 +295,7 @@
     fill: var(--icon-color);
   }
 
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons)::part(button) {
     border: 1px solid transparent;
     overflow: hidden;
@@ -309,6 +311,7 @@
     box-shadow: 0 3px 12px -2px rgba(var(--sw-prompt-ring-violet-rgb), 0.35);
   }
 
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons):is(:hover, :focus, :active)::part(button) {
     background:
       linear-gradient(var(--sw-prompt-fill-color), var(--sw-prompt-fill-color)) padding-box,
@@ -317,11 +320,13 @@
   }
 
   /* Disables the shared hover-reveal gradient above; this ring is always on. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons)::part(button)::after {
     content: none;
   }
 
   /* Reuses ::before for a one-shot hover shimmer instead of the shared fade. */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons)::part(button)::before {
     content: "";
     inset: 0;
@@ -339,6 +344,7 @@
     opacity: 1;
   }
 
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   .sw-prompt-button:has(.sw-prompt-favicons):hover::part(button)::before {
     animation: sw-prompt-favicon-shimmer 0.9s cubic-bezier(0.4, 0, 0.3, 1) 1 forwards;
   }
@@ -350,6 +356,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
     .sw-prompt-button:has(.sw-prompt-favicons):hover::part(button)::before {
       animation: none;
     }

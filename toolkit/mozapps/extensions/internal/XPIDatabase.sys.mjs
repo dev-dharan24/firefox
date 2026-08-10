@@ -2759,7 +2759,14 @@ export const XPIDatabase = {
       return true;
     }
 
-    if (Services.policies && !Services.policies.mayInstallAddon(aAddon)) {
+    if (
+      Services.policies &&
+      !Services.policies.mayInstallAddon({
+        id: aAddon.id,
+        type: aAddon.type,
+        permissions: aAddon.userPermissions?.permissions,
+      })
+    ) {
       return false;
     }
 

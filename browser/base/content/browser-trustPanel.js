@@ -147,6 +147,13 @@ class TrustPanel {
   // share a single query of each blocker instead of both querying.
   #trackerCountPromise = null;
   #isFirstVisit = false;
+  // False until the blocker check completes; while false a secure page shows the
+  // neutral "scanning" shield rather than the check-mark.
+  #blockersChecked = false;
+  // Guards against a stale run overwriting a fresher count.
+  #toolbarTrackerCountUpdateId = 0;
+  // True while navigating within the same site, so the icon stays static.
+  #sameSiteNavigation = false;
   /**
    * We don't want to add the `has-blocked-trackers` class before we add the `first-visit` class,
    * because otherwise the animation choreography gets out of sync (specifically, the
@@ -266,7 +273,8 @@ class TrustPanel {
     // different blockers:
     this.anyDetected = false;
     this.#lastEvent = event;
-    this.#trackerCount = null;
+    // Recompute the count, but keep the last displayed value so it doesn't
+    // briefly drop to 0 during a same-site navigation.
     this.#trackerCountPromise = null;
 
     // Check whether the user has added an exception for this site.
@@ -391,6 +399,103 @@ class TrustPanel {
     await hidden;
   }
 
+  /**
+   * Whether the current page is http(s) web content (as opposed to an internal
+   * about:/chrome page or an extension page). Only web content is scanned for
+   * trackers, so the scanning shield is scoped to it.
+   *
+   * @returns {boolean}
+   */
+  #isWebPage() {
+    return (
+      !!this.#uri && (this.#uri.schemeIs("http") || this.#uri.schemeIs("https"))
+    );
+  }
+
+  /**
+   * Whether two URIs are on the same site — i.e. share a base domain (eTLD+1),
+   * so subdomains (e.g. www.example.com and example.com) count as the same
+   * site. Guards against URIs with no base domain (IP hosts, about:, etc.).
+   *
+   * @param {nsIURI} a
+   * @param {nsIURI} b
+   * @returns {boolean}
+   */
+  #isSameSite(a, b) {
+    try {
+      return (
+        !!a &&
+        !!b &&
+        Services.eTLD.getBaseDomain(a) === Services.eTLD.getBaseDomain(b)
+      );
+    } catch (ex) {
+      return false;
+    }
+  }
+
+  /**
+   * Called at navigation start (before the security state is known) so the icon
+   * drops to the "scanning" shield immediately, rather than showing the previous
+   * page's secure check until updateIdentity runs on the security change.
+   */
+  resetIconForNavigation(targetURI) {
+    if (!this.#enabled) {
+      return;
+    }
+    let sameSite = this.#isSameSite(targetURI, this.#uri);
+    // Set this early (before the new page's content-blocking events) to avoid a
+    // race with updateIdentity. STATE_START can fire without a URI.
+    if (targetURI) {
+      this.#sameSiteNavigation = sameSite;
+    }
+    // A same-site navigation keeps the resolved icon static; only cross-site
+    // resets and scans.
+    if (sameSite) {
+      return;
+    }
+    this.#blockersChecked = false;
+    if (
+      !UrlbarPrefs.get("trackerCountFeatureGate") ||
+      !UrlbarPrefs.get("trackerCount.enabled")
+    ) {
+      return;
+    }
+    // Set the shield directly: #uri isn't set this early, so #updateUrlbarIcon
+    // can't run yet. It resolves once a tracker is blocked or the load completes.
+    let icon = document.getElementById("trust-icon-container");
+    for (let cls of [...icon.classList]) {
+      icon.classList.remove(cls);
+    }
+    icon.classList.add("scanning");
+  }
+
+  /**
+   * Called when the top-level document finishes loading. If the scanning shield
+   * is still up (no tracker was blocked during the load), resolve it now to the
+   * final secure/insecure state. A tracker blocked later still increments the
+   * count via #updateToolbarTrackerCount.
+   */
+  async onNavigationComplete() {
+    if (!this.#enabled || !this.#uri || this.#blockersChecked) {
+      return;
+    }
+    if (
+      !UrlbarPrefs.get("trackerCountFeatureGate") ||
+      !UrlbarPrefs.get("trackerCount.enabled")
+    ) {
+      return;
+    }
+    // Resolve the count first: if a tracker was blocked it already set
+    // #blockersChecked, so we only fall through to the plain check when none was.
+    const uri = this.#uri;
+    await this.#updateToolbarTrackerCount();
+    if (this.#uri !== uri || this.#blockersChecked) {
+      return;
+    }
+    this.#blockersChecked = true;
+    this.#updateUrlbarIcon();
+  }
+
   updateIdentity(state, uri) {
     if (!this.#enabled) {
       return;
@@ -401,6 +506,9 @@ class TrustPanel {
     } catch (ex) {
       this.#uriHasHost = false;
     }
+    // Compute before overwriting #uri below.
+    this.#sameSiteNavigation = this.#isSameSite(uri, this.#uri);
+
     this.#state = state;
     this.#uri = uri;
 
@@ -410,12 +518,16 @@ class TrustPanel {
     this.#qwacStatusPromise = null;
     this.#pageExtensionPolicy = WebExtensionPolicy.getByURI(uri);
     this.#breachedStatus = null;
-    this.#trackerCount = null;
-    this.#trackerCountPromise = null;
-    this.#isFirstVisit = false;
-    // The breached status is checked asynchronously below. Rendering now with the
-    // reset state above also clears the previous page's tracker-related classes,
-    // so the icon shows a neutral state immediately after navigation.
+    if (this.#sameSiteNavigation) {
+      // Keep the count, but clear first-visit so it renders statically.
+      this.#isFirstVisit = false;
+    } else {
+      this.#trackerCount = null;
+      this.#trackerCountPromise = null;
+      this.#isFirstVisit = false;
+    }
+    // #blockersChecked is reset in resetIconForNavigation, not here, so tab
+    // switches and re-fired security changes don't re-enter scanning.
     this.#updateUrlbarIcon();
 
     // We want to make sure the URL bar icon updates immediately to a neutral state
@@ -427,7 +539,10 @@ class TrustPanel {
     // (This function will update the icon by itself when it resolves, so we don't have to await it here.)
     void this.#checkForBreaches(uri);
 
-    this.#firstVisitPromise = this.#markFirstVisit();
+    // Only re-check first-visit on a cross-site navigation.
+    if (!this.#sameSiteNavigation) {
+      this.#firstVisitPromise = this.#markFirstVisit();
+    }
     void this.#updateToolbarTrackerCount();
   }
 
@@ -488,6 +603,31 @@ class TrustPanel {
     // Added after "first-visit" so the tracker-count pill animation stays in sync.
     if (this.#trackerCount > 0) {
       targetClasses.add("has-blocked-trackers");
+    }
+
+    // Before the blocker check resolves, show the scanning shield instead of the
+    // check-mark. Only affects secure http(s) pages; definitive states still show.
+    if (
+      !this.#blockersChecked &&
+      this.#isWebPage() &&
+      targetClasses.has("secure") &&
+      !targetClasses.has("breached") &&
+      !targetClasses.has("warning") &&
+      UrlbarPrefs.get("trackerCountFeatureGate") &&
+      UrlbarPrefs.get("trackerCount.enabled")
+    ) {
+      targetClasses = new Set(["scanning"]);
+    }
+
+    // Suppresses the reveal animation so the pill stays static across a
+    // same-site navigation.
+    if (this.#sameSiteNavigation && !targetClasses.has("scanning")) {
+      targetClasses.add("same-site-nav");
+    }
+
+    // A breach supersedes scanning: resolve so the shield doesn't mask it.
+    if (targetClasses.has("breached")) {
+      this.#blockersChecked = true;
     }
 
     // Handle the breach animation guard (restart only on fresh URI).
@@ -695,17 +835,27 @@ class TrustPanel {
       return;
     }
     const uri = this.#uri;
-    const [count] = await Promise.all([
+    // Tag this run so that if a newer one starts while we're awaiting below,
+    // this now-stale run bails instead of clobbering the fresher count.
+    const updateId = ++this.#toolbarTrackerCountUpdateId;
+    let [count] = await Promise.all([
       this.#computeTrackerCount(),
       this.#firstVisitPromise,
     ]);
-    if (this.#uri !== uri) {
+    if (this.#uri !== uri || this.#toolbarTrackerCountUpdateId !== updateId) {
       return;
     }
-    // Set the icon's count and the "shown" pref together, before the icon is
-    // re-rendered below, so the has-blocked-trackers class can't appear before
-    // the pref is recorded.
+
+    // On a same-site navigation, keep the last positive count until the new page
+    // reports its own, so the pill doesn't flash "0" mid-load.
+    if (this.#sameSiteNavigation && count === 0 && this.#trackerCount > 0) {
+      count = this.#trackerCount;
+    }
     this.#trackerCount = count;
+    // A blocked tracker resolves the scanning shield straight into the reveal.
+    if (count > 0) {
+      this.#blockersChecked = true;
+    }
     const iconContainer = document.getElementById("trust-icon-container");
     if (count > 0 && !UrlbarPrefs.get("trackerCountShown")) {
       // The very first time we show the count of trackers, we set this pref so

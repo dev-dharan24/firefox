@@ -105,6 +105,10 @@ open class FocusApplication : Application(), Provider {
 
                 // Remove stale temporary uploaded files.
                 components.fileUploadsDirCleaner.cleanUploadsDirectory()
+
+                withContext(ioDispatcher) {
+                    components.settings.deleteObsoleteCookieBannerDataIfNeeded()
+                }
             }
         }
     }

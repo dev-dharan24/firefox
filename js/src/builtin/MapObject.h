@@ -123,10 +123,9 @@ class MapObject : public OrderedHashMapObject {
 
   friend class OrderedHashTableRef<MapObject>;
 
-  static constexpr auto NURSERY_KEYS_SLOT =
-      TypedSlot<ValueType::Double>(Table::SlotCount + 0);
-  static constexpr auto REGISTERED_NURSERY_ITERATORS_SLOT =
-      TypedSlot<ValueType::Boolean>(Table::SlotCount + 1);
+  JS_DEFINE_TYPED_SLOT(Table::SlotCount + 0, NURSERY_KEYS_SLOT, Private);
+  JS_DEFINE_TYPED_SLOT(Table::SlotCount + 1, REGISTERED_NURSERY_ITERATORS_SLOT,
+                       Boolean);
   static constexpr uint32_t SLOT_COUNT = Table::SlotCount + 2;
 
   using IteratorKind = TableIteratorObject::Kind;
@@ -257,10 +256,9 @@ class SetObject : public OrderedHashSetObject {
 
   friend class OrderedHashTableRef<SetObject>;
 
-  static constexpr auto NURSERY_KEYS_SLOT =
-      TypedSlot<ValueType::Double>(Table::SlotCount + 0);
-  static constexpr auto REGISTERED_NURSERY_ITERATORS_SLOT =
-      TypedSlot<ValueType::Boolean>(Table::SlotCount + 1);
+  JS_DEFINE_TYPED_SLOT(Table::SlotCount + 0, NURSERY_KEYS_SLOT, Private);
+  JS_DEFINE_TYPED_SLOT(Table::SlotCount + 1, REGISTERED_NURSERY_ITERATORS_SLOT,
+                       Boolean);
   static constexpr uint32_t SLOT_COUNT = Table::SlotCount + 2;
 
   using IteratorKind = TableIteratorObject::Kind;

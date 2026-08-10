@@ -6,6 +6,7 @@
 #include "mozilla/dom/PrefetchRecordParent.h"
 
 #include "mozilla/DebugOnly.h"
+#include "mozilla/LoadInfo.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/dom/PrefetchLog.h"
 #include "mozilla/dom/ReferrerInfo.h"
@@ -113,17 +114,18 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
   }
   mIsolatedPartitionKey = isolatedAttrs.mPartitionKey;
 
-  nsICookieJarSettings* cjs = aWGP->CookieJarSettings();
+  // Use CreateForNonDocument (instead of passing a null aLoadingNode to
+  // NS_NewChannelInternal) so the resulting LoadInfo carries aWGP's
+  // BrowsingContext ID; otherwise DevTools can't attribute the prefetch
+  // request to the tab that triggered it.
+  RefPtr<net::LoadInfo> loadInfo = net::LoadInfo::CreateForNonDocument(
+      aWGP, docPrincipal, nsIContentPolicy::TYPE_OTHER,
+      nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_INHERITS_SEC_CONTEXT,
+      /* aSandboxFlags */ 0);
+  loadInfo->SetOriginAttributes(isolatedAttrs);
 
   nsresult rv = NS_NewChannelInternal(
-      getter_AddRefs(mChannel), mURL,
-      nullptr,       // aLoadingNode
-      docPrincipal,  // aLoadingPrincipal
-      nullptr,       // aTriggeringPrincipal
-      mozilla::Nothing(), mozilla::Nothing(),
-      nsILoadInfo::SEC_ALLOW_CROSS_ORIGIN_INHERITS_SEC_CONTEXT,
-      nsIContentPolicy::TYPE_OTHER,
-      cjs,      // cookieJarSettings — carries dFPI partition key from WGP
+      getter_AddRefs(mChannel), mURL, loadInfo,
       nullptr,  // aPerformanceStorage — Resource Timing entries are recorded at
                 //   activation, not during the background prefetch fetch
       nullptr,  // aLoadGroup — intentionally no load group; prefetch is
@@ -139,18 +141,6 @@ void PrefetchRecordParent::Init(WindowGlobalParent* aWGP,
     mState = PrefetchState::Canceled;
     return;
   }
-
-  nsCOMPtr<nsILoadInfo> loadInfo = mChannel->LoadInfo();
-  if (!loadInfo) {
-    LOG_SPECRULES_WARN(
-        ("PrefetchRecordParent::Init: this=%p mChannel->LoadInfo() returned "
-         "null",
-         this));
-    mState = PrefetchState::Canceled;
-    mChannel = nullptr;
-    return;
-  }
-  loadInfo->SetOriginAttributes(isolatedAttrs);
 
   ConfigureSecPurpose(mChannel);
 

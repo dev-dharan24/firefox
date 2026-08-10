@@ -40,6 +40,13 @@
     :root:is([inFullscreen], [inDOMFullscreen]) & {
       margin: 0;
     }
+
+    /* A maximized window has no outer padding, but keeps the gap below the
+       toolbox that separates it from the blocks in #browser. */
+    :root[sizemode="maximized"] & {
+      margin-block-start: 0;
+      margin-inline: 0;
+    }
   }
 
   #browser {
@@ -58,6 +65,13 @@
       padding-block-start: 2px;
       gap: 2px;
     }
+  }
+
+  /* Keep the gap between blocks, but drop the outer padding so they sit flush
+     against the edges of a maximized window. */
+  :root[sizemode="maximized"] #browser {
+    padding-inline: 0;
+    padding-block-end: 0;
   }
 
   #tabbrowser-tabbox {
@@ -103,12 +117,34 @@
         border-radius: 0;
       }
     }
+
+    /* Maximized: zero the outer corners & borders that meet the bottom window edge. */
+    :root[sizemode="maximized"] & {
+      border-end-start-radius: 0;
+      border-end-end-radius: 0;
+      border-block-end: none;
+    }
+
+    /* Maximized: when there's no sidebar docked on the inline-start edge,
+       remove those borders & corners. */
+    :root[sizemode="maximized"] #tabbrowser-tabbox:not([sidebar-shown]) &,
+    :root[sizemode="maximized"] #tabbrowser-tabbox[sidebar-shown][sidebar-positionend] & {
+      border-start-start-radius: 0;
+      border-inline-start: none;
+    }
+
+    /* If there's no sidebar docked on the inline-end edge, remove those borders & corners. */
+    :root[sizemode="maximized"] #tabbrowser-tabbox:not([sidebar-positionend], [ai-window-open]) & {
+      border-start-end-radius: 0;
+      border-inline-end: none;
+    }
   }
 
   /* Splitter between split-view panels. The active panel's 2px focus outline
    * extends into the splitter margin on the active panel's side, so we widen
    * that side's margin to 3px (2px outline + 1px clear) and keep the other
-   * side at 1px. See the :has() rules below for the asymmetric overrides. */
+   * side at 1px. See the [splitview-selected-column] rules below for the
+   * asymmetric overrides. */
   #tabbrowser-tabpanels[splitview] .split-view-splitter {
     background-color: transparent;
     border: none;
@@ -130,13 +166,13 @@
 
   /* When column-0 is selected, its right outline extends into the splitter's
    * inline-start margin: widen that side to 3px (2px outline + 1px clear). */
-  #tabbrowser-tabpanels[splitview]:has(.split-view-panel[column="0"].deck-selected) .split-view-splitter {
+  :root[splitview-selected-column="0"] #tabbrowser-tabpanels[splitview] .split-view-splitter {
     margin-inline-start: 3px;
   }
 
   /* When column-1 is selected, its left outline extends into the splitter's
    * inline-end margin: widen that side to 3px (2px outline + 1px clear). */
-  #tabbrowser-tabpanels[splitview]:has(.split-view-panel[column="1"].deck-selected) .split-view-splitter {
+  :root[splitview-selected-column="1"] #tabbrowser-tabpanels[splitview] .split-view-splitter {
     margin-inline-end: 3px;
   }
 }
@@ -319,7 +355,7 @@
     box-shadow: var(--content-area-shadow);
   }
 
-  @media -moz-pref("sidebar.revamp") and -moz-pref("sidebar.revamp.round-content-area") {
+  @media -moz-pref("sidebar.revamp") {
     overflow: clip;
 
     @media not -moz-pref("browser.nova.enabled") {
@@ -595,6 +631,19 @@ split-view-footer {
 
   -moz-context-properties: fill;
   fill: var(--button-icon-fill);
+
+  /* Remove end|end radius when the content page does not have a border radius because
+     of the DevTools toolbox placement: */
+  :is(
+    /* when the toolbox is docked at the bottom */
+    .browserSidebarContainer[devtools-host-type="bottom"],
+    /* when the toolbox is docked on the right in LTR */
+    :dir(ltr) .browserSidebarContainer[devtools-host-type="right"],
+    /* when the toolbox is docked on the left in RTL */
+    :dir(rtl) .browserSidebarContainer[devtools-host-type="left"]
+  ) & {
+    border-end-end-radius: 0;
+  }
 }
 
 .split-view-icon {
@@ -945,8 +994,11 @@ split-view-footer {
 }
 
 /* Radius the backdrop so it doesnt occlude the radiused .browserContainer below it */
-:root:not([inDOMFullscreen]) #tabbrowser-tabbox[sidebar-shown] .dialogOverlay[topmost="true"] {
-  @media -moz-pref("sidebar.revamp.round-content-area") {
+@media not -moz-pref("browser.nova.enabled") {
+  /* The border radius on those dialog is set in the next top-level rule (`.dialogOverlay[topmost="true"]`),
+     and uses the --chrome-block-radius, which is only set when Nova is enabled.
+     So here we only need to handle the case where Nova isn't enabled */
+  :root:not([inDOMFullscreen]) #tabbrowser-tabbox[sidebar-shown] .browserSidebarContainer:not(.responsive-mode) .dialogOverlay[topmost="true"] {
     border-start-end-radius: var(--border-radius-medium);
 
     @media -moz-pref("sidebar.position_start") {
@@ -960,6 +1012,27 @@ split-view-footer {
 #window-modal-dialog::backdrop {
   background-color: var(--background-color-overlay);
   border-radius: var(--chrome-block-radius);
+
+  .browserSidebarContainer.responsive-mode & {
+    border-radius: 0;
+  }
+
+  .browserSidebarContainer:not(.responsive-mode)[devtools-host-type="bottom"] > .dialogStack > & {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .browserSidebarContainer:not(.responsive-mode)[devtools-host-type="right"] > .dialogStack > & {
+    /* Use physical properties as devtools docking side is physical (left/right), and not logical */
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .browserSidebarContainer:not(.responsive-mode)[devtools-host-type="left"] > .dialogStack > & {
+    /* Use physical properties as devtools docking side is physical (left/right), and not logical */
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
 }
 
 .dialogOverlay[hideContent="true"][topmost="true"] {

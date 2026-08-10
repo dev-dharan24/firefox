@@ -8,6 +8,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ContextId: "moz-src:///browser/modules/ContextId.sys.mjs",
   SectionsLayoutManager: "resource://newtab/lib/SectionsLayoutFeed.sys.mjs",
   maskLayoutAds: "resource://newtab/lib/SectionsLayoutFeed.sys.mjs",
+  MozAdsPlacementRequestWithCount:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsIabContent:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsIabContentTaxonomy:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
   NimbusFeatures: "resource://nimbus/ExperimentAPI.sys.mjs",
   NewTabUtils: "resource://gre/modules/NewTabUtils.sys.mjs",
   ObliviousHTTP: "resource://gre/modules/ObliviousHTTP.sys.mjs",
@@ -621,6 +627,68 @@ export class DiscoveryStreamFeed {
     }
     return null;
   }
+
+  async _fetchSpocsWithAdsClient(placements) {
+    const options = lazy.AdsClient.requestOptions();
+
+    const requests = [];
+    for (let { placement: placementId, count, content } of placements) {
+      let iabContent = null;
+      if (content) {
+        iabContent = new lazy.MozAdsIabContent({
+          categoryIds: content.categories,
+          taxonomy:
+            lazy.MozAdsIabContentTaxonomy[
+              // js-style enum strings (eg. "IAB-3.0") must be converted to
+              // rust-style enum names (eg. "IAB3_0") before looking up
+              // the actual enum value (eg. 4)
+              content.taxonomy.replace("-", "").replace(".", "_")
+            ],
+        });
+      }
+
+      requests.push(
+        new lazy.MozAdsPlacementRequestWithCount({
+          placementId,
+          count,
+          iabContent,
+        })
+      );
+    }
+
+    const spocs = await this.adsClient.requestSpocAds(requests, options);
+
+    return Object.fromEntries(
+      spocs.entries().map(([placementId, placementSpocs]) => [
+        placementId,
+        placementSpocs.map(spoc => ({
+          format: spoc.format,
+          url: spoc.url,
+          callbacks: spoc.callbacks,
+          image_url: spoc.imageUrl,
+          title: spoc.title,
+          domain: spoc.domain,
+          excerpt: spoc.excerpt,
+          sponsor: spoc.sponsor,
+          sponsored_by_override: spoc.sponsoredByOverride,
+          block_key: spoc.blockKey,
+          caps: spoc.caps
+            ? { cap_key: spoc.caps.capKey, day: spoc.caps.day }
+            : undefined,
+          ranking: spoc.ranking
+            ? {
+                item_score: spoc.ranking.itemScore,
+                personalization_models: Object.fromEntries(
+                  spoc.ranking.personalizationModels ?? []
+                ),
+                priority: spoc.ranking.priority,
+              }
+            : undefined,
+        })),
+      ])
+    );
+  }
+
   get spocsOnDemand() {
     if (this._spocsOnDemand === undefined) {
       const { values } = this.store.getState().Prefs;
@@ -1373,15 +1441,20 @@ export class DiscoveryStreamFeed {
           }
         } else {
           try {
-            spocsResponse = await this.fetchFromEndpoint(
-              endpoint,
-              {
-                method: "POST",
-                headers,
-                body: JSON.stringify(body),
-              },
-              marsOhttpEnabled
-            );
+            if (this.adsClient) {
+              spocsResponse =
+                await this._fetchSpocsWithAdsClient(unifiedAdsPlacements);
+            } else {
+              spocsResponse = await this.fetchFromEndpoint(
+                endpoint,
+                {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify(body),
+                },
+                marsOhttpEnabled
+              );
+            }
           } catch (error) {
             console.error("Error trying to load spocs feeds:", error);
           }

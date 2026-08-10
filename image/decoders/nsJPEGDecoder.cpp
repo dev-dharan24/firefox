@@ -383,7 +383,7 @@ LexerTransition<nsJPEGDecoder::State> nsJPEGDecoder::ReadJPEGData(
       // Swizzling can convert from CMYK/inverted CMYK for us.
       SurfaceFormat inFormat = SurfaceFormat::OS_RGBX;
       if (mInfo.out_color_space == JCS_CMYK) {
-        inFormat = mIsPDF ? SurfaceFormat::InvertedCMYK : SurfaceFormat::CMYK;
+        inFormat = mIsPDF ? SurfaceFormat::CMYK : SurfaceFormat::InvertedCMYK;
       }
 
       Maybe<SurfacePipe> pipe = SurfacePipeFactory::CreateReorientSurfacePipe(

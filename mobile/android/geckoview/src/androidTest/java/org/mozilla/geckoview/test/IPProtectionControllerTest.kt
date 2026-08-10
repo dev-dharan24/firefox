@@ -196,6 +196,8 @@ class IPProtectionControllerTest : BaseSessionTest() {
             "pass-unavailable" to IPProtectionController.IPProxyException.ERROR_PASS_UNAVAILABLE,
             "server-not-found" to IPProtectionController.IPProxyException.ERROR_SERVER_NOT_FOUND,
             "activation-canceled" to IPProtectionController.IPProxyException.ERROR_ACTIVATION_CANCELED,
+            "catastrophic-error" to IPProtectionController.IPProxyException.ERROR_CATASTROPHIC,
+            "vpn-unavailable" to IPProtectionController.IPProxyException.ERROR_VPN_UNAVAILABLE,
         )
         for ((errorString, expectedCode) in cases) {
             assertThat(
@@ -207,7 +209,7 @@ class IPProtectionControllerTest : BaseSessionTest() {
 
     @Test
     fun ipProxyExceptionUnknownErrorStringsMapsToErrorUnknown() {
-        val unknownStrings = listOf("generic-error", "catastrophic-error", "some-unknown-error", null)
+        val unknownStrings = listOf("generic-error", "some-unknown-error", null)
         for (errorString in unknownStrings) {
             assertThat(
                 IPProtectionController.IPProxyException.fromErrorString(errorString).code,

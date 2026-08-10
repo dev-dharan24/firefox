@@ -335,59 +335,6 @@ let JSWINDOWACTORS = {
     safeForUntrustedWebProcess: true,
   },
 
-  CookieBanner: {
-    parent: {
-      esModuleURI: "resource://gre/actors/CookieBannerParent.sys.mjs",
-    },
-    child: {
-      esModuleURI: "resource://gre/actors/CookieBannerChild.sys.mjs",
-      events: {
-        DOMContentLoaded: {},
-        load: { capture: true },
-      },
-    },
-    // Only need handle cookie banners for HTTP/S scheme.
-    matches: ["https://*/*", "http://*/*"],
-    // Only handle banners for browser tabs (including sub-frames).
-    messageManagerGroups: ["browsers"],
-    // Cookie banners can be shown in sub-frames so we need to include them.
-    allFrames: true,
-    onAddActor(register, unregister) {
-      let isRegistered = false;
-
-      const maybeRegister = () => {
-        const isEnabled = Services.prefs.getBoolPref(
-          "cookiebanners.bannerClicking.enabled",
-          false
-        );
-        const mode = Services.prefs.getIntPref("cookiebanners.service.mode", 0);
-        const privateBrowsing = Services.prefs.getIntPref(
-          "cookiebanners.service.mode.privateBrowsing"
-        );
-        if (isEnabled && (mode != 0 || privateBrowsing != 0)) {
-          if (!isRegistered) {
-            register();
-            isRegistered = true;
-          }
-        } else if (isRegistered) {
-          unregister();
-          isRegistered = false;
-        }
-      };
-
-      [
-        "cookiebanners.bannerClicking.enabled",
-        "cookiebanners.service.mode",
-        "cookiebanners.service.mode.privateBrowsing",
-      ].forEach(prefName => {
-        Services.prefs.addObserver(prefName, maybeRegister);
-      });
-
-      maybeRegister();
-    },
-    safeForUntrustedWebProcess: true,
-  },
-
   ExtFind: {
     child: {
       esModuleURI: "resource://gre/actors/ExtFindChild.sys.mjs",

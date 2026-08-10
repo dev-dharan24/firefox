@@ -26,6 +26,7 @@ browser.jar:
         content/browser/logos/tracking-protection.svg (content/logos/tracking-protection.svg)
         content/browser/logos/vpn.svg                 (content/logos/vpn.svg)
         content/browser/logos/vpn-promo-logo.svg      (content/logos/vpn-promo-logo.svg)
+        content/browser/kit-signed-out.svg            (content/kit-signed-out.svg)
         content/browser/aboutRobots-icon.png          (content/aboutRobots-icon.png)
         content/browser/aboutFrameCrashed.html        (content/aboutFrameCrashed.html)
         content/browser/aboutTabCrashed.css           (content/aboutTabCrashed.css)

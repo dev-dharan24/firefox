@@ -4,12 +4,16 @@
 
 package org.mozilla.fenix.ui.efficiency.helpers
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.test.espresso.Espresso
 import androidx.test.espresso.IdlingResourceTimeoutException
 import androidx.test.espresso.NoMatchingViewException
 import androidx.test.espresso.base.DefaultFailureHandler
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.uiautomator.UiObjectNotFoundException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -60,6 +64,8 @@ abstract class BaseTest(
     private val isPocketEnabled: Boolean = true,
     private val isRecentlyVisitedFeatureEnabled: Boolean = true,
     private val shouldUseExpandedToolbar: Boolean = false,
+    private val isTabStripEnabled: Boolean = false,
+    private val isPWAsPromptEnabled: Boolean = false,
 ) {
 
     // Default launch built from the constructor args (back-compat for every existing subclass).
@@ -69,6 +75,8 @@ abstract class BaseTest(
         isPocketEnabled = isPocketEnabled,
         isRecentlyVisitedFeatureEnabled = isRecentlyVisitedFeatureEnabled,
         shouldUseExpandedToolbar = shouldUseExpandedToolbar,
+        isTabStripEnabled = isTabStripEnabled,
+        isPWAsPromptEnabled = isPWAsPromptEnabled,
     )
 
     /** Override to vary the launch per run/case (e.g. the reachability shard uses the case's config). */
@@ -102,6 +110,8 @@ abstract class BaseTest(
                             isPocketEnabled = cfg.isPocketEnabled,
                             isRecentlyVisitedFeatureEnabled = cfg.isRecentlyVisitedFeatureEnabled,
                             shouldUseExpandedToolbar = cfg.shouldUseExpandedToolbar,
+                            isTabStripEnabled = cfg.isTabStripEnabled,
+                            isPWAsPromptEnabled = cfg.isPWAsPromptEnabled,
                         ),
                     ) { it.activity }
                     try {
@@ -120,8 +130,20 @@ abstract class BaseTest(
                                 runCatching {
                                     val autofill = appContext.components.core.autofillStorage
                                     autofill.getAllAddresses().forEach { autofill.deleteAddress(it.guid) }
+                                    // Same for cards: a leftover card replaces "Add card" with "Manage
+                                    // cards" on the Autofill screen, so a retry of a card test starts on
+                                    // a different screen than the first attempt did.
+                                    autofill.getAllCreditCards().forEach { autofill.deleteCreditCard(it.guid) }
                                 }.onFailure {
                                     Log.i("BaseTest", "RetryTestRule: autofill clear failed: ${it.message}")
+                                }
+                                // Clear saved logins for the same reason (and so a retry doesn't inherit
+                                // logins the previous attempt saved — a re-submit of the same credentials
+                                // shows no save prompt, which reads as a spurious failure).
+                                runCatching {
+                                    appContext.components.core.passwordsStorage.wipeLocal()
+                                }.onFailure {
+                                    Log.i("BaseTest", "RetryTestRule: logins clear failed: ${it.message}")
                                 }
                             }
                         }
@@ -136,6 +158,7 @@ abstract class BaseTest(
                         if (!t.isRetryable() || attempt >= MAX_RETRIES) throw t
                         Log.i("BaseTest", "RetryTestRule: ${t::class.simpleName} caught, retrying.")
                         cleanup(removeTabs = true)
+                        finishLeftoverActivities()
                     }
                 }
             }
@@ -229,6 +252,49 @@ abstract class BaseTest(
         const val MAX_RETRIES = 1
     }
 }
+
+/**
+ * Finish whatever the failed attempt left running, and wait for it to actually be gone.
+ *
+ * The next attempt launches a fresh HomeActivity, and that launch is what breaks if the previous
+ * attempt's instance is still alive: HomeActivity is launchMode="singleTask", so the intent is
+ * delivered to the existing instance instead of creating one, MonitoringInstrumentation never sees a
+ * newly launched activity reach RESUMED, and the attempt dies after 45s on "Could not launch intent
+ * ... HomeActivity". That error names HomeActivity, so it hides whatever actually failed first.
+ *
+ * The activity rule's own teardown is not enough to rely on here — the retry runs immediately after
+ * the failure, and the previous attempt's HomeActivity has been observed still RESUMED at that point.
+ * Best-effort: this must never turn a retryable failure into a different one, so errors are logged
+ * and swallowed, and the wait is bounded.
+ */
+private fun finishLeftoverActivities() {
+    val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val deadline = SystemClock.uptimeMillis() + LEFTOVER_ACTIVITY_TIMEOUT
+    while (SystemClock.uptimeMillis() < deadline) {
+        var remaining = emptyList<String>()
+        runCatching {
+            instrumentation.runOnMainSync {
+                val monitor = ActivityLifecycleMonitorRegistry.getInstance()
+                val live = Stage.values()
+                    .filter { it != Stage.DESTROYED }
+                    .flatMap { monitor.getActivitiesInStage(it) }
+                    .distinct()
+                remaining = live.map { it.javaClass.simpleName }
+                live.forEach { it.finish() }
+            }
+        }.onFailure {
+            Log.i("BaseTest", "RetryTestRule: could not inspect leftover activities: ${it.message}")
+            return
+        }
+        if (remaining.isEmpty()) return
+        Log.i("BaseTest", "RetryTestRule: finishing leftover activities: $remaining")
+        SystemClock.sleep(LEFTOVER_ACTIVITY_POLL)
+    }
+    Log.i("BaseTest", "RetryTestRule: leftover activities outlived ${LEFTOVER_ACTIVITY_TIMEOUT}ms")
+}
+
+private const val LEFTOVER_ACTIVITY_TIMEOUT = 5_000L
+private const val LEFTOVER_ACTIVITY_POLL = 200L
 
 private fun cleanup(removeTabs: Boolean = false) {
     unregisterAllIdlingResources()

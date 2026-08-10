@@ -94,6 +94,18 @@ const tests = [
     checkRect(result, selectionBounds,
               formatMessage('Text rect should fall back to selection bounds if requested range is closer to selection than character bounds.'));
   },
+  function emptyTextUsesSelectionBounds() {
+    const selectionBounds = new DOMRect(100, 200, 300, 400);
+    editContext.updateText(0, editContext.text.length, '');
+    editContext.updateSelectionBounds(selectionBounds);
+    const rect = queryTextRectArray(0, 1)[0];
+    checkRect(rect, selectionBounds,
+              formatMessage('With empty text, querying text rect array should give selection bounds.'));
+    const result = synthesizeQueryTextRect(0, 1);
+    ok(result.succeeded, formatMessage('QueryTextRect should succeed.'));
+    checkRect(result, selectionBounds,
+              formatMessage('With empty text, querying text rect should give selection bounds.'));
+  },
 ];
 
 // DOM-based EditContext only:

@@ -187,12 +187,6 @@ class Core(
             dohExceptionsList = context.components.settings.dohExceptionsList.toList(),
             globalPrivacyControlEnabled = context.components.settings.shouldEnableGlobalPrivacyControl,
             fdlibmMathEnabled = FxNimbus.features.fingerprintingProtection.value().fdlibmMath,
-            cookieBannerHandlingMode = context.components.settings.getCookieBannerHandling(),
-            cookieBannerHandlingModePrivateBrowsing = context.components.settings.getCookieBannerHandlingPrivateMode(),
-            cookieBannerHandlingDetectOnlyMode = context.components.settings.shouldEnableCookieBannerDetectOnly,
-            cookieBannerHandlingGlobalRules = context.components.settings.shouldEnableCookieBannerGlobalRules,
-            cookieBannerHandlingGlobalRulesSubFrames =
-                context.components.settings.shouldEnableCookieBannerGlobalRulesSubFrame,
             emailTrackerBlockingPrivateBrowsing = true,
             userCharacteristicPingCurrentVersion = FxNimbus.features.userCharacteristics.value().currentVersion,
             getDesktopMode = {
@@ -319,7 +313,7 @@ class Core(
     }
 
     private val locationService: LocationService by lazyMonitored {
-        if (Config.channel.isDebug || BuildConfig.MLS_TOKEN.isEmpty()) {
+        if (BuildConfig.MLS_TOKEN.isEmpty()) {
             LocationService.default()
         } else {
             MozillaLocationService(context, client, BuildConfig.MLS_TOKEN)
@@ -401,10 +395,6 @@ class Core(
                     isTranslationsEnabled = {
                         TranslationsEnabledSettings.dataStore(context).isEnabled.first()
                     },
-                ),
-                StartupMiddleware(
-                    applicationContext = context,
-                    repository = DefaultHomepageAsANewTabPreferenceRepository(context.components.settings),
                 ),
                 AboutHomeMiddleware(
                     homepageTitle = context.getString(R.string.tab_tray_homepage_tab),

@@ -159,25 +159,24 @@ add_task(async function test_filter_passwords_while_editing() {
 
   info("Focus the password field.");
   const loginForm = megalist.querySelector("login-form");
-  const passwordField = loginForm.shadowRoot.querySelector(
-    "login-password-field"
-  );
+  const passwordField =
+    loginForm.shadowRoot.querySelector("moz-input-password");
   const revealPromise = BrowserTestUtils.waitForMutationCondition(
-    passwordField.input,
+    passwordField.inputEl,
     {
       attributeFilter: ["type"],
     },
-    () => passwordField.input.getAttribute("type") === "text"
+    () => passwordField.inputEl.getAttribute("type") === "text"
   );
-  passwordField.input.focus();
+  passwordField.inputEl.focus();
   await revealPromise;
-  is(passwordField.input.value, TEST_LOGIN_2.password, "password revealed");
+  is(passwordField.inputEl.value, TEST_LOGIN_2.password, "password revealed");
 
   const newUsername = "new_sally";
   const newPassword = "new_password_sally";
   info("Updating login.");
-  setInputValue(loginForm, "login-username-field", newUsername);
-  setInputValue(loginForm, "login-password-field", newPassword);
+  setInputValue(loginForm, "moz-input-text", newUsername);
+  setInputValue(loginForm, "moz-input-password", newPassword);
 
   const saveButton = loginForm.shadowRoot.querySelector(
     "moz-button[type=primary]"
@@ -235,8 +234,8 @@ add_task(async function test_filter_passwords_and_update_login() {
   const loginForm = megalist.querySelector("login-form");
 
   info("Updating login.");
-  setInputValue(loginForm, "login-username-field", newUsername);
-  setInputValue(loginForm, "login-password-field", newPassword);
+  setInputValue(loginForm, "moz-input-text", newUsername);
+  setInputValue(loginForm, "moz-input-password", newPassword);
   const saveButton = loginForm.shadowRoot.querySelector(
     "moz-button[type=primary]"
   );

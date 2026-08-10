@@ -7,7 +7,11 @@ import React, { useCallback, useRef } from "react";
 import { useSelector, batch } from "react-redux";
 import { actionCreators as ac, actionTypes as at } from "common/Actions.mjs";
 import { useIntersectionObserver, useSizeSubmenu } from "../../../lib/utils";
-import { WIDGET_REGISTRY, resolveWidgetSize } from "common/WidgetsRegistry.mjs";
+import {
+  WIDGET_REGISTRY,
+  resolveWidgetSize,
+  resolvePrivacyDisplayCount,
+} from "common/WidgetsRegistry.mjs";
 import { MoveSubmenu } from "../MoveSubmenu";
 
 const USER_ACTION_TYPES = {
@@ -18,33 +22,26 @@ const PRIVACY_ENTRY = WIDGET_REGISTRY.find(w => w.id === "privacy");
 
 const ICON_BASE_URL = "chrome://newtab/content/data/content/assets/";
 
-// Renders a widget icon by asset filename. The wrapper div is the alignment
-// hook. TEMP (Bug 2049390): callers pass a static filename for now; the
-// per-message icon mapping (shield/planet/star/bolt/kit) is a follow-up commit.
-const privacyImage = filename => (
+// Icon key (from the message decision / PrivacyMessages.sys.mjs) -> asset.
+const ICON_ASSETS = {
+  shield: "widget-privacy-shield.svg",
+  shieldCheck: "widget-privacy-shield-check.svg",
+  planet: "widget-privacy-planet.svg",
+  bolt: "widget-privacy-bolt.svg",
+  star: "widget-privacy-star.svg",
+  kit: "widget-privacy-kit.svg",
+};
+
+// Renders a widget icon by icon key. The wrapper div is the alignment hook.
+const privacyImage = iconKey => (
   <div className="privacy-image">
     <img
       className="privacy-image-icon"
-      src={`${ICON_BASE_URL}${filename}`}
+      src={`${ICON_BASE_URL}${ICON_ASSETS[iconKey] || ICON_ASSETS.shieldCheck}`}
       alt=""
     />
   </div>
 );
-
-const PREF_PRIVACY_MAX_COUNT = "widgets.privacy.maxCount";
-const DEFAULT_PRIVACY_MAX_COUNT = 100;
-
-// Resolves the count at which the readout caps to "N+". trainhopConfig wins so
-// an experiment can override the pref's default; then the pref
-// (widgets.privacy.maxCount, default 100); then a defensive fallback. Routed
-// through a helper (never the raw pref) per the trainhop-gate convention.
-function resolvePrivacyMaxCount(prefs) {
-  return (
-    prefs.trainhopConfig?.widgets?.privacyMaxCount ||
-    prefs[PREF_PRIVACY_MAX_COUNT] ||
-    DEFAULT_PRIVACY_MAX_COUNT
-  );
-}
 
 function Privacy({ dispatch, widgetsMayBeMaximized, widgetEnabledMap }) {
   const prefs = useSelector(state => state.Prefs.values);
@@ -61,14 +58,43 @@ function Privacy({ dispatch, widgetsMayBeMaximized, widgetEnabledMap }) {
   // when it's skipped (e.g. the backward-compat guard in PrivacyFeed on older
   // platforms) — show no metric state rather than a misleading empty/zero one.
   const initialized = privacyData?.initialized ?? false;
-  // Ceiling the readout at "{maxCount}+" so the number stays a tidy single line.
-  const maxCount = resolvePrivacyMaxCount(prefs);
-  const displayCount =
-    trackersToday > maxCount ? `${maxCount}+` : `${trackersToday}`;
 
-  const isEmptyState = trackersToday === 0;
-  const showTip = !isEmptyState;
+  // Message decision chosen by PrivacyFeed's selector (Bug 2050954).
+  const { variant, messageId, icon, countArg, cta, countCeiling } =
+    privacyData ?? {};
   const isLarge = widgetSize === "large";
+
+  // Normally show the real count, only ceiling the readout at "{cap}+"
+  // (default 999) so it stays a tidy few characters. On the daily-cap render
+  // the selector sets countCeiling (100), so that one load shows "100+"; the
+  // next load clears it and the real number returns.
+  const displayCap = resolvePrivacyDisplayCount(prefs);
+  let displayCount = `${trackersToday}`;
+  if (typeof countCeiling === "number") {
+    displayCount = `${countCeiling}+`;
+  } else if (trackersToday > displayCap) {
+    displayCount = `${displayCap}+`;
+  }
+
+  // trackersToday === 0 is the sole trigger for the empty layout. It must not
+  // also key off `variant === "empty"`: a SYSTEM_TICK refreshes the count
+  // without touching `variant`, so a tab opened at zero would stay empty even
+  // after its count climbs, until the next tab re-runs the selector.
+  const isEmptyState = trackersToday === 0;
+  // Streak and tip both use the count + divider + message layout; "blank"
+  // shows the count only (plus a CTA).
+  const isStreak = !isEmptyState && variant === "streak";
+  const isTip = !isEmptyState && variant === "tip";
+  const isBlank = !isEmptyState && variant === "blank";
+  const hasMessage = (isStreak || isTip) && messageId;
+  // Telemetry id for a CTA click. The blank state has no messageId, so give it
+  // a stable, distinguishable id — otherwise its clicks report null and the
+  // most-shown state can't be attributed (Dré).
+  const ctaMessageId = isBlank ? "newtab-privacy-blank" : messageId;
+  // The single icon sits beside the count, except in the large tip layout where
+  // it sits inside the tip.
+  const iconBesideCount = !isEmptyState && !(isTip && isLarge);
+  const iconInTip = isTip && isLarge;
 
   const handleIntersection = useCallback(() => {
     if (impressionFired.current) {
@@ -162,11 +188,75 @@ function Privacy({ dispatch, widgetsMayBeMaximized, widgetEnabledMap }) {
     });
   }
 
+  // Runs the message's CTA. The SpecialMessageAction descriptor lives on the
+  // decision (`cta`); the parent (PrivacyFeed) executes it — content only
+  // forwards it and logs the interaction.
+  function handleCtaClick() {
+    batch(() => {
+      dispatch(
+        ac.OnlyToMain({
+          type: at.WIDGETS_PRIVACY_CTA,
+          data: { action: cta, message_id: ctaMessageId },
+        })
+      );
+      dispatch(
+        ac.OnlyToMain({
+          type: at.WIDGETS_USER_EVENT,
+          data: {
+            widget_name: "privacy",
+            widget_source: "widget",
+            user_action: "message_cta",
+            action_value: ctaMessageId,
+            widget_size: widgetSize,
+          },
+        })
+      );
+    });
+  }
+
+  // The message resolves via its Fluent `messageId` (Bug 2048389); `countArg`
+  // feeds the plural/variable l10n args.
+  const messageEl = className => (
+    <p
+      className={className}
+      data-l10n-id={messageId}
+      data-l10n-args={countArg ? JSON.stringify(countArg) : undefined}
+    />
+  );
+
+  // CTA button for messages that carry one (`cta`); its label is the message's
+  // `-cta` companion Fluent id. Value-only messages render as moz-button text.
+  const ctaButton =
+    cta && messageId ? (
+      <moz-button
+        className="privacy-cta"
+        data-l10n-id={`${messageId}-cta`}
+        onClick={handleCtaClick}
+        size="small"
+        type="primary"
+      />
+    ) : null;
+
+  // The blank state has no tip copy (messageId is null) but still shows a
+  // "View protections" CTA, borrowing info-1's companion label for now.
+  const blankCta =
+    isBlank && cta ? (
+      <moz-button
+        className="privacy-cta"
+        data-l10n-id="newtab-privacy-message-info-1-cta"
+        onClick={handleCtaClick}
+        size="small"
+        type="primary"
+      />
+    ) : null;
+
   return (
     <article
       className={`privacy widget col-4 ${widgetSize}-widget${
         initialized && isEmptyState ? " is-empty" : ""
-      }${initialized && showTip ? " has-tip-msg" : ""}`}
+      }${initialized && isTip ? " has-tip-msg" : ""}${
+        initialized && isStreak ? " has-streak" : ""
+      }`}
       ref={el => {
         widgetRef.current = [el];
       }}
@@ -222,7 +312,9 @@ function Privacy({ dispatch, widgetsMayBeMaximized, widgetEnabledMap }) {
         {initialized &&
           (isEmptyState ? (
             <div className="privacy-empty">
-              {privacyImage("widget-privacy-shield.svg")}
+              {/* Empty state always uses the shield icon — never the decision's
+                  `icon`, which may be a stale shieldCheck from a prior tip. */}
+              {privacyImage("shield")}
               <p
                 className="privacy-empty-message"
                 data-l10n-id="newtab-privacy-empty"
@@ -232,36 +324,48 @@ function Privacy({ dispatch, widgetsMayBeMaximized, widgetEnabledMap }) {
             <>
               <div className="privacy-count">
                 <div className="privacy-count-number-wrapper">
-                  {/* Compact sizes (small, medium): icon beside the count.
-                      Keyed off !isLarge so a future "small" needs no change. */}
-                  {!isLarge && privacyImage("widget-privacy-shield-check.svg")}
+                  {/* The single icon sits beside the count, except in the large
+                      tip layout where it moves into the tip. */}
+                  {iconBesideCount && privacyImage(icon || "shieldCheck")}
                   <span className="privacy-count-number">{displayCount}</span>
                 </div>
 
-                <span
-                  className="privacy-count-label"
-                  data-l10n-id="newtab-privacy-trackers-blocked-today"
-                  data-l10n-args={JSON.stringify({ count: trackersToday })}
-                />
-                <span
-                  className="privacy-count-sites"
-                  data-l10n-id="newtab-privacy-across-sites"
-                  data-l10n-args={JSON.stringify({ count: sitesToday })}
-                />
+                <div className="privacy-count-text">
+                  <span
+                    className="privacy-count-label"
+                    data-l10n-id="newtab-privacy-trackers-blocked-today"
+                    data-l10n-args={JSON.stringify({ count: trackersToday })}
+                  />
+                  <span
+                    className="privacy-count-sites"
+                    data-l10n-id="newtab-privacy-across-sites"
+                    data-l10n-args={JSON.stringify({ count: sitesToday })}
+                  />
+                </div>
               </div>
-              {showTip && (
+              {isStreak && hasMessage && (
                 <>
                   <hr className="privacy-divider" />
-                  <div className="privacy-tip">
-                    {/* Large only: icon sits inside the tip. */}
-                    {isLarge && privacyImage("widget-privacy-shield-check.svg")}
-                    <p
-                      className="privacy-tip-message"
-                      data-l10n-id="newtab-privacy-message-informed-5"
-                    />
+                  <div className="privacy-streak">
+                    {messageEl("privacy-tip-message")}
+                    {ctaButton}
                   </div>
                 </>
               )}
+              {isTip && hasMessage && (
+                <>
+                  <hr className="privacy-divider" />
+                  <div className="privacy-tip">
+                    {iconInTip && privacyImage(icon || "shieldCheck")}
+                    <div className="privacy-tip-content">
+                      {messageEl("privacy-tip-message")}
+                      {ctaButton}
+                    </div>
+                  </div>
+                </>
+              )}
+              {/* Blank: count only, but still a "View protections" CTA. */}
+              {blankCta}
             </>
           ))}
       </div>

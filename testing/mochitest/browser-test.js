@@ -11,10 +11,13 @@ var { AppConstants } = ChromeUtils.importESModule(
   "resource://gre/modules/AppConstants.sys.mjs"
 );
 
-var { uploadProfileArtifact, installProfilerDumpAndQuit } =
-  ChromeUtils.importESModule(
-    "resource://testing-common/TestProfilerArtifact.sys.mjs"
-  );
+var {
+  uploadProfileArtifact,
+  installProfilerDumpAndQuit,
+  shouldSaveFailureProfile,
+} = ChromeUtils.importESModule(
+  "resource://testing-common/TestProfilerArtifact.sys.mjs"
+);
 
 ChromeUtils.defineESModuleGetters(this, {
   AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
@@ -960,15 +963,10 @@ Tester.prototype = {
   },
 
   async notifyProfilerOfTestEnd() {
-    // See if we should upload a profile of a failing test.
-    // If MOZ_PROFILER_SHUTDOWN is set, the profiler got started from --profiler
-    // and a profile will be shown even if there's no test failure.
-    if (
-      this.currentTest.failCount &&
-      Services.env.exists("MOZ_UPLOAD_DIR") &&
-      !Services.env.exists("MOZ_PROFILER_SHUTDOWN") &&
-      Services.profiler.IsActive()
-    ) {
+    // Upload a profile of a failing test, when one should be saved (e.g. not
+    // when --profiler already saves a shutdown profile; see
+    // shouldSaveFailureProfile).
+    if (this.currentTest.failCount && shouldSaveFailureProfile()) {
       await uploadProfileArtifact(this.currentTest.path, this.structuredLogger);
     }
   },

@@ -6716,6 +6716,10 @@ MDefinition* MFunctionEnvironment::foldsTo(TempAllocator& alloc) {
 }
 
 static bool AddIsANonZeroAdditionOf(MAdd* add, MDefinition* ins) {
+  if (add->type() != MIRType::Int32 && add->type() != MIRType::Double) {
+    return false;
+  }
+
   if (add->lhs() != ins && add->rhs() != ins) {
     return false;
   }

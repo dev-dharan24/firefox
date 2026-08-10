@@ -24,6 +24,9 @@ const STYLE_INSPECTOR_L10N = new LocalizationHelper(
   "devtools/shared/locales/styleinspector.properties"
 );
 
+const InactiveCssTooltipHelper = require("resource://devtools/client/shared/widgets/tooltip/inactive-css-tooltip-helper.js");
+const CssCompatibilityTooltipHelper = require("resource://devtools/client/shared/widgets/tooltip/css-compatibility-tooltip-helper.js");
+
 /**
  * When a tooltip is closed, this ends up "commiting" the value changed within
  * the tooltip (e.g. the color in case of a colorpicker) which, in turn, ends up
@@ -1011,9 +1014,11 @@ async function checkInteractiveTooltip(view, type, ruleIndex, declaration) {
   // Get the necessary tooltip helper to fetch the Fluent template.
   let tooltipHelper;
   if (type === "inactive-css-tooltip") {
-    tooltipHelper = view.tooltips.inactiveCssTooltipHelper;
+    tooltipHelper = new InactiveCssTooltipHelper(data, tooltip);
+  } else if (type === "compatibility-tooltip") {
+    tooltipHelper = new CssCompatibilityTooltipHelper();
   } else {
-    tooltipHelper = view.tooltips.compatibilityTooltipHelper;
+    throw new Error(`Unsupported "${type}" tooltip`);
   }
 
   // Get the HTML template.

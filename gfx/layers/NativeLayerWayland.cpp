@@ -1326,26 +1326,32 @@ void NativeLayerWaylandRender::ReadBackFrontBuffer(
   if (!copyRegion.IsEmpty()) {
     if (mSurfacePoolHandle->gl()) {
       mSurfacePoolHandle->gl()->MakeCurrent();
+      Maybe<GLuint> sourceFB =
+          mSurfacePoolHandle->GetFramebufferForBuffer(mFrontBuffer, false);
+      MOZ_DIAGNOSTIC_ASSERT(sourceFB,
+                            "NativeLayerWaylandRender: Failed to get "
+                            "mFrontBuffer framebuffer!");
+      if (!sourceFB) {
+        return;
+      }
+      Maybe<GLuint> destFB =
+          mSurfacePoolHandle->GetFramebufferForBuffer(mInProgressBuffer, false);
+      MOZ_DIAGNOSTIC_ASSERT(destFB,
+                            "NativeLayerWaylandRender: Failed to get "
+                            "mInProgressBuffer framebuffer!");
+      if (!destFB) {
+        return;
+      }
+
+      mSurfacePoolHandle->gl()->fBindFramebuffer(LOCAL_GL_READ_FRAMEBUFFER,
+                                                 sourceFB.value());
+      mSurfacePoolHandle->gl()->fBindFramebuffer(LOCAL_GL_DRAW_FRAMEBUFFER,
+                                                 destFB.value());
+
       for (auto iter = copyRegion.RectIter(); !iter.Done(); iter.Next()) {
         gfx::IntRect r = iter.Get();
-        Maybe<GLuint> sourceFB =
-            mSurfacePoolHandle->GetFramebufferForBuffer(mFrontBuffer, false);
-        MOZ_DIAGNOSTIC_ASSERT(sourceFB,
-                              "NativeLayerWaylandRender: Failed to get "
-                              "mFrontBuffer framebuffer!");
-        if (!sourceFB) {
-          return;
-        }
-        Maybe<GLuint> destFB = mSurfacePoolHandle->GetFramebufferForBuffer(
-            mInProgressBuffer, false);
-        MOZ_DIAGNOSTIC_ASSERT(destFB,
-                              "NativeLayerWaylandRender: Failed to get "
-                              "mInProgressBuffer framebuffer!");
-        if (!destFB) {
-          return;
-        }
-        mSurfacePoolHandle->gl()->BlitHelper()->BlitFramebufferToFramebuffer(
-            sourceFB.value(), destFB.value(), r, r, LOCAL_GL_NEAREST);
+        mSurfacePoolHandle->gl()->BlitHelper()->BlitFramebuffer(
+            r, r, LOCAL_GL_NEAREST);
       }
     } else {
       RefPtr<gfx::DataSourceSurface> dataSourceSurface =

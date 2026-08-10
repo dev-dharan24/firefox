@@ -8,9 +8,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AddonRepository: "resource://gre/modules/addons/AddonRepository.sys.mjs",
 });
 
-export const TESTING_XPI_BASE_URL =
-  "browser.theme.testing.extraThemesXPIBaseUrl";
-
 /**
  * @typedef {string} ThemesInstallSource
  *   Telemetry source string recorded when a theme is installed (e.g. "about:addons",
@@ -311,27 +308,14 @@ class ThemesList {
         return true;
       }
 
-      let installUrl;
-      let installName;
-      // TODO(Bug 2053220): restrict use of this testing url pref to non-release channels.
-      const testingBaseUrl = Services.prefs.getStringPref(
-        TESTING_XPI_BASE_URL,
-        ""
-      );
-      if (testingBaseUrl) {
-        installUrl = `${testingBaseUrl}/${themeId}.xpi`;
-        installName = themeId;
-      } else {
-        const [repoAddon] = await lazy.AddonRepository.getAddonsByIDs([
-          themeId,
-        ]);
-        if (!repoAddon?.sourceURI) {
-          console.error("Unable to resolve the XPI url for the theme", themeId);
-          return false;
-        }
-        installUrl = repoAddon.sourceURI.spec;
-        installName = repoAddon.name;
+      const [repoAddon] = await lazy.AddonRepository.getAddonsByIDs([themeId]);
+      if (!repoAddon?.sourceURI) {
+        console.error("Unable to resolve the XPI url for the theme", themeId);
+        return false;
       }
+
+      const installUrl = repoAddon.sourceURI.spec;
+      const installName = repoAddon.name;
 
       install = await lazy.AddonManager.getInstallForURL(installUrl, {
         name: installName,

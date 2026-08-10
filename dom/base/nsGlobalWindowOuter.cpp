@@ -915,7 +915,7 @@ bool nsOuterWindowProxy::get(JSContext* cx, JS::Handle<JSObject*> proxy,
                              JS::MutableHandle<JS::Value> vp) const {
   if (id == GetJSIDByIndex(cx, XPCJSContext::IDX_WRAPPED_JSOBJECT) &&
       xpc::AccessCheck::isChrome(js::GetContextCompartment(cx))) {
-    vp.set(JS::ObjectValue(*proxy));
+    vp.setObject(*proxy);
     return MaybeWrapValue(cx, vp);
   }
 
@@ -5409,8 +5409,12 @@ void nsGlobalWindowOuter::ResizeByOuter(int32_t aWidthDif, int32_t aHeightDif,
   auto scale = CSSToDevScaleForBaseWindow(treeOwnerAsWin);
   CSSIntSize cssSize = RoundedToInt(size / scale);
 
-  cssSize.width += aWidthDif;
-  cssSize.height += aHeightDif;
+  // The deltas come from content and can be large enough to overflow a 32-bit
+  // add, so do the arithmetic in 64 bits and keep the result in range.
+  cssSize.width = int32_t(
+      std::clamp<int64_t>(int64_t(cssSize.width) + aWidthDif, 0, INT32_MAX));
+  cssSize.height = int32_t(
+      std::clamp<int64_t>(int64_t(cssSize.height) + aHeightDif, 0, INT32_MAX));
 
   if (mBrowsingContext->GetIsDocumentPiP()) {
     if (Maybe<CSSIntRect> screen =

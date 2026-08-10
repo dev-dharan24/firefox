@@ -33,6 +33,7 @@
     outline: unset;
   }
 
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   &.ellipsis-text:has(> a:focus-visible) {
     outline: var(--focus-outline);
     outline-offset: var(--link-focus-outline-offset);

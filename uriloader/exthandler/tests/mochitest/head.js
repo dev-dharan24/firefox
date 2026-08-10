@@ -295,10 +295,26 @@ async function waitForProtocolDialog(browser, state) {
   return dialog;
 }
 
+/**
+ * Promise that resolves when a download is added to the list and then
+ * finishes. Note: will ignore downloads already present when this is called,
+ * so make sure to call it before starting/creating your download.
+ */
 async function promiseDownloadFinished(list, stopFromOpening) {
   return new Promise(resolve => {
-    list.addView({
+    // Downloads already in the list must be ignored: otherwise a later,
+    // unrelated change to one of them (e.g. from a previous caller cleaning
+    // up its file) would be mistaken for the completion of the download this
+    // call is actually waiting for.
+    let preExistingDownloads = new Set();
+    let view = {
+      onDownloadAdded(download) {
+        preExistingDownloads.add(download);
+      },
       onDownloadChanged(download) {
+        if (preExistingDownloads.has(download)) {
+          return;
+        }
         if (stopFromOpening) {
           download.launchWhenSucceeded = false;
         }
@@ -309,7 +325,11 @@ async function promiseDownloadFinished(list, stopFromOpening) {
           resolve(download);
         }
       },
-    });
+    };
+    list.addView(view);
+    // onDownloadAdded has now been called for every pre-existing download;
+    // remove it so it doesn't also swallow the new download we're waiting for.
+    delete view.onDownloadAdded;
   });
 }
 

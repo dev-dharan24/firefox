@@ -8834,7 +8834,7 @@ void nsDisplayDestination::Paint(nsDisplayListBuilder* aBuilder,
 
 void nsDisplayAccessibleId::Paint(nsDisplayListBuilder* aBuilder,
                                   gfxContext* aCtx) {
-  aCtx->GetDrawTarget()->AccessibleId(mBrowsingContextId, mAccId);
+  aCtx->GetDrawTarget()->AccessibleId(mInnerWindowId, mAccId);
 }
 
 void nsDisplayListCollection::SerializeWithCorrectZOrder(

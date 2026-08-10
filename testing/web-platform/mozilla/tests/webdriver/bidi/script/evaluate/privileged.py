@@ -1,4 +1,4 @@
-# META timeout=long
+# META: timeout=long
 
 import tempfile
 from copy import deepcopy

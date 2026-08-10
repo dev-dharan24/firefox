@@ -936,11 +936,16 @@ Result<EditActionResult, nsresult> HTMLEditor::HTMLWithContextInserter::Run(
     return EditActionResult::HandledResult();
   }
 
+  MOZ_ASSERT(insertNodeResult.HasCaretPointSuggestion());
+  EditorDOMPoint pointToPutCaret = insertNodeResult.UnwrapCaretPoint();
+
   if (MOZ_LIKELY(insertNodeResult.GetNewNode()->IsInComposedDoc())) {
     const auto afterLastInsertedContent =
         EditorRawDOMPoint(insertNodeResult.GetNewNode())
             .NextPointOrAfterContainer<EditorDOMPoint>();
     if (MOZ_LIKELY(afterLastInsertedContent.IsInContentNode())) {
+      AutoTrackDOMPoint trackPointToPutCaret(mHTMLEditor.RangeUpdaterRef(),
+                                             &pointToPutCaret);
       nsresult rv = mHTMLEditor.EnsureNoFollowingUnnecessaryLineBreak(
           afterLastInsertedContent,
           // When user inserting content, the web app may expect that nothing
@@ -956,15 +961,17 @@ Result<EditActionResult, nsresult> HTMLEditor::HTMLWithContextInserter::Run(
     }
   }
 
-  MOZ_ASSERT(insertNodeResult.HasCaretPointSuggestion());
-  rv = insertNodeResult.SuggestCaretPointTo(
-      mHTMLEditor, {SuggestCaret::AndIgnoreTrivialError});
-  if (NS_FAILED(rv)) {
-    NS_WARNING("CaretPoint::SuggestCaretPointTo() failed");
-    return Err(rv);
+  if (NS_WARN_IF(!pointToPutCaret.IsSetAndValidInComposedDoc())) {
+    return Err(NS_ERROR_EDITOR_UNEXPECTED_DOM_TREE);
   }
-  NS_WARNING_ASSERTION(rv != NS_SUCCESS_EDITOR_BUT_IGNORED_TRIVIAL_ERROR,
-                       "CaretPoint::SuggestCaretPointTo() failed, but ignored");
+  rv = mHTMLEditor.CollapseSelectionTo(pointToPutCaret);
+  if (MOZ_UNLIKELY(rv == NS_ERROR_EDITOR_DESTROYED)) {
+    NS_WARNING(
+        "EditorBase::CollapseSelectionTo() caused destroying the editor");
+    return Err(NS_ERROR_EDITOR_DESTROYED);
+  }
+  NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
+                       "EditorBase::CollapseSelectionTo() failed, but ignored");
 
   // If we didn't start from an `<a href>` element, we should not keep
   // caret in the link to make users type something outside the link.
@@ -978,13 +985,17 @@ Result<EditActionResult, nsresult> HTMLEditor::HTMLWithContextInserter::Run(
       return EditActionResult::HandledResult();
     }
 
-    nsresult rv =
-        MoveCaretOutsideOfLink(*linkElement, insertNodeResult.CaretPointRef());
-    if (NS_FAILED(rv)) {
-      NS_WARNING(
-          "HTMLEditor::HTMLWithContextInserter::MoveCaretOutsideOfLink() "
-          "failed");
-      return Err(rv);
+    // Note that the caret point may be outside the found link. So, let's check
+    // it before trying to split the link.
+    if (linkElement->IsInclusiveDescendantOf(pointToPutCaret.GetContainer()))
+        [[likely]] {
+      nsresult rv = MoveCaretOutsideOfLink(*linkElement, pointToPutCaret);
+      if (NS_FAILED(rv)) {
+        NS_WARNING(
+            "HTMLEditor::HTMLWithContextInserter::MoveCaretOutsideOfLink() "
+            "failed");
+        return Err(rv);
+      }
     }
   }
 
@@ -1251,9 +1262,6 @@ HTMLEditor::HTMLWithContextInserter::InsertContents(
                             : EditorDOMPoint::AtEndOf(std::move(parentNode));
             MOZ_ASSERT(pointToInsert.IsSetAndValidInComposedDoc());
           }
-          NS_WARNING(nsPrintfCString("%s into %s", ToString(*child).c_str(),
-                                     ToString(pointToInsert).c_str())
-                         .get());
           Result<CreateContentResult, nsresult> moveChildResult =
               mHTMLEditor
                   .InsertNodeIntoProperAncestorWithTransaction<nsIContent>(
@@ -1399,13 +1407,9 @@ nsresult HTMLEditor::HTMLWithContextInserter::MoveCaretOutsideOfLink(
       mHTMLEditor.SplitNodeDeepWithTransaction(
           aLinkElement, aPointToPutCaret,
           SplitAtEdges::eDoNotCreateEmptyContainer);
-  if (MOZ_UNLIKELY(splitLinkResult.isErr())) {
-    if (splitLinkResult.inspectErr() == NS_ERROR_EDITOR_DESTROYED) {
-      NS_WARNING("HTMLEditor::SplitNodeDeepWithTransaction() failed");
-      return NS_ERROR_EDITOR_DESTROYED;
-    }
-    NS_WARNING(
-        "HTMLEditor::SplitNodeDeepWithTransaction() failed, but ignored");
+  if (splitLinkResult.isErr()) [[unlikely]] {
+    NS_WARNING("HTMLEditor::SplitNodeDeepWithTransaction() failed");
+    return splitLinkResult.unwrapErr();
   }
 
   if (nsIContent* previousContentOfSplitPoint =

@@ -30,6 +30,11 @@ support-files = [
 ]
 tags = ["portal"]
 
+["test_isOneClickSetDefaultEnabled.js"]
+run-if = [
+  "os == 'win'",
+]
+
 ["test_linuxDesktopEntry.js"]
 run-if = [
   "os == 'linux'",

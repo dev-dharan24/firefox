@@ -8,6 +8,14 @@ const novaEnabled = Services.prefs.getBoolPref(
 
 info(`Run with Nova browser styles ${novaEnabled ? "enabled" : "disabled"}`);
 
+// Some linux WMs can't draw alpha-transparent rounded corners, so the panel
+// falls back to square corners regardless of Nova (see the -moz-platform and
+// -moz-gtk-csd-transparency-available checks in popup.css and
+// extension-popup-panel.css).
+const isLinuxWithoutCSDTransparency =
+  AppConstants.platform == "linux" &&
+  !window.matchMedia("(-moz-gtk-csd-transparency-available)").matches;
+
 add_task(async function testPopupBorderRadius() {
   let extension = ExtensionTestUtils.loadExtension({
     background() {
@@ -44,10 +52,15 @@ add_task(async function testPopupBorderRadius() {
 
   let defaultRadius = novaEnabled ? "24px" : "8px";
 
-  // If the panel doesn't allows embedding in subview then
-  // radius will be 0, otherwise 8.  In practice we always
-  // disallow subview.
-  let expectedRadius = widget.disallowSubView ? defaultRadius : "0px";
+  // If the panel is embedded in subview (in practive we always disallow
+  // subviews since the extensions action button can't be overflowed in
+  // the default overfow panel), or Firefox is running on a Linux WMs that
+  // can't draw alpha-transparent rounded corners, then the panel radius
+  // is expected to be 0.
+  let expectedRadius =
+    !widget.disallowSubView || isLinuxWithoutCSDTransparency
+      ? "0px"
+      : defaultRadius;
 
   async function testPanel(browser, standAlone = true) {
     let panel = getPanelForNode(browser);
@@ -82,19 +95,23 @@ add_task(async function testPopupBorderRadius() {
         is(
           viewStyle[prop],
           panelStyle[prop],
-          `Panel and view ${prop} should be the same`
+          `Panel and view ${prop} should be the same (${expectedRadius})`
         );
         is(
           bodyStyle.get(prop),
           panelStyle[prop],
-          `Panel and body ${prop} should be the same`
+          `Panel and body ${prop} should be the same (${expectedRadius})`
         );
       } else {
-        is(viewStyle[prop], expectedRadius, `View node ${prop} should be 0px`);
+        is(
+          viewStyle[prop],
+          expectedRadius,
+          `View node ${prop} should be ${expectedRadius}`
+        );
         is(
           bodyStyle.get(prop),
           expectedRadius,
-          `Body node ${prop} should be 0px`
+          `Body node ${prop} should be ${expectedRadius}`
         );
       }
     }

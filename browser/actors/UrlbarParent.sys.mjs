@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { blobAsDataURL } from "moz-src:///toolkit/modules/FaviconUtils.sys.mjs";
+
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -115,6 +117,15 @@ export class UrlbarParent extends JSWindowActorParent {
       case "RecordAutofillBackspace":
         controller.recordAutofillBackspace(message.data.url);
         break;
+      case "RecordAutofillDeletion":
+        controller.recordAutofillDeletion();
+        break;
+      case "ClearAutofillBackspaceEntryForUrl":
+        controller.clearAutofillBackspaceEntryForUrl(message.data.url);
+        break;
+      case "HandleAutofillReintegration":
+        controller.handleAutofillReintegration(message.data.url);
+        break;
       case "RecordSearchMode":
         controller.recordSearchMode(message.data.searchMode);
         break;
@@ -152,6 +163,11 @@ export class UrlbarParent extends JSWindowActorParent {
           message.data.reason
         );
         break;
+      case "DismissAutofill":
+        return controller.dismissAutofill(
+          message.data.url,
+          message.data.action
+        );
       case "LoadURL":
         return controller.loadURL(message.data.loadData);
       case "FocusBrowser":
@@ -190,7 +206,10 @@ export class UrlbarParent extends JSWindowActorParent {
         controller.initEngineStore();
         break;
       case "GetEngineIconURL":
-        return controller.getEngineIconURL(message.data.engineId);
+        return this.#getSerializableEngineIcon(
+          controller,
+          message.data.engineId
+        );
       case "MarkEngineAsUsed":
         controller.markEngineAsUsed(message.data.engineId);
         break;
@@ -199,18 +218,47 @@ export class UrlbarParent extends JSWindowActorParent {
           message.data.engineId,
           message.data.searchTerms,
           message.data.where,
-          message.data.inBackground
+          message.data.inBackground,
+          message.data.browserId
         );
         break;
       case "OpenSearchForm":
         controller.openSearchForm(
           message.data.engineId,
           message.data.where,
-          message.data.inBackground
+          message.data.inBackground,
+          message.data.browserId
         );
         break;
     }
     return undefined;
+  }
+
+  /**
+   * Returns an engine's icon URL in a form that resolves in the child's
+   * process.
+   *
+   * @param {UrlbarParentController} controller
+   * @param {string} engineId
+   * @returns {Promise<?string>}
+   *   The icon URL, or null if the engine or its icon could not be found.
+   */
+  async #getSerializableEngineIcon(controller, engineId) {
+    let url = await controller.getEngineIconURL(engineId);
+
+    // A blob URL only resolves in the process that created it, so the icon
+    // travels as a data URL instead.
+    if (!url?.startsWith("blob:")) {
+      return url;
+    }
+
+    try {
+      let response = await fetch(url);
+      return await blobAsDataURL(await response.blob());
+    } catch (ex) {
+      console.error(`Could not read the icon of engine ${engineId}`, ex);
+      return null;
+    }
   }
 
   didDestroy() {
@@ -325,6 +373,10 @@ class ViewProxy {
 
   acknowledgeFeedback(result) {
     this.#invoke("acknowledgeFeedback", [result.toWire()]);
+  }
+
+  clearTopSitesCache() {
+    this.#invoke("clearTopSitesCache", []);
   }
 
   close(options) {

@@ -2489,10 +2489,6 @@ add_task(async function activeNotifications_default_prompt_shown() {
 
   const win = await BrowserTestUtils.openNewBrowserWindow();
 
-  let visibilityChange = new Promise(res =>
-    win.document.addEventListener("visibilitychange", res, { once: true })
-  );
-
   sb.stub(DefaultBrowserCheck, "willCheckDefaultBrowser").returns(true);
   const promptSpy = sb.spy(DefaultBrowserCheck, "prompt");
 
@@ -2500,15 +2496,31 @@ add_task(async function activeNotifications_default_prompt_shown() {
 
   Assert.equal(promptSpy.callCount, 1, "default prompt should be called");
 
-  // activeNotifications are updated by visibilitychanges, so make sure we get
-  // one before testing it.
-  await visibilityChange;
+  // BrowserGlue doesn't await the prompt, and the dialog only opens after
+  // some some async things happen (eg pin checks, localization), so we should
+  // wait for it to actually be showing in the window that received it
+  const [promptWin] = promptSpy.firstCall.args;
+  await TestUtils.waitForCondition(
+    () => promptWin.gDialogBox?.isOpen,
+    "Waiting for the default browser prompt to open",
+    100,
+    100
+  );
+  // activeNotifications only inspects the top window, so make sure that's the
+  // window showing the prompt.
+  await SimpleTest.promiseFocus(promptWin);
 
   is(
     await ASRouterTargeting.Environment.activeNotifications,
     true,
     "activeNotifications should be true if the set to default prompt is being shown"
   );
+  let dialogClosed = BrowserTestUtils.waitForEvent(
+    promptWin,
+    "DOMModalDialogClosed"
+  );
+  promptWin.gDialogBox.dialog?.close();
+  await dialogClosed;
   await BrowserTestUtils.closeWindow(win);
   sb.restore();
 });

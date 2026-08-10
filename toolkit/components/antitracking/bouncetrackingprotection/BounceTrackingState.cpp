@@ -631,6 +631,32 @@ BounceTrackingState::OnContentBlockingEvent(nsIWebProgress* aWebProgress,
   return NS_OK;
 }
 
+// Site host of aWindowContext's top level document. False if that document is
+// no longer the current one or is not a principal we track.
+static bool GetTopLevelSiteHost(dom::WindowContext* aWindowContext,
+                                nsACString& aSiteHost) {
+  if (!aWindowContext) {
+    return false;
+  }
+  dom::WindowContext* topWindowContext = aWindowContext->TopWindowContext();
+  if (!topWindowContext || !topWindowContext->IsCurrent()) {
+    return false;
+  }
+
+  nsIPrincipal* principal = topWindowContext->Canonical()->DocumentPrincipal();
+  if (!principal || !BounceTrackingState::ShouldTrackPrincipal(principal)) {
+    return false;
+  }
+
+  nsAutoCString siteHost;
+  if (NS_WARN_IF(NS_FAILED(principal->GetBaseDomain(siteHost)))) {
+    return false;
+  }
+
+  aSiteHost = siteHost;
+  return true;
+}
+
 nsresult BounceTrackingState::OnStartNavigation(
     nsIPrincipal* aTriggeringPrincipal,
     const bool aHasValidUserGestureActivation, uint64_t aLoadId) {
@@ -673,7 +699,7 @@ nsresult BounceTrackingState::OnStartNavigation(
   // Obtain the (schemeless) site to keep track of bounces.
   nsAutoCString siteHost;
 
-  // If origin is an opaque origin, set initialHost to empty host. Strictly
+  // If origin is an opaque origin, set siteHost to empty host. Strictly
   // speaking we only need to check IsNullPrincipal, but we're generally only
   // interested in content principals with http/s scheme. Other principal types
   // or schemes are not considered to be trackers.
@@ -687,6 +713,26 @@ nsresult BounceTrackingState::OnStartNavigation(
     }
   }
 
+  // RecordStatefulBounces exempts the initial host, so it must be the site this
+  // context is leaving, not the initiator's, otherwise a frame which navigates
+  // the top level exempts itself. Both reads are at commit time. A context with
+  // no committed document was opened by this navigation; use its opener, not
+  // the initiator, which can resolve back into it and name the frame again.
+  nsAutoCString initialSiteHost;
+  if (RefPtr<dom::BrowsingContext> browsingContext = CurrentBrowsingContext()) {
+    if (browsingContext->GetHasLoadedNonInitialDocument()) {
+      GetTopLevelSiteHost(browsingContext->GetCurrentWindowContext(),
+                          initialSiteHost);
+    } else if (RefPtr<dom::BrowsingContext> opener =
+                   browsingContext->GetOpener()) {
+      GetTopLevelSiteHost(opener->GetCurrentWindowContext(), initialSiteHost);
+    }
+  }
+
+  MOZ_LOG_FMT(gBounceTrackingProtectionLog, LogLevel::Debug,
+              "{}: siteHost: {}, initialSiteHost: {}", __FUNCTION__, siteHost,
+              initialSiteHost);
+
   // If sourceSnapshotParams’s has transient activation is true,
   // we initialize a new bounce tracking record with the initialHost
   // having been activated. Also treat system principal navigation as
@@ -699,7 +745,7 @@ nsresult BounceTrackingState::OnStartNavigation(
   // initialHost.
   if (!mBounceTrackingRecord) {
     mBounceTrackingRecord = MakeRefPtr<BounceTrackingRecord>();
-    mBounceTrackingRecord->SetInitialHost(siteHost);
+    mBounceTrackingRecord->SetInitialHost(initialSiteHost);
     if (hasUserActivation) {
       mBounceTrackingRecord->AddUserActivationHost(siteHost);
     }
@@ -722,7 +768,9 @@ nsresult BounceTrackingState::OnStartNavigation(
 
     MOZ_ASSERT(!mBounceTrackingRecord);
     mBounceTrackingRecord = MakeRefPtr<BounceTrackingRecord>();
-    mBounceTrackingRecord->SetInitialHost(siteHost);
+    mBounceTrackingRecord->SetInitialHost(initialSiteHost);
+    // Not initialSiteHost: the user activation set feeds
+    // DynamicFpiNavigationHeuristic, which wants the site interacted with.
     mBounceTrackingRecord->AddUserActivationHost(siteHost);
 
     return NS_OK;

@@ -1430,58 +1430,12 @@ system.os:
       - update
       - third-party-modules
 
-  service_pack_major:
-    type: quantity
-    unit: version
-    lifetime: application
-    description: |
-      The Windows service pack's major version, according to WindowsVersionInfo.
-      Windows only.
-      e.g. 0
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1950409
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1950409
-    data_sensitivity:
-      - technical
-    notification_emails:
-      - gijs@mozilla.com
-    expires: never
-    send_in_pings:
-      - metrics
-      - sync
-      - update
-      - third-party-modules
-
-  service_pack_minor:
-    type: quantity
-    unit: version
-    lifetime: application
-    description: |
-      The Windows service pack's minor version, according to WindowsVersionInfo.
-      Windows only.
-      e.g. 0
-    bugs:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1950409
-    data_reviews:
-      - https://bugzilla.mozilla.org/show_bug.cgi?id=1950409
-    data_sensitivity:
-      - technical
-    notification_emails:
-      - gijs@mozilla.com
-    expires: never
-    send_in_pings:
-      - metrics
-      - sync
-      - update
-      - third-party-modules
-
   windows_build_number:
     type: quantity
     unit: build number
     lifetime: application
     description: |
-      The Windows build number, according to WindowsVersionInfo.
+      The Windows build number, according to 'CurrentBuild' in the Windows registry.
       Windows only.
       e.g. 26100
       Expected in most cases to be identical to `client_info.windows_build_number`.

@@ -6,6 +6,7 @@ package org.mozilla.fenix.ui.efficiency.selectors
 
 import org.mozilla.fenix.R
 import org.mozilla.fenix.compose.snackbar.SNACKBAR_BUTTON_TEST_TAG
+import org.mozilla.fenix.compose.snackbar.SNACKBAR_TEST_TAG
 import org.mozilla.fenix.helpers.DataGenerationHelper.getStringResource
 import org.mozilla.fenix.helpers.TestHelper.shortAppName
 import org.mozilla.fenix.ui.efficiency.helpers.Selector
@@ -31,6 +32,13 @@ object BrowserPageSelectors {
         value = SNACKBAR_BUTTON_TEST_TAG,
         description = "Snackbar Edit button",
         groups = listOf("snackbar"),
+    )
+
+    val SNACKBAR = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+        value = SNACKBAR_TEST_TAG,
+        description = "Snackbar container",
+        groups = listOf(),
     )
 
     val MAIN_MENU_BUTTON = Selector(
@@ -86,6 +94,13 @@ object BrowserPageSelectors {
         groups = listOf(),
     )
 
+    val TRANSLATION_SHEET = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR2_BY_RES,
+        value = "design_bottom_sheet",
+        description = "Translation bottom sheet",
+        groups = listOf("notTranslatedPageTranslationSheet"),
+    )
+
     val TRANSLATION_SHEET_TITLE = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.translations_bottom_sheet_title_first_time, argument = shortAppName),
@@ -114,6 +129,13 @@ object BrowserPageSelectors {
         groups = listOf("notTranslatedPageTranslationSheet"),
     )
 
+    val TRANSLATION_SHEET_NOT_NOW_BUTTON = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_TEXT,
+        value = getStringResource(R.string.translations_bottom_sheet_negative_button),
+        description = "Translation bottom sheet not now button",
+        groups = listOf("notTranslatedPageTranslationSheet"),
+    )
+
     val TRANSLATION_SHEET_SHOW_ORIGINAL_BUTTON = Selector(
         strategy = SelectorStrategy.COMPOSE_BY_TEXT,
         value = getStringResource(R.string.translations_bottom_sheet_negative_button_restore),
@@ -138,11 +160,72 @@ object BrowserPageSelectors {
         groups = listOf(),
     )
 
+    val USERNAME_WEB_FIELD = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+        value = "username",
+        description = "Web form username field",
+        groups = listOf(),
+    )
+
+    val PASSWORD_WEB_FIELD = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+        value = "password",
+        description = "Web form password field",
+        groups = listOf(),
+    )
+
+    val TOGGLE_PASSWORD_WEB_BUTTON = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_COMPOSE_TAG,
+        value = "togglePassword",
+        description = "Web form show-password toggle",
+        groups = listOf(),
+    )
+
+    @Suppress("ktlint:standard:function-naming", "FunctionName")
+    fun PREFILLED_USERNAME(text: String = "") = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_WEB_ID_AND_TEXT,
+        value = "username",
+        secondaryValue = text,
+        description = "Web form username prefilled with '$text'",
+        groups = listOf(),
+    )
+
+    @Suppress("ktlint:standard:function-naming", "FunctionName")
+    fun PREFILLED_PASSWORD(text: String = "") = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_WEB_ID_AND_TEXT,
+        value = "password",
+        secondaryValue = text,
+        description = "Web form password prefilled with '$text'",
+        groups = listOf(),
+    )
+
+    val SUGGESTED_LOGINS_BAR = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR2_BY_RES,
+        value = "loginSelectBar",
+        description = "Suggested logins bar",
+        groups = listOf(),
+    )
+
+    @Suppress("ktlint:standard:function-naming", "FunctionName")
+    fun SUGGESTED_LOGIN(username: String = "") = Selector(
+        strategy = SelectorStrategy.COMPOSE_BY_TEXT,
+        value = username,
+        description = "Suggested login '$username'",
+        groups = listOf(),
+    )
+
     // Save-login prompt is an app View (package-prefixed res-id).
     val SAVE_LOGIN_PROMPT = Selector(
         strategy = SelectorStrategy.UIAUTOMATOR_WITH_RES_ID,
         value = "feature_prompt_login_fragment",
         description = "Save-login prompt",
+        groups = listOf(),
+    )
+
+    val SAVE_LOGIN_PROMPT_CONFIRM_BUTTON = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR2_BY_RES,
+        value = "save_confirm",
+        description = "Save-login prompt: confirm (Save/Update) button",
         groups = listOf(),
     )
 
@@ -205,30 +288,50 @@ object BrowserPageSelectors {
         groups = listOf(),
     )
 
+    val STAY_IN_FIREFOX_PROMPT_BUTTON = Selector(
+        strategy = SelectorStrategy.UIAUTOMATOR_WITH_TEXT_CONTAINS,
+        value = "Stay in",
+        description = "Applinks prompt 'Stay in Firefox' button",
+        groups = listOf(),
+    )
+
     val all = listOf(
-        SUBMIT_LOGIN_BUTTON,
-        SAVE_LOGIN_PROMPT,
-        ADDRESS_STREET_WEB_FIELD,
+        ADDED_TO_SHORTCUTS_SNACKBAR_TEXT,
         ADDRESS_CITY_WEB_FIELD,
         ADDRESS_COUNTRY_WEB_FIELD,
-        SELECT_ADDRESS_HEADER,
+        ADDRESS_STREET_WEB_FIELD,
         ADDRESS_SUGGESTION(),
         AUTOFILLED_STREET_ADDRESS(),
         ENGINE_VIEW,
+        MAIN_MENU_BUTTON,
         PAGE_CONTENT,
+        PAGE_CONTENT(),
+        PASSWORD_WEB_FIELD,
+        PREFILLED_PASSWORD(),
+        PREFILLED_USERNAME(),
+        SAVE_LOGIN_PROMPT,
+        SAVE_LOGIN_PROMPT_CONFIRM_BUTTON,
+        SELECT_ADDRESS_HEADER,
         SNACKBAR_EDIT_BUTTON,
+        STAY_IN_FIREFOX_PROMPT_BUTTON,
+        SUBMIT_LOGIN_BUTTON,
+        SUGGESTED_LOGIN(),
+        SUGGESTED_LOGINS_BAR,
+        TAB_CRASH_REPORTER_CLOSE_BUTTON,
+        SNACKBAR,
         MAIN_MENU_BUTTON,
         TAB_CRASH_REPORTER_IMAGE,
-        TAB_CRASH_REPORTER_TITLE,
         TAB_CRASH_REPORTER_MESSAGE,
         TAB_CRASH_REPORTER_RESTORE_BUTTON,
-        TAB_CRASH_REPORTER_CLOSE_BUTTON,
-        PAGE_CONTENT(),
+        TAB_CRASH_REPORTER_TITLE,
+        TOGGLE_PASSWORD_WEB_BUTTON,
+        TRANSLATION_SHEET,
+        TRANSLATION_SHEET_NOT_NOW_BUTTON,
+        TRANSLATION_SHEET_SHOW_ORIGINAL_BUTTON,
         TRANSLATION_SHEET_TITLE,
+        TRANSLATION_SHEET_TRANSLATE_BUTTON,
         TRANSLATION_SHEET_TRANSLATE_FROM,
         TRANSLATION_SHEET_TRANSLATE_TO,
-        TRANSLATION_SHEET_TRANSLATE_BUTTON,
-        TRANSLATION_SHEET_SHOW_ORIGINAL_BUTTON,
-        ADDED_TO_SHORTCUTS_SNACKBAR_TEXT,
+        USERNAME_WEB_FIELD,
     )
 }

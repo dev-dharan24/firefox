@@ -1008,6 +1008,13 @@ class GatherDecls(TcheckVisitor):
                 },
             )
 
+            if not p.name.startswith("P"):
+                self.error(
+                    p.loc,
+                    "invalid protocol name `%s': name must begin with `P'",
+                    p.name,
+                )
+
             # FIXME/cjones: it's a little weird and counterintuitive
             # to put both the namespace and non-namespaced name in the
             # global scope.  try to figure out something better; maybe

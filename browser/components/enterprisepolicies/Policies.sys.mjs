@@ -29,6 +29,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
   QuickSuggest: "moz-src:///browser/components/urlbar/QuickSuggest.sys.mjs",
   WebsiteFilter: "resource:///modules/policies/WebsiteFilter.sys.mjs",
+  WindowsLaunchOnLogin: "resource://gre/modules/WindowsLaunchOnLogin.sys.mjs",
 
   PoliciesUtils: "resource://gre/modules/PoliciesHelpers.sys.mjs",
   addAllowDenyPermissions: "resource://gre/modules/PoliciesHelpers.sys.mjs",
@@ -47,8 +48,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const PREF_LOGLEVEL = "browser.policies.loglevel";
 const BROWSER_DOCUMENT_URL = AppConstants.BROWSER_CHROME_URL;
-
-const isXpcshell = Services.env.exists("XPCSHELL_TEST_PROFILE_DIR");
 
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
   let { ConsoleAPI } = ChromeUtils.importESModule(
@@ -94,7 +93,7 @@ export var Policies = {
   // Use the same timing that you used for setting up the policy.
   _cleanup: {
     onBeforeAddons() {
-      if (Cu.isInAutomation || isXpcshell) {
+      if (Cu.isInAutomation) {
         lazy.clearBlockedAboutPages();
       }
       Services.obs.notifyObservers(
@@ -1217,6 +1216,20 @@ export var Policies = {
       if (param) {
         lazy.PoliciesUtils.setAndLockPref("browser.formfill.enable", false);
       }
+    },
+  },
+
+  DisableLaunchOnLogin: {
+    onBeforeAddons(manager, param) {
+      if (!param || AppConstants.platform !== "win") {
+        return;
+      }
+      manager.disallowFeature("launchOnLogin");
+      lazy.PoliciesUtils.setAndLockPref(
+        "browser.startup.windowsLaunchOnLogin.enabled",
+        false
+      );
+      lazy.WindowsLaunchOnLogin.removeLaunchOnLogin();
     },
   },
 
@@ -3423,6 +3436,10 @@ export var Policies = {
 
       if ("DisableJit" in policies) {
         features.jit = !policies.DisableJit;
+      }
+
+      if ("HttpsOnly" in policies) {
+        features.http = !policies.HttpsOnly;
       }
 
       return features;

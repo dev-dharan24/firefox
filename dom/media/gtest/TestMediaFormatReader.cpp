@@ -17,6 +17,7 @@
 #include "mozilla/Atomics.h"
 #include "mozilla/Preferences.h"
 #include "mozilla/SpinEventLoopUntil.h"
+#include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gtest/MozAssertions.h"
 #include "mozilla/gtest/WaitFor.h"
 #include "nsQueryObject.h"
@@ -29,6 +30,7 @@ using SamplesHolder = MediaTrackDemuxer::SamplesHolder;
 using SamplesPromise = MediaTrackDemuxer::SamplesPromise;
 using SeekPromise = MediaTrackDemuxer::SeekPromise;
 using TrackType = TrackInfo::TrackType;
+using media::TimeInterval;
 using media::TimeIntervals;
 using media::TimeUnit;
 using testing::InSequence;
@@ -36,34 +38,93 @@ using testing::MockFunction;
 using testing::Return;
 using testing::StrEq;
 
+static constexpr const char* kTestVideoMime =
+    "video/x-test; width=640; height=360";
+static constexpr const char* kTestAudioMime = "audio/x-test";
+
+static RefPtr<MediaRawData> MakeRawSample(const TimeUnit& aTime,
+                                          const TimeUnit& aDuration,
+                                          bool aKeyframe = false) {
+  RefPtr sample = new MediaRawData;
+  sample->mTime = aTime;
+  sample->mDuration = aDuration;
+  sample->mKeyframe = aKeyframe;
+  return sample;
+}
+
+static RefPtr<SamplesPromise> ResolveOneSample(RefPtr<MediaRawData> aSample) {
+  RefPtr<SamplesHolder> samples = new SamplesHolder;
+  samples->AppendSample(std::move(aSample));
+  return SamplesPromise::CreateAndResolve(samples, __func__);
+}
+
 // Shared setup for MediaFormatReader gtests: a single video track backed by a
-// MockMediaDataDemuxer/MockMediaTrackDemuxer and a MockDecoderModule. Each test
-// sets its own decoder and demux-sample expectations, then calls InitReader().
+// MockMediaDataDemuxer/MockMediaTrackDemuxer and a MockDecoderModule.
 class TestMediaFormatReader : public ::testing::Test {
  protected:
   void SetUp() override {
+    SetUpReaderDependencies();
+    InitReader();
+  }
+
+  void SetUpReaderDependencies() {
     mDataDemuxer = new MockMediaDataDemuxer();
     // VideoInfo::IsValid() needs dimensions.
-    mTrackDemuxer =
-        new MockMediaTrackDemuxer("video/x-test; width=640; height=360");
+    mTrackDemuxer = new MockMediaTrackDemuxer(kTestVideoMime);
 
-    ON_CALL(*mDataDemuxer, GetNumberTracks(TrackType::kVideoTrack))
-        .WillByDefault(Return(1));
+    ON_CALL(*mDataDemuxer, GetNumberTracks)
+        .WillByDefault([this](TrackType aType) {
+          if (aType == TrackType::kAudioTrack) {
+            return mAudioTrackDemuxer ? 1u : 0u;
+          }
+          if (aType == TrackType::kVideoTrack) {
+            return 1u;
+          }
+          return 0u;
+        });
     ON_CALL(*mDataDemuxer, GetTrackDemuxer)
         .WillByDefault([this](TrackType aType, uint32_t aTrackNumber) {
           EXPECT_EQ(aTrackNumber, 0u);
-          EXPECT_EQ(aType, TrackType::kVideoTrack);
           if (!mDemuxerThread) {
             mDemuxerThread = do_QueryObject(AbstractThread::GetCurrent());
           }
+          if (aType == TrackType::kAudioTrack) {
+            EXPECT_TRUE(mAudioTrackDemuxer);
+            return do_AddRef(mAudioTrackDemuxer);
+          }
+          EXPECT_EQ(aType, TrackType::kVideoTrack);
           return do_AddRef(mTrackDemuxer);
         });
 
     mPdm = new MockDecoderModule();
   }
 
-  // Create and initialize the reader and its proxy. Call after the decoder and
-  // demux-sample expectations have been set.
+  void TearDown() override { FinishShutdown(); }
+
+  void SetVideoMediaTime(const TimeUnit& aMediaTime) {
+    ON_CALL(*mTrackDemuxer, GetInfo).WillByDefault([aMediaTime]() {
+      auto extended = MakeMediaContainerType(kTestVideoMime).value();
+      UniquePtr<TrackInfo> info =
+          CreateTrackInfoWithMIMETypeAndContainerTypeExtraParameters(
+              extended.Type().AsString(), extended);
+      info->mMediaTime = aMediaTime;
+      return info;
+    });
+  }
+
+  void AddAudioTrack(uint32_t aRate = 44100, uint32_t aChannels = 2) {
+    mAudioTrackDemuxer = new MockMediaTrackDemuxer(kTestAudioMime);
+    ON_CALL(*mAudioTrackDemuxer, GetInfo).WillByDefault([aRate, aChannels]() {
+      auto extended = MakeMediaContainerType(kTestAudioMime).value();
+      UniquePtr<TrackInfo> info =
+          CreateTrackInfoWithMIMETypeAndContainerTypeExtraParameters(
+              extended.Type().AsString(), extended);
+      info->GetAsAudioInfo()->mRate = aRate;
+      info->GetAsAudioInfo()->mChannels = aChannels;
+      return info;
+    });
+  }
+
   void InitReader() {
     mOwner = std::make_unique<MockMediaDecoderOwner>();
     RefPtr container = new VideoFrameContainer(
@@ -83,6 +144,14 @@ class TestMediaFormatReader : public ::testing::Test {
     mReader = new MediaFormatReader(init, mDataDemuxer);
     mProxy = new ReaderProxy(AbstractThread::MainThread(), mReader);
     EXPECT_NS_SUCCEEDED(mReader->Init());
+  }
+
+  void FinishShutdown() {
+    if (mShutdownComplete) {
+      return;
+    }
+    WaitForResolve(mProxy->Shutdown());
+    mShutdownComplete = true;
   }
 
   // Wait enough for the MediaFormatReader to process at least aCount demuxer or
@@ -143,12 +212,9 @@ class TestMediaFormatReader : public ::testing::Test {
   void ExpectDemuxReachingInternalSeekPriming() {
     InSequence s;
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).Times(2).WillRepeatedly([this] {
-      RefPtr sample = new MediaRawData;
-      sample->mTime = TimeUnit(mDecodedSampleCount, 30);
+      const TimeUnit time(mDecodedSampleCount, 30);
       ++mDecodedSampleCount;
-      RefPtr<SamplesHolder> samples = new SamplesHolder;
-      samples->AppendSample(std::move(sample));
-      return SamplesPromise::CreateAndResolve(samples, __func__);
+      return ResolveOneSample(MakeRawSample(time, TimeUnit(1, 30)));
     });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([] {
       return SamplesPromise::CreateAndReject(
@@ -161,11 +227,7 @@ class TestMediaFormatReader : public ::testing::Test {
       return SeekPromise::CreateAndResolve(TimeUnit::Zero(), __func__);
     });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([] {
-      RefPtr sample = new MediaRawData;
-      sample->mTime = TimeUnit(0, 30);
-      RefPtr<SamplesHolder> samples = new SamplesHolder;
-      samples->AppendSample(std::move(sample));
-      return SamplesPromise::CreateAndResolve(samples, __func__);
+      return ResolveOneSample(MakeRawSample(TimeUnit(0, 30), TimeUnit(1, 30)));
     });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillRepeatedly([] {
       return SamplesPromise::CreateAndReject(
@@ -187,11 +249,13 @@ class TestMediaFormatReader : public ::testing::Test {
 
   RefPtr<MockMediaDataDemuxer> mDataDemuxer;
   RefPtr<MockMediaTrackDemuxer> mTrackDemuxer;
+  RefPtr<MockMediaTrackDemuxer> mAudioTrackDemuxer;
   RefPtr<MockDecoderModule> mPdm;
   std::unique_ptr<MockMediaDecoderOwner> mOwner;
   RefPtr<FrameStatistics> mFrameStats;
   RefPtr<MediaFormatReader> mReader;
   RefPtr<ReaderProxy> mProxy;
+  bool mShutdownComplete = false;
   // Thread scheduling provides ordering for thread initializations before
   // their first read.
   RefPtr<TaskQueue> mDemuxerThread;
@@ -200,10 +264,232 @@ class TestMediaFormatReader : public ::testing::Test {
   int mDecodedSampleCount = 0;
 };
 
+// MP4 edit lists use a positive media time to map decoder pre-roll at the
+// matching negative offset to currentTime 0.
+const TimeUnit kEditListFrameDuration = TimeUnit::FromMicroseconds(41667);
+
+TEST_F(TestMediaFormatReader, PositiveMediaTimeIgnoresNegativePreroll) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-6375000),
+                                          kEditListFrameDuration));
+  });
+
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+}
+
+TEST_F(TestMediaFormatReader, PositiveMediaTimeClipsNegativeBufferedRange) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-6375000),
+                                          kEditListFrameDuration));
+  });
+  ON_CALL(*mTrackDemuxer, GetBuffered).WillByDefault([]() {
+    return TimeIntervals(TimeInterval(TimeUnit::FromMicroseconds(-6375000),
+                                      TimeUnit::FromSeconds(1)));
+  });
+
+  Mirror<TimeIntervals> buffered(AbstractThread::MainThread(), TimeIntervals(),
+                                 "TestMediaFormatReader::buffered");
+  buffered.Connect(mReader->CanonicalBuffered());
+
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+  SpinEventLoopUntil("buffered range updated"_ns,
+                     [&]() { return !buffered.Ref().IsEmpty(); });
+  EXPECT_EQ(buffered.Ref().GetStart(), TimeUnit::Zero());
+  EXPECT_EQ(buffered.Ref().GetEnd(), TimeUnit::FromSeconds(1));
+
+  buffered.DisconnectIfConnected();
+  mReader->OwnerThread()->AwaitIdle();
+}
+
+TEST_F(TestMediaFormatReader, PositiveMediaTimeDropsNegativeVideoPreroll) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+  {
+    InSequence s;
+    EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+      return ResolveOneSample(
+          MakeRawSample(TimeUnit::FromMicroseconds(-6375000),
+                        kEditListFrameDuration, /* aKeyframe */ true));
+    });
+    EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+      return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-41667),
+                                            kEditListFrameDuration));
+    });
+    EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+      return ResolveOneSample(
+          MakeRawSample(TimeUnit::Zero(), kEditListFrameDuration));
+    });
+  }
+
+  EXPECT_CALL(*mPdm, CreateVideoDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        return do_AddRef(new MockVideoDataDecoder(aParams));
+      });
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+
+  RefPtr<VideoData> clippedVideoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(clippedVideoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(clippedVideoData->mDuration, TimeUnit::Zero());
+
+  RefPtr<VideoData> videoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(videoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(videoData->mDuration, kEditListFrameDuration);
+  EXPECT_EQ(videoData->GetEndTime(), kEditListFrameDuration);
+}
+
+TEST_F(TestMediaFormatReader, PositiveMediaTimePreservesZeroDurationAtStart) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::Zero(), TimeUnit::Zero(),
+                                          /* aKeyframe */ true));
+  });
+  EXPECT_CALL(*mPdm, CreateVideoDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        return do_AddRef(new MockVideoDataDecoder(aParams));
+      });
+
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+
+  RefPtr<VideoData> videoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(videoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(videoData->mDuration, TimeUnit::Zero());
+}
+
+TEST_F(TestMediaFormatReader, LongVideoPrerollReturnsFirstVisibleFrame) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  // Keep this above ThreadSanitizer's 128-lock limit to catch per-frame
+  // promise chaining.
+  static constexpr int32_t kPrerollSampleCount = 130;
+  SetVideoMediaTime(TimeUnit(kPrerollSampleCount, 30));
+
+  int32_t sampleIndex = 0;
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples)
+      .Times(kPrerollSampleCount + 1)
+      .WillRepeatedly([&sampleIndex]() {
+        const int32_t sampleOffset = sampleIndex - kPrerollSampleCount;
+        const TimeUnit sampleTime(sampleOffset, 30);
+        const bool keyframe = sampleIndex == 0;
+        ++sampleIndex;
+        return ResolveOneSample(
+            MakeRawSample(sampleTime, TimeUnit(1, 30), keyframe));
+      });
+
+  EXPECT_CALL(*mPdm, CreateVideoDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        return do_AddRef(new MockVideoDataDecoder(aParams));
+      });
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+
+  RefPtr<VideoData> clippedVideoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(clippedVideoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(clippedVideoData->mDuration, TimeUnit::Zero());
+
+  RefPtr<VideoData> videoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(videoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(videoData->mDuration, TimeUnit(1, 30));
+}
+
+TEST_F(TestMediaFormatReader, PositiveMediaTimeClipsVideoSpanningZero) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-20000),
+                                          TimeUnit::FromMicroseconds(40000),
+                                          /* aKeyframe */ true));
+  });
+
+  EXPECT_CALL(*mPdm, CreateVideoDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        return do_AddRef(new MockVideoDataDecoder(aParams));
+      });
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+
+  RefPtr<VideoData> videoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(videoData->mTime, TimeUnit::Zero());
+  EXPECT_EQ(videoData->mDuration, TimeUnit::FromMicroseconds(20000));
+  EXPECT_EQ(videoData->GetEndTime(), TimeUnit::FromMicroseconds(20000));
+}
+
+TEST_F(TestMediaFormatReader, NegativeOverallStartPreservesVisibleVideo) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  AddAudioTrack();
+  SetVideoMediaTime(TimeUnit::FromSeconds(1));
+
+  EXPECT_CALL(*mAudioTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-1000000),
+                                          TimeUnit::FromMicroseconds(100000)));
+  });
+  EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-500000),
+                                          TimeUnit::FromMicroseconds(100000),
+                                          /* aKeyframe */ true));
+  });
+  EXPECT_CALL(*mPdm, CreateVideoDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        return do_AddRef(new MockVideoDataDecoder(aParams));
+      });
+
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::FromMicroseconds(-1000000));
+
+  RefPtr<VideoData> videoData =
+      WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(videoData->mTime, TimeUnit::FromMicroseconds(500000));
+  EXPECT_EQ(videoData->mDuration, TimeUnit::FromMicroseconds(100000));
+}
+
+TEST_F(TestMediaFormatReader, PositiveVideoMediaTimeDoesNotDelayAudio) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  AddAudioTrack();
+  SetVideoMediaTime(TimeUnit::FromMicroseconds(6375000));
+
+  ON_CALL(*mAudioTrackDemuxer, MockGetSamples).WillByDefault([]() {
+    return ResolveOneSample(
+        MakeRawSample(TimeUnit::Zero(), TimeUnit::FromMicroseconds(23220)));
+  });
+  ON_CALL(*mTrackDemuxer, MockGetSamples).WillByDefault([]() {
+    return ResolveOneSample(MakeRawSample(TimeUnit::FromMicroseconds(-6375000),
+                                          kEditListFrameDuration,
+                                          /* aKeyframe */ true));
+  });
+
+  EXPECT_CALL(*mPdm, CreateAudioDecoder)
+      .WillOnce([](const CreateDecoderParams& aParams) {
+        RefPtr<MediaDataDecoder> decoder = new DummyMediaDataDecoder(
+            MakeUnique<BlankAudioDataCreator>(aParams.AudioConfig().mChannels,
+                                              aParams.AudioConfig().mRate),
+            "MockAudioDataDecoder"_ns, aParams);
+        return decoder.forget();
+      });
+  MetadataHolder metadata = WaitForResolve(mProxy->ReadMetadata());
+  EXPECT_EQ(metadata.mInfo->mStartTime, TimeUnit::Zero());
+
+  RefPtr<AudioData> audioData = WaitForResolve(mProxy->RequestAudioData());
+  EXPECT_EQ(audioData->mTime, TimeUnit::Zero());
+}
+
 TEST_F(TestMediaFormatReader, WaitingForDemuxAfterInternalSeek) {
   PDMFactory::AutoForcePDM autoForcePDM(mPdm);
   RefPtr<MockVideoDataDecoder> decoder;
   MozPromiseHolder<DecodePromise> drainPromise;
+  int sampleCount = 0;
   EXPECT_CALL(*mPdm, CreateVideoDecoder)
       .WillOnce([&](const CreateDecoderParams& aParams) {
         decoder = new MockVideoDataDecoder(aParams);
@@ -228,15 +514,13 @@ TEST_F(TestMediaFormatReader, WaitingForDemuxAfterInternalSeek) {
   {
     InSequence s;
 
-    EXPECT_CALL(*mTrackDemuxer, MockGetSamples).Times(2).WillRepeatedly([]() {
-      static int count = 0;
-      RefPtr sample = new MediaRawData;
-      sample->mTime = TimeUnit(count, 30);
-      ++count;
-      RefPtr<SamplesHolder> samples = new SamplesHolder;
-      samples->AppendSample(std::move(sample));
-      return SamplesPromise::CreateAndResolve(samples, __func__);
-    });
+    EXPECT_CALL(*mTrackDemuxer, MockGetSamples)
+        .Times(2)
+        .WillRepeatedly([&sampleCount]() {
+          const TimeUnit time(sampleCount, 30);
+          ++sampleCount;
+          return ResolveOneSample(MakeRawSample(time, TimeUnit(1, 30)));
+        });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
       return SamplesPromise::CreateAndReject(
           NS_ERROR_DOM_MEDIA_WAITING_FOR_DATA, __func__);
@@ -250,12 +534,8 @@ TEST_F(TestMediaFormatReader, WaitingForDemuxAfterInternalSeek) {
       return SeekPromise::CreateAndResolve(TimeUnit::Zero(), __func__);
     });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
-      RefPtr sample = new MediaRawData;
       // Time is zero after the seek.
-      sample->mTime = TimeUnit(0, 30);
-      RefPtr<SamplesHolder> samples = new SamplesHolder;
-      samples->AppendSample(std::move(sample));
-      return SamplesPromise::CreateAndResolve(samples, __func__);
+      return ResolveOneSample(MakeRawSample(TimeUnit(0, 30), TimeUnit(1, 30)));
     });
     EXPECT_CALL(*mTrackDemuxer, MockGetSamples).WillOnce([]() {
       return SamplesPromise::CreateAndReject(
@@ -268,8 +548,6 @@ TEST_F(TestMediaFormatReader, WaitingForDemuxAfterInternalSeek) {
           NS_ERROR_DOM_MEDIA_WAITING_FOR_DATA, __func__);
     });
   }
-
-  InitReader();
 
   // ReadMetadata() to init demuxer.
   (void)WaitForResolve(mProxy->ReadMetadata());
@@ -309,7 +587,7 @@ TEST_F(TestMediaFormatReader, WaitingForDemuxAfterInternalSeek) {
   // demux request to complete.
   WaitForReaderOperations(2);
   // Clean up.
-  WaitForResolve(mProxy->Shutdown());
+  FinishShutdown();
   drainPromise.Reject(NS_ERROR_ILLEGAL_DURING_SHUTDOWN, __func__);
 }
 
@@ -337,7 +615,6 @@ TEST_F(TestMediaFormatReader, VideoSkipDoesNotReenterAcrossErrorRecovery) {
       });
   ExpectDecoderWithFailingPrimingDrain();
   ExpectDemuxReachingInternalSeekPriming();
-  InitReader();
 
   // Drive the reader until the failing priming drain has started a recovery
   // skip that has no pending frame request.
@@ -362,8 +639,6 @@ TEST_F(TestMediaFormatReader, VideoSkipDoesNotReenterAcrossErrorRecovery) {
       })));
   MediaResult pendingResult = WaitForReject(pending);
   EXPECT_EQ(pendingResult.Code(), NS_ERROR_DOM_MEDIA_CANCELED);
-
-  WaitForResolve(mProxy->Shutdown());
 }
 
 class RecreateOnNthDecodeDecoder final : public MockVideoDataDecoder {
@@ -415,10 +690,10 @@ class VideoRateTest : public TestMediaFormatReader {
   };
 
   void SetUp() override {
-    TestMediaFormatReader::SetUp();
+    SetUpReaderDependencies();
     mTrackInfo = mTrackDemuxer->GetInfo();
     ASSERT_TRUE(mTrackInfo);
-    ON_CALL(*mDataDemuxer, IsSeekable).WillByDefault(Return(true));
+    ON_CALL(*mDataDemuxer, IsSeekable).WillByDefault(testing::Return(true));
     ON_CALL(*mTrackDemuxer, Seek).WillByDefault([](const TimeUnit& aTime) {
       return SeekPromise::CreateAndResolve(aTime, __func__);
     });
@@ -849,4 +1124,140 @@ TEST_F(VideoRateTest, StreamChangeWhileNullDecodingUsesNewRateOnResume) {
   EXPECT_FLOAT_EQ(mDecoderRates[1], static_cast<float>(secondFinalRate));
   EXPECT_DOUBLE_EQ(VideoRate(), secondFinalRate);
   ShutdownReader();
+}
+
+// Shared setup for crypto subsample check tests. A single video track backed
+// by a MockMediaDataDemuxer/MockMediaTrackDemuxer and a MockDecoderModule.
+// Each test sets its MockGetSamples expectation, then calls InitReader().
+class TestMFRCryptoSampleSizeCheck : public ::testing::Test {
+ protected:
+  RefPtr<MockMediaDataDemuxer> mDataDemuxer;
+  RefPtr<MockMediaTrackDemuxer> mTrackDemuxer;
+  RefPtr<MockDecoderModule> mPdm;
+  std::unique_ptr<MockMediaDecoderOwner> mOwner;
+  RefPtr<VideoFrameContainer> mContainer;
+  RefPtr<MediaFormatReader> mReader;
+  RefPtr<ReaderProxy> mProxy;
+
+  TestMFRCryptoSampleSizeCheck()
+      : mDataDemuxer(new MockMediaDataDemuxer()),
+        mTrackDemuxer(
+            new MockMediaTrackDemuxer("video/x-test; width=640; height=360")),
+        mPdm(new MockDecoderModule()),
+        mOwner(std::make_unique<MockMediaDecoderOwner>()) {}
+
+  void SetUp() override {
+    ON_CALL(*mDataDemuxer, GetNumberTracks(TrackType::kVideoTrack))
+        .WillByDefault(Return(1));
+    ON_CALL(*mDataDemuxer, GetTrackDemuxer)
+        .WillByDefault([this](TrackType, uint32_t) {
+          return do_AddRef(mTrackDemuxer.get());
+        });
+    ON_CALL(*mPdm, CreateVideoDecoder)
+        .WillByDefault([](const CreateDecoderParams& aParams) {
+          return do_AddRef(new MockVideoDataDecoder(aParams));
+        });
+  }
+
+  void InitReader() {
+    // VideoFrameContainer's constructor reads gfxVars on Android; initialize
+    // them if the gtest harness hasn't done so.
+    if (!gfx::gfxVars::IsInitialized()) {
+      gfx::gfxVars::Initialize();
+    }
+    mContainer = new VideoFrameContainer(
+        mOwner.get(),
+        MakeAndAddRef<ImageContainer>(ImageUsageType::VideoFrameContainer,
+#ifdef MOZ_WIDGET_ANDROID
+                                      // Work around bug 1922144
+                                      ImageContainer::SYNCHRONOUS
+#else
+                                      ImageContainer::ASYNCHRONOUS
+#endif
+                                      ));
+    MediaFormatReaderInit init;
+    init.mVideoFrameContainer = mContainer;
+    mReader = new MediaFormatReader(init, mDataDemuxer);
+    mProxy = new ReaderProxy(AbstractThread::MainThread(), mReader);
+    EXPECT_NS_SUCCEEDED(mReader->Init());
+  }
+};
+
+namespace {
+
+// Returns a SamplesHolder containing one encrypted sample with the given
+// data size and subsample arrays.
+RefPtr<SamplesHolder> MakeCryptoSamplesHolder(size_t aDataSize, TimeUnit aTime,
+                                              nsTArray<uint32_t> aPlainSizes,
+                                              nsTArray<uint32_t> aEncSizes) {
+  auto sample = MakeRefPtr<MediaRawData>();
+  sample->mTime = aTime;
+  auto writer = sample->CreateWriter();
+  writer->mCrypto.mCryptoScheme = CryptoScheme::Cenc;
+  writer->mCrypto.mPlainSizes = std::move(aPlainSizes);
+  writer->mCrypto.mEncryptedSizes = std::move(aEncSizes);
+  [[maybe_unused]] auto unused = writer->SetSize(aDataSize);
+  RefPtr<SamplesHolder> holder = new SamplesHolder;
+  holder->AppendSample(std::move(sample));
+  return holder;
+}
+
+}  // namespace
+
+// Verify that a sample where mPlainSizes and mEncryptedSizes have different
+// lengths is rejected before reaching the decoder.
+TEST_F(TestMFRCryptoSampleSizeCheck, CryptoSubsampleArrayLengthMismatch) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  // Configure before InitReader() -- start-time detection calls GetSamples().
+  ON_CALL(*mTrackDemuxer, MockGetSamples).WillByDefault([]() {
+    // mPlainSizes has 1 entry; mEncryptedSizes has 2 -- lengths don't match.
+    return SamplesPromise::CreateAndResolve(
+        MakeCryptoSamplesHolder(100, TimeUnit::Zero(), {50u}, {25u, 25u}),
+        __func__);
+  });
+  InitReader();
+  (void)WaitForResolve(mProxy->ReadMetadata());
+
+  MediaResult result =
+      WaitForReject(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(result.Code(), NS_ERROR_DOM_MEDIA_DECODE_ERR);
+
+  WaitForResolve(mProxy->Shutdown());
+}
+
+// Verify that a sample where sum(mPlainSizes + mEncryptedSizes) != Size()
+// is rejected before reaching the decoder.
+TEST_F(TestMFRCryptoSampleSizeCheck, CryptoSubsampleTotalSizeMismatch) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  ON_CALL(*mTrackDemuxer, MockGetSamples).WillByDefault([]() {
+    // 50 + 30 = 80, but the buffer is 100 bytes.
+    return SamplesPromise::CreateAndResolve(
+        MakeCryptoSamplesHolder(100, TimeUnit::Zero(), {50u}, {30u}), __func__);
+  });
+  InitReader();
+  (void)WaitForResolve(mProxy->ReadMetadata());
+
+  MediaResult result =
+      WaitForReject(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+  EXPECT_EQ(result.Code(), NS_ERROR_DOM_MEDIA_DECODE_ERR);
+
+  WaitForResolve(mProxy->Shutdown());
+}
+
+// Verify that a sample with valid crypto subsamples (sum == Size()) passes
+// the check and is decoded successfully.
+TEST_F(TestMFRCryptoSampleSizeCheck, CryptoSubsampleValid) {
+  PDMFactory::AutoForcePDM autoForcePDM(mPdm);
+  ON_CALL(*mTrackDemuxer, MockGetSamples).WillByDefault([]() {
+    // 50 + 50 = 100 == buffer size -- subsamples are valid.
+    return SamplesPromise::CreateAndResolve(
+        MakeCryptoSamplesHolder(100, TimeUnit::Zero(), {50u}, {50u}), __func__);
+  });
+  InitReader();
+  (void)WaitForResolve(mProxy->ReadMetadata());
+
+  // The sample should pass the check and be decoded without error.
+  (void)WaitForResolve(mProxy->RequestVideoData(TimeUnit::Zero(), false));
+
+  WaitForResolve(mProxy->Shutdown());
 }

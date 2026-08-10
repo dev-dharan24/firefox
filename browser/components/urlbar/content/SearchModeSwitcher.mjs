@@ -83,8 +83,6 @@ export class SearchModeSwitcher {
       "nsISupportsWeakReference",
     ]);
 
-    UrlbarPrefs.addObserver(this);
-
     this.#panelList = input.querySelector(".searchmode-switcher-panel-list");
     this.#button = input.querySelector(".searchmode-switcher");
     this.#closebutton = input.querySelector(".searchmode-switcher-close");
@@ -104,10 +102,25 @@ export class SearchModeSwitcher {
       this.#panelList.replaceWith(panel);
       panel.appendChild(this.#panelList);
     }
+  }
 
-    if (this.#isEnabled) {
+  /**
+   * Called when the input is connected.
+   */
+  connect() {
+    UrlbarPrefs.addObserver(this);
+
+    if (this.#isEnabled()) {
       this.#enableObservers();
     }
+  }
+
+  /**
+   * Called when the input is disconnected.
+   */
+  disconnect() {
+    UrlbarPrefs.removeObserver(this);
+    this.#disableObservers();
   }
 
   #isEnabled() {
@@ -120,8 +133,11 @@ export class SearchModeSwitcher {
   async #onPopupShowing() {
     // Discard event to avoid recording an abandonment.
     this.#input.controller.engagementEvent.discard();
-    await this.#buildSearchModeList();
+    // Close the view before anything is awaited. Closing it collapses the
+    // urlbar, and the panel aligns itself asynchronously and abandons the open
+    // if its anchor moves mid-alignment.
     this.#input.view.close({ showFocusBorder: false });
+    await this.#buildSearchModeList();
 
     if (this.#input.sapName == "urlbar") {
       Glean.urlbarUnifiedsearchbutton.opened.add(1);
@@ -320,12 +336,7 @@ export class SearchModeSwitcher {
   }
 
   onSearchEngineUpdate = (modifiedType, _engine) => {
-    if (
-      !this.#input.window ||
-      this.#input.window.closed ||
-      // TODO bug 2005783 stop observing when input is disconnected.
-      !this.#input.isConnected
-    ) {
+    if (!this.#input.window || this.#input.window.closed) {
       return;
     }
 
@@ -619,7 +630,7 @@ export class SearchModeSwitcher {
     this.#buildSettingsButton();
 
     // Add engines that can be installed.
-    let openSearchEngines = lazy.OpenSearchManager.getEngines(
+    let openSearchEngines = lazy.OpenSearchManager.getInstallableEngines(
       browser.selectedBrowser
     );
     openSearchEngines = openSearchEngines.slice(

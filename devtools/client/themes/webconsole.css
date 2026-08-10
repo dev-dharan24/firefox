@@ -935,6 +935,7 @@ html #webconsole-notificationbox {
   border: none;
   color: var(--theme-icon-dimmed-color);
   background: transparent;
+  user-select: none;
 }
 
 .collapse-button::before {

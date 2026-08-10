@@ -193,6 +193,32 @@ declare const isDefaultBrowser: boolean;
 
 Behaves the same as `isDefaultBrowser`, but retrieves the current value directly from shell service instead of using the cached value. This may not be as performant.
 
+### `isOneClickSetDefaultEnabled`
+
+Windows only. Can Firefox currently make itself the default browser by writing
+the Windows UserChoice registry keys, instead of having to send the user into the
+Windows Settings app to do it manually. Accounts for the
+`browser.shell.setDefaultBrowserUserChoice` and
+`browser.shell.setDefaultBrowserUserChoice.regRename` prefs as well as whether
+Windows will currently accept a UserChoice change from a third-party browser.
+
+`true` means a set-default request would be honored or that Firefox is already the default (the latter is a shortcut to `true` to avoid the risk of a UserChoice write when we don't need to attempt to set to default anyway).
+
+
+If the UserChoice Protection Driver (UCPD) is running and Firefox isn't already
+the default, this temporarily renames the `http` association key and renames it
+back. UCPD versions where one-click still works permit this rename, while those where it doesn't do not.
+
+
+Always `false` on macOS and Linux. Neither goes through UserChoice, and neither
+is reliably one-click, since both can (but don't always) defer to an OS consent prompt. Supporting them needs its own handling (see bug 2060879).
+
+#### Definition
+
+```ts
+declare const isOneClickSetDefaultEnabled: boolean;
+```
+
 ### `isDefaultHandler`
 
 Is Firefox the user's default handler for various file extensions and protocols?
@@ -553,7 +579,7 @@ Information about the browser's top 25 frecent sites.
 
 #### Examples
 * Is any of a broad set of shopping-related domains in the user's top frecent sites with a last visit date greater than April 4th, 2018 (UNIX Epoch timestamp 1522843725924)?
-```java
+```js
 (["amazon.com", "ebay.com", "etsy.com", "walmart.com", "target.com",
   "bestbuy.com", "newegg.com", "costco.com", "homedepot.com", "wayfair.com"
   ] intersect topFrecentSites[.lastVisitDate > 1522843725924]|mapToProperty('host'))|length > 1

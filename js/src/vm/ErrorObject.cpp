@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 #include "jspubtd.h"
@@ -565,7 +566,7 @@ bool js::ErrorObject::init(JSContext* cx, Handle<ErrorObject*> obj,
   cx->check(obj, stack);
 
   // Null out early in case of error, for exn_finalize's sake.
-  obj->initReservedSlot(ERROR_REPORT_SLOT, PrivateValue(nullptr));
+  obj->initReservedSlotTyped(ERROR_REPORT_SLOT, PrivateValue(nullptr));
 
   if (!SharedShape::ensureInitialCustomShape<ErrorObject>(cx, obj)) {
     return false;
@@ -610,8 +611,8 @@ bool js::ErrorObject::init(JSContext* cx, Handle<ErrorObject*> obj,
       obj->lookupPure(NameToId(cx->names().cause))->slot() == CAUSE_SLOT);
 
   JSErrorReport* report = errorReport.release();
-  obj->initReservedSlot(STACK_SLOT, ObjectOrNullValue(stack));
-  obj->setReservedSlot(ERROR_REPORT_SLOT, PrivateValue(report));
+  obj->initReservedSlotTyped(STACK_SLOT, ObjectOrNullValue(stack));
+  obj->setReservedSlotTyped(ERROR_REPORT_SLOT, PrivateValue(report));
   obj->initReservedSlot(FILENAME_SLOT, StringValue(fileName));
   obj->initReservedSlot(LINENUMBER_SLOT, Int32Value(lineNumber));
   obj->initReservedSlot(COLUMNNUMBER_SLOT,
@@ -624,10 +625,11 @@ bool js::ErrorObject::init(JSContext* cx, Handle<ErrorObject*> obj,
   } else {
     obj->initReservedSlot(CAUSE_SLOT, MagicValue(JS_ERROR_WITHOUT_CAUSE));
   }
-  obj->initReservedSlot(SOURCEID_SLOT, Int32Value(sourceId));
+  obj->initReservedSlotTyped(SOURCEID_SLOT, Int32Value(sourceId));
   if (obj->mightBeWasmTrap()) {
-    MOZ_ASSERT(JSCLASS_RESERVED_SLOTS(obj->getClass()) > WASM_TRAP_SLOT);
-    obj->initReservedSlot(WASM_TRAP_SLOT, BooleanValue(false));
+    MOZ_ASSERT(JSCLASS_RESERVED_SLOTS(obj->getClass()) >
+               WASM_TRAP_SLOT.index());
+    obj->initReservedSlotTyped(WASM_TRAP_SLOT, BooleanValue(false));
   }
 
   return true;
@@ -716,7 +718,7 @@ JSErrorReport* js::ErrorObject::getOrCreateErrorReport(JSContext* cx) {
   if (!copy) {
     return nullptr;
   }
-  setReservedSlot(ERROR_REPORT_SLOT, PrivateValue(copy.get()));
+  setReservedSlotTyped(ERROR_REPORT_SLOT, PrivateValue(copy.get()));
   return copy.release();
 }
 
@@ -795,8 +797,8 @@ bool js::ErrorObject::setStack_impl(JSContext* cx, const CallArgs& args) {
 
 void js::ErrorObject::setFromWasmTrap() {
   MOZ_ASSERT(mightBeWasmTrap());
-  MOZ_ASSERT(JSCLASS_RESERVED_SLOTS(getClass()) > WASM_TRAP_SLOT);
-  setReservedSlot(WASM_TRAP_SLOT, BooleanValue(true));
+  MOZ_ASSERT(JSCLASS_RESERVED_SLOTS(getClass()) > WASM_TRAP_SLOT.index());
+  setReservedSlotTyped(WASM_TRAP_SLOT, BooleanValue(true));
 }
 
 JSString* js::ErrorToSource(JSContext* cx, HandleObject obj) {
@@ -1568,6 +1570,71 @@ JSString* JS::ErrorReportBuilder::maybeCreateReportFromDOMException(
   return messageStr;
 }
 
+// Build a side-effect-free preview of a non-Error exception object by listing
+// its own string-keyed property names, e.g. |Object { code, message }|,
+// instead of the unhelpful bare "Object". This runs while reporting an
+// exception without side effects, so it must not execute user code: only own
+// properties are inspected and getters and proxy traps are never invoked.
+// Indexed properties stored as dense elements are not included.
+// Cross-compartment wrappers (including cross-origin objects) are not native
+// and are left opaque. Returns just |ClassName| when there are no such
+// properties.
+static JSString* DescribeUncaughtObjectNoSideEffects(JSContext* cx,
+                                                     HandleObject exnObject) {
+  if (!exnObject->is<NativeObject>()) {
+    return nullptr;
+  }
+
+  Rooted<NativeObject*> nobj(cx, &exnObject->as<NativeObject>());
+
+  AutoClearPendingException acpe(cx);
+  JSStringBuilder sb(cx);
+
+  const char* className = nobj->getClass()->name;
+  if (!sb.append(className, strlen(className))) {
+    return nullptr;
+  }
+
+  static constexpr uint32_t MaxProps = 10;
+
+  uint32_t written = 0;
+  Rooted<JSString*> key(cx);
+  for (ShapePropertyIter<CanGC> iter(cx, nobj->shape()); !iter.done(); iter++) {
+    if (!iter->key().isString()) {
+      continue;
+    }
+    if (written == MaxProps) {
+      if (!sb.append(", ...")) {
+        return nullptr;
+      }
+      break;
+    }
+    if (written == 0) {
+      if (!sb.append(" { ")) {
+        return nullptr;
+      }
+    } else if (!sb.append(", ")) {
+      return nullptr;
+    }
+    key = iter->key().toString();
+    if (!sb.append(key)) {
+      return nullptr;
+    }
+    written++;
+  }
+
+  if (written == 0) {
+    // Just return the className as a string.
+    return sb.finishString();
+  }
+
+  if (!sb.append(" }")) {
+    return nullptr;
+  }
+
+  return sb.finishString();
+}
+
 bool JS::ErrorReportBuilder::init(JSContext* cx,
                                   const JS::ExceptionStack& exnStack,
                                   SniffingBehavior sniffingBehavior) {
@@ -1608,8 +1675,16 @@ bool JS::ErrorReportBuilder::init(JSContext* cx,
     } else {
       str = nullptr;
     }
-  } else if (exnObject && sniffingBehavior == NoSideEffects) {
-    str = cx->names().Object;
+  } else if (exnObject && sniffingBehavior != WithSideEffects) {
+    // Reporting a non-Error object without running user code. For callers that
+    // opted in, show a preview built from its own property names instead of
+    // the bare "Object".
+    if (sniffingBehavior == NoSideEffectsListPropertyNames) {
+      str = DescribeUncaughtObjectNoSideEffects(cx, exnObject);
+    }
+    if (!str) {
+      str = cx->names().Object;
+    }
   } else {
     str = js::ToString<CanGC>(cx, exnStack.exception());
   }
@@ -1966,7 +2041,7 @@ const char* js::ValueToSourceForError(JSContext* cx, HandleValue val,
 bool js::GetInternalError(JSContext* cx, unsigned errorNumber,
                           MutableHandleValue error) {
   FixedInvokeArgs<1> args(cx);
-  args[0].set(Int32Value(errorNumber));
+  args[0].setInt32(errorNumber);
   return CallSelfHostedFunction(cx, cx->names().GetInternalError,
                                 NullHandleValue, args, error);
 }
@@ -1974,7 +2049,7 @@ bool js::GetInternalError(JSContext* cx, unsigned errorNumber,
 bool js::GetTypeError(JSContext* cx, unsigned errorNumber,
                       MutableHandleValue error) {
   FixedInvokeArgs<1> args(cx);
-  args[0].set(Int32Value(errorNumber));
+  args[0].setInt32(errorNumber);
   return CallSelfHostedFunction(cx, cx->names().GetTypeError, NullHandleValue,
                                 args, error);
 }
@@ -1982,7 +2057,7 @@ bool js::GetTypeError(JSContext* cx, unsigned errorNumber,
 bool js::GetAggregateError(JSContext* cx, unsigned errorNumber,
                            MutableHandleValue error) {
   FixedInvokeArgs<1> args(cx);
-  args[0].set(Int32Value(errorNumber));
+  args[0].setInt32(errorNumber);
   return CallSelfHostedFunction(cx, cx->names().GetAggregateError,
                                 NullHandleValue, args, error);
 }

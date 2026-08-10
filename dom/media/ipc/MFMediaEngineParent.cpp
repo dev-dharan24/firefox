@@ -618,7 +618,7 @@ HRESULT MFMediaEngineParent::SetMediaInfo(const MediaInfoIPDL& aInfo,
   }
 
   if (isEncrypted && mContentProtectionManager) {
-    auto* proxy = mContentProtectionManager->GetCDMProxy();
+    RefPtr<MFCDMProxy> proxy = mContentProtectionManager->GetCDMProxy();
     MOZ_ASSERT(proxy);
     mMediaSource->SetCDMProxy(proxy);
   }
@@ -793,8 +793,11 @@ mozilla::ipc::IPCResult MFMediaEngineParent::RecvSetCDMProxyId(
     LOG("WMFClearKey CDM detected, enabling frame server mode");
     mIsFrameServerMode = true;
   }
-  HRESULT rv =
-      MakeAndInitialize<MFContentProtectionManager>(&mContentProtectionManager);
+  if (mContentProtectionManager) {
+    mContentProtectionManager->Shutdown();
+  }
+  HRESULT rv = MakeAndInitialize<MFContentProtectionManager>(
+      &mContentProtectionManager, mManagerThread);
   CDM_SETUP_IPC_RETURN_IF_FAILED(rv,
                                  "Failed to create content protection manager");
 
@@ -840,8 +843,7 @@ mozilla::ipc::IPCResult MFMediaEngineParent::RecvSetCDMProxyId(
         if (self->CanSend() && self->mMediaEngine) {
           (void)self->SendNotifyWaitingForKey();
         }
-      },
-      mManagerThread);
+      });
 
   // TODO : is it possible to set CDM proxy before creating media source? If so,
   // handle that as well.

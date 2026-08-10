@@ -1870,6 +1870,18 @@ class PresShell final : public nsStubDocumentObserver,
    */
   bool IsForcingLayoutForHiddenContent(const nsIFrame*) const;
 
+  void IncrementContentVisibilityHiddenCount() {
+    ++mContentVisibilityHiddenCount;
+  }
+  void DecrementContentVisibilityHiddenCount() {
+    MOZ_ASSERT(mContentVisibilityHiddenCount > 0,
+               "Increment/decrement calls should be balanced");
+    --mContentVisibilityHiddenCount;
+  }
+  bool HasContentVisibilityHiddenFrames() const {
+    return mContentVisibilityHiddenCount > 0;
+  }
+
   void RegisterContentVisibilityAutoFrame(nsIFrame* aFrame) {
     mContentVisibilityAutoFrames.Insert(aFrame);
   }
@@ -3434,6 +3446,9 @@ class PresShell final : public nsStubDocumentObserver,
   uint32_t mFontSizeInflationEmPerLine;
   uint32_t mFontSizeInflationMinTwips;
   uint32_t mFontSizeInflationLineThreshold;
+
+  // How many frames in the frame tree have 'content-visibility: hidden'.
+  uint32_t mContentVisibilityHiddenCount = 0;
 
   // Can be multiple of nsISelectionDisplay::DISPLAY_*.
   int16_t mSelectionFlags;

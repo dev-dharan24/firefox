@@ -24,6 +24,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import mozilla.appservices.fxaclient.FxaException
 import mozilla.appservices.sync15.SyncTelemetryPing
 import mozilla.appservices.syncmanager.ServiceStatus
 import mozilla.appservices.syncmanager.SyncAuthInfo
@@ -248,7 +249,7 @@ internal class WorkManagerSyncDispatcher(
             .addTag(SyncWorkerTag.Common.name)
             .addTag(SyncWorkerTag.Debounce.name)
             .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
+                BackoffPolicy.LINEAR,
                 SYNC_WORKER_BACKOFF_DELAY_MINUTES,
                 TimeUnit.MINUTES,
             )
@@ -273,7 +274,7 @@ internal class WorkManagerSyncDispatcher(
             .addTag(if (debounce) SyncWorkerTag.Debounce.name else SyncWorkerTag.Immediate.name)
             .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
             .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL,
+                BackoffPolicy.LINEAR,
                 SYNC_WORKER_BACKOFF_DELAY_MINUTES,
                 TimeUnit.MINUTES,
             )
@@ -551,6 +552,9 @@ internal class WorkManagerSyncWorker(
                 syncKey = authKey.k,
                 tokenserverUrl = tokenServerUrl,
             )
+        } catch (exception: FxaException.Forbidden) {
+            logger.error("Account is not authorized for the Sync scope", exception)
+            null
         } catch (exception: IllegalStateException) {
             logger.error("Error getting sync auth info", exception)
             null

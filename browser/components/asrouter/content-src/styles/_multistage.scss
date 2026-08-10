@@ -105,7 +105,7 @@ html {
 
 .onboardingContainer:has(theme-picker) {
   .content-tile {
-    max-width: 450px;
+    max-width: 470px;
     padding-bottom: var(--space-large);
   }
 }
@@ -431,6 +431,20 @@ html {
       @media (prefers-contrast) {
         text-decoration: none;
       }
+    }
+  }
+
+  // The preonboarding splash covers the whole window, which already rounds
+  // and clips the dialog to match its own corners, so the splash shouldn't
+  // include rounded corners. Its focus ring is also unncessary, as it is
+  // non-interactable.
+  .screen.TOU_ONBOARDING_LOADING {
+    &:focus-visible {
+      outline: none;
+    }
+
+    .main-content {
+      border-radius: 0;
     }
   }
 

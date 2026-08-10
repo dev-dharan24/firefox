@@ -839,7 +839,7 @@ export var UrlbarUtils = {
    *   Epoch timestamp in ms after which the block expires.
    */
   async blockAutofill(url, blockUntilMs) {
-    if (this.isOriginUrl(url)) {
+    if (UrlbarShared.isOriginUrl(url)) {
       await this.blockOriginAutofill(url, blockUntilMs);
     } else {
       await this.blockOriginPageAutofill(url, blockUntilMs);
@@ -1069,7 +1069,7 @@ export var UrlbarUtils = {
     }
     let basehost = origin.host.replace(/^www\./, "");
     let scope = /** @type {"origin" | "page"} */ (
-      this.isOriginUrl(url) ? "origin" : "page"
+      UrlbarShared.isOriginUrl(url) ? "origin" : "page"
     );
     return `${scope}:${basehost}`;
   },
@@ -1169,7 +1169,7 @@ export var UrlbarUtils = {
       return null;
     }
     /** @type {"origin" | "url"} */
-    let level = this.isOriginUrl(url) ? "origin" : "url";
+    let level = UrlbarShared.isOriginUrl(url) ? "origin" : "url";
     return { blockedAt: entry.blockedAt, level };
   },
 
@@ -1187,20 +1187,59 @@ export var UrlbarUtils = {
   },
 
   /**
-   * Returns whether a URL is an origin URL, i.e. it has no path beyond "/",
-   * no query string, and no hash.
+   * Dismisses an autofill result, either by blocking the autofill pairing for
+   * `autoFill.dismissalBlockDurationMs` or by removing the URL from history
+   * entirely, and clears the URL's backspace bookkeeping either way. Failures
+   * are reported and swallowed so a caller can still re-run its query.
    *
    * @param {string} url
-   *   The URL to check.
-   * @returns {boolean}
-   *   True if the URL is an origin URL, false if it has a path, query, hash,
-   *   or is unparseable.
+   *   The dismissed autofill result's URL.
+   * @param {object} [options]
+   *   Options object.
+   * @param {boolean} [options.removeFromHistory]
+   *   Whether to remove the URL from history instead of blocking autofill
+   *   for it.
    */
-  isOriginUrl(url) {
-    let parsed = URL.parse(url);
-    return (
-      !!parsed && parsed.pathname === "/" && !parsed.search && !parsed.hash
-    );
+  async dismissAutofill(url, { removeFromHistory = false } = {}) {
+    if (removeFromHistory) {
+      await lazy.PlacesUtils.history.remove(url).catch(console.error);
+    } else {
+      await this.blockAutofill(
+        url,
+        Date.now() + lazy.UrlbarPrefs.get("autoFill.dismissalBlockDurationMs")
+      ).catch(console.error);
+    }
+
+    this.clearAutofillBackspaceEntryForUrl(url);
+  },
+
+  /**
+   * Re-integrates an autofill URL the user navigated to anyway: clears the
+   * URL's autofill block and its backspace bookkeeping, and reports what
+   * happened so the caller can record re-integration telemetry.
+   *
+   * @param {string} url
+   *   The URL being re-integrated.
+   * @returns {Promise<{wasBlocked: boolean, level: "origin" | "url", backspaceBlock: ?{blockedAt: number, level: "origin" | "url"}}>}
+   *   `wasBlocked` is whether a database block was actually cleared, `level`
+   *   the scope it was cleared at, and `backspaceBlock` the consumed backspace
+   *   block, if the URL had one.
+   */
+  async reintegrateAutofill(url) {
+    let isOrigin = UrlbarShared.isOriginUrl(url);
+    let wasBlocked = isOrigin
+      ? await this.clearOriginAutofillBlock(url)
+      : await this.clearOriginPageAutofillBlock(url);
+
+    // getBackspaceBlock reads and removes the {blockedAt} entry for telemetry.
+    // clearAutofillBackspaceEntryForUrl then removes any remaining
+    // sub-threshold {count} entry. Together they always clear the in-memory
+    // counter — visiting the url is a positive signal regardless of whether a
+    // database block existed.
+    let backspaceBlock = this.getBackspaceBlock(url);
+    this.clearAutofillBackspaceEntryForUrl(url);
+
+    return { wasBlocked, level: isOrigin ? "origin" : "url", backspaceBlock };
   },
 
   /**
@@ -1285,13 +1324,14 @@ export var UrlbarUtils = {
    * Add the search to form history.  This also updates any existing form
    * history for the search.
    *
-   * @param {UrlbarInput} input The UrlbarInput object requesting the addition.
+   * @param {boolean} isPrivate
+   *   Whether the search is private is in a private window.
    * @param {string} value The value to add.
    * @param {string} [source] The source of the addition, usually
    *        the name of the engine the search was made with.
    * @returns {Promise<void>} resolved once the operation is complete
    */
-  addToFormHistory(input, value, source) {
+  async addToFormHistory(isPrivate, value, source) {
     // If the user types a search engine alias without a search string,
     // we have an empty search string and we can't bump it.
     // We also don't want to add history in private browsing mode.
@@ -1299,13 +1339,13 @@ export var UrlbarUtils = {
     // particularly useful to the user.
     if (
       !value ||
-      input.isPrivate ||
+      isPrivate ||
       value.length >
         lazy.SearchSuggestionController.SEARCH_HISTORY_MAX_VALUE_LENGTH
     ) {
-      return Promise.resolve();
+      return;
     }
-    return lazy.FormHistory.update({
+    await lazy.FormHistory.update({
       op: "bump",
       fieldname: lazy.DEFAULT_FORM_HISTORY_PARAM,
       value,
@@ -1337,19 +1377,6 @@ export var UrlbarUtils = {
     return uri.length > UrlbarShared.MAX_TEXT_LENGTH
       ? uri
       : Services.textToSubURI.unEscapeURIForUI(uri);
-  },
-
-  /**
-   * Checks whether a given text has right-to-left direction or not.
-   *
-   * @param {string} value The text which should be check for RTL direction.
-   * @param {Window} window The window where 'value' is going to be displayed.
-   * @returns {boolean} Returns true if text has right-to-left direction and
-   *                    false otherwise.
-   */
-  isTextDirectionRTL(value, window) {
-    let directionality = window.windowUtils.getDirectionFromText(value);
-    return directionality == window.windowUtils.DIRECTION_RTL;
   },
 
   /**

@@ -512,8 +512,14 @@ input:where([type="color"], [type="reset"], [type="button"], [type="submit"]) {
   background-color: ButtonFace;
   cursor: default;
   box-sizing: border-box;
-  user-select: none;
   break-inside: avoid;
+}
+
+/* Disable text-selection by default, for button-flavored input elements
+   (including the file-selector button for input[type="file"]) */
+::file-selector-button,
+input:where([type="color"], [type="reset"], [type="button"], [type="submit"]) {
+  user-select: none;
 }
 
 /* Text-related properties for buttons: these ones are not shared with

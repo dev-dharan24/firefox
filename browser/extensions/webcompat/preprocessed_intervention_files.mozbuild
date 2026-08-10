@@ -168,4 +168,8 @@ preprocessed_intervention_files = [
     "bug2051501-community.acer.com-fix_clipped_tables.css",
     "bug2051291-customers.extend-hide_preloader.css",
     "bug2053077-jobs.abbott-restore_otp_inputs.css",
+    "bug2057149-patreon.com.js",
+    "bug2058162-the-image-editor.com-allow_body_scrollbar.css",
+    "bug2059742-13coins.toast.site-vertically_shrink_menuitems.css",
+    "bug2060224-alreadyordered.no.js",
 ]

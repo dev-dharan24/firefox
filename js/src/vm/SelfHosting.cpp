@@ -829,7 +829,9 @@ static bool intrinsic_GeneratorSetClosed(JSContext* cx, unsigned argc,
   MOZ_ASSERT(args[0].isObject());
 
   GeneratorObject* genObj = &args[0].toObject().as<GeneratorObject>();
-  genObj->setClosed(cx);
+  if (!genObj->isClosed()) {
+    genObj->setClosed(cx);
+  }
   return true;
 }
 

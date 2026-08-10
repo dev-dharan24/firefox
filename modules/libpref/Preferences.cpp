@@ -1454,7 +1454,8 @@ class CallbackNode : public CallbackData {
                bool aIsPrefix)
       : CallbackData(aFunc, aData),
         mDomain(AsVariant(CopyStrippingTrailingDot(aDomain))),
-        mIsPrefix(aIsPrefix) {
+        mIsPrefix(aIsPrefix),
+        mSingleDomainHadTrailingDot(StringEndsWith(aDomain, "."_ns)) {
 #ifdef DEBUG
     mRawDomain = aDomain;
 #endif
@@ -1477,6 +1478,27 @@ class CallbackNode : public CallbackData {
   // Func(), Data(), ClearFunc() are inherited from CallbackData.
 
   bool IsPrefix() const { return mIsPrefix; }
+
+  // Whether this callback matches aPrefName exactly. Called at the terminal
+  // trie node, where the dot-stripped domain already equals the dot-stripped
+  // name: a domain registered with a trailing dot covers the subtree below it,
+  // not the shorter stem name.
+  bool MatchesTerminalPref(const nsACString& aPrefName,
+                           bool aPrefHasTrailingDot) const {
+    if (aPrefHasTrailingDot) {
+      return true;
+    }
+    if (mDomain.is<nsCString>()) {
+      return !mSingleDomainHadTrailingDot;
+    }
+    // Array entries keep their dots, so an exact one still matches.
+    for (const char* const* p = mDomain.as<const char* const*>(); *p; ++p) {
+      if (aPrefName.Equals(*p)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
 #ifdef DEBUG
   // Domain exactly as registered, before trailing-dot stripping (single-string
@@ -1521,6 +1543,8 @@ class CallbackNode : public CallbackData {
   Variant<nsCString, const char* const*> mDomain;
 
   bool mIsPrefix;
+  // Array entries keep their dots in mDomain, so this stays false for them.
+  bool mSingleDomainHadTrailingDot = false;
 };
 
 // Node in the dot-segmented pref callback trie.  Each node represents one
@@ -1537,11 +1561,15 @@ struct CallbackTrieNode {
   nsTArray<Child> mChildren;
   nsTArray<RefPtr<CallbackNode>> mCallbacks;
 
-  // Append this node's live callbacks (skipping dead, null-Func nodes) to aOut
-  // in LIFO order (newest registration first).
-  void AppendAll(nsTArray<RefPtr<CallbackNode>>& aOut) const {
+  // Append this node's live callbacks (skipping dead, null-Func nodes) that
+  // match aPrefName to aOut in LIFO order (newest registration first).
+  void AppendAll(nsTArray<RefPtr<CallbackNode>>& aOut,
+                 const nsACString& aPrefName, bool aPrefHasTrailingDot) const {
     for (const RefPtr<CallbackNode>& node : Reversed(mCallbacks)) {
-      if (node->Func()) aOut.AppendElement(node);
+      if (node->Func() &&
+          node->MatchesTerminalPref(aPrefName, aPrefHasTrailingDot)) {
+        aOut.AppendElement(node);
+      }
     }
   }
 
@@ -1659,13 +1687,17 @@ class CallbackTrie {
   // registration first).
   void CollectMatchingForNotify(const nsCString& aPrefName,
                                 nsTArray<RefPtr<CallbackNode>>& aOut) {
+    const bool prefHasTrailingDot =
+        !aPrefName.IsEmpty() && aPrefName.Last() == '.';
     mRoot.AppendPrefix(aOut);
     Walk(aPrefName,
-         [&aOut](CallbackTrieNode* aNode, const nsACString& aSegment,
-                 bool aIsLast) -> CallbackTrieNode* {
+         [&aOut, &aPrefName, prefHasTrailingDot](
+             CallbackTrieNode* aNode, const nsACString& aSegment,
+             bool aIsLast) -> CallbackTrieNode* {
            CallbackTrieNode* child = aNode->FindChild(aSegment);
            if (!child) return nullptr;
-           aIsLast ? child->AppendAll(aOut) : child->AppendPrefix(aOut);
+           aIsLast ? child->AppendAll(aOut, aPrefName, prefHasTrailingDot)
+                   : child->AppendPrefix(aOut);
            return child;
          });
   }
@@ -3569,9 +3601,13 @@ void nsPrefBranch::NotifyObserver(const char* aNewPref, void* aData) {
   }
 
   // Remove any root this string may contain so as to not confuse the observer
-  // by passing them something other than what they passed us as a topic.
-  uint32_t len = pCallback->GetPrefBranch()->GetRootLength();
-  nsDependentCString suffix(aNewPref + len);
+  // by passing them something other than what they passed us as a topic. The
+  // trie normalizes trailing dots while the root length does not, so clamp to
+  // keep the topic a suffix of the name.
+  nsDependentCString fullPref(aNewPref);
+  uint32_t len = std::min<uint32_t>(pCallback->GetPrefBranch()->GetRootLength(),
+                                    fullPref.Length());
+  const nsDependentCSubstring suffix(Substring(fullPref, len));
 
   observer->Observe(static_cast<nsIPrefBranch*>(pCallback->GetPrefBranch()),
                     NS_PREFBRANCH_PREFCHANGE_TOPIC_ID,

@@ -114,7 +114,7 @@ class BaselineFrame {
     return CalleeTokenIsConstructing(calleeToken());
   }
   bool isResumingGenerator() const {
-    return framePrefix()->descriptor().isResumingGenerator();
+    return framePrefix()->isResumingGenerator();
   }
   JSScript* script() const {
     return MaybeForwardedScriptFromCalleeToken(calleeToken());
@@ -143,14 +143,7 @@ class BaselineFrame {
     return UndefinedValue();
   }
 
-  Value* resumeArgs() {
-    MOZ_ASSERT(isResumingGenerator());
-    if (isFunctionFrame()) {
-      return argv() + numFormalArgs();
-    }
-    MOZ_ASSERT(isModuleFrame());
-    return framePrefix()->moduleResumeSlots();
-  }
+  Value* resumeArgs() { return framePrefix()->resumeArgs(); }
 
 #ifdef DEBUG
   size_t debugNumValueSlots() const { return numValueSlots(debugFrameSize()); }

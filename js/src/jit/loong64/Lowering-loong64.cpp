@@ -182,7 +182,7 @@ void LIRGeneratorLOONG64::lowerDivI(MDiv* div) {
     if (std::has_single_bit(mozilla::Abs(rhs))) {
       int32_t shift = mozilla::FloorLog2(mozilla::Abs(rhs));
       auto* lir = new (alloc())
-          LDivPowTwoI(useRegister(div->lhs()), temp(), shift, rhs < 0);
+          LDivPowTwoI(useRegisterAtStart(div->lhs()), temp(), shift, rhs < 0);
       if (div->fallible()) {
         assignSnapshot(lir, div->bailoutKind());
       }
@@ -234,7 +234,8 @@ void LIRGeneratorLOONG64::lowerModI(MMod* mod) {
 
     if (std::has_single_bit(mozilla::Abs(rhs))) {
       int32_t shift = mozilla::FloorLog2(mozilla::Abs(rhs));
-      auto* lir = new (alloc()) LModPowTwoI(useRegister(mod->lhs()), shift);
+      auto* lir =
+          new (alloc()) LModPowTwoI(useRegisterAtStart(mod->lhs()), shift);
       if (mod->fallible()) {
         assignSnapshot(lir, mod->bailoutKind());
       }
@@ -288,7 +289,7 @@ void LIRGeneratorLOONG64::lowerUDiv(MDiv* div) {
     if (std::has_single_bit(rhs)) {
       int32_t shift = mozilla::FloorLog2(rhs);
       auto* lir = new (alloc())
-          LDivPowTwoI(useRegister(div->lhs()), temp(), shift, false);
+          LDivPowTwoI(useRegisterAtStart(div->lhs()), temp(), shift, false);
       if (div->fallible()) {
         assignSnapshot(lir, div->bailoutKind());
       }
@@ -347,7 +348,8 @@ void LIRGeneratorLOONG64::lowerUMod(MMod* mod) {
 
     if (std::has_single_bit(rhs)) {
       int32_t shift = mozilla::FloorLog2(rhs);
-      auto* lir = new (alloc()) LModPowTwoI(useRegister(mod->lhs()), shift);
+      auto* lir =
+          new (alloc()) LModPowTwoI(useRegisterAtStart(mod->lhs()), shift);
       if (mod->fallible()) {
         assignSnapshot(lir, mod->bailoutKind());
       }

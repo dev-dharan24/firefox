@@ -1300,7 +1300,7 @@ html {
 }
 
 .onboardingContainer:has(theme-picker) .content-tile {
-  max-width: 450px;
+  max-width: 470px;
   padding-bottom: var(--space-large);
 }
 
@@ -1531,6 +1531,12 @@ html {
 }
 .onboardingContainer .main-content .no-steps .steps {
   display: none;
+}
+.onboardingContainer .screen.TOU_ONBOARDING_LOADING:focus-visible {
+  outline: none;
+}
+.onboardingContainer .screen.TOU_ONBOARDING_LOADING .main-content {
+  border-radius: 0;
 }
 .onboardingContainer .screen {
   display: flex;

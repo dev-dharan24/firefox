@@ -76,6 +76,9 @@ export var WindowsLaunchOnLogin = {
    * restrictions on writing to the registry in MSIX.
    */
   async createLaunchOnLogin() {
+    if (Services.policies && !Services.policies.isAllowed("launchOnLogin")) {
+      return;
+    }
     if (Services.sysinfo.getProperty("hasWinPackageId")) {
       await this.enableLaunchOnLoginMSIX();
     } else {

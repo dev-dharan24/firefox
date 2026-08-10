@@ -38,28 +38,17 @@ class DateTimeFormatObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto NUMBERING_SYSTEM_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto CALENDAR_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(2);
-  static constexpr auto TIMEZONE_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(3);
-  static constexpr auto OPTIONS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(4);
-  static constexpr auto PATTERN_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(5);
-  static constexpr auto CALENDAR_VALUE_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(6);
-  static constexpr auto DATE_FORMAT_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(7);
-  static constexpr auto DATE_INTERVAL_FORMAT_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(8);
-  static constexpr auto DATE_TIME_VALUE_KIND_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(9);
-  static constexpr auto BOUND_FORMAT_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(10);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE_SLOT, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, NUMBERING_SYSTEM_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, CALENDAR_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, TIMEZONE_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, OPTIONS_SLOT, Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(5, PATTERN_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(6, CALENDAR_VALUE_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(7, DATE_FORMAT_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(8, DATE_INTERVAL_FORMAT_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(9, DATE_TIME_VALUE_KIND_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(10, BOUND_FORMAT_SLOT, Object, Undefined);
   static constexpr uint32_t SLOT_COUNT = 11;
 
   // Estimated memory use for UDateFormat (see IcuMemoryUsage).

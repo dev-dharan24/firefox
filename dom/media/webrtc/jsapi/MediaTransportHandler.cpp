@@ -719,7 +719,7 @@ void MediaTransportHandlerSTS::ActivateTransport(
           stream->DisableComponent(2);
         }
 
-        mTransports[aTransportId] = transport;
+        mTransports[aTransportId] = std::move(transport);
       },
       [](const std::string& aError) {});
 }

@@ -696,13 +696,6 @@ export class LoginManagerPrompter {
             case "dismissed":
               // Note that this can run after `showing` but before `shown` upon tab switch.
               this.wasDismissed = true;
-              // The username field hosts its <input> in a shadow root, so when
-              // the panel hides the platform doesn't reliably return focus to
-              // the content browser. Restore it here, but only for the selected
-              // browser so we don't steal focus on a tab switch.
-              if (PopupNotifications.tabbrowser?.selectedBrowser === browser) {
-                browser.focus();
-              }
             // Fall through.
             case "removed": {
               // Note that this can run after `showing` and `shown` for the

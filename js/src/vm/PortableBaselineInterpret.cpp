@@ -1348,10 +1348,12 @@ uint64_t ICInterpretOps(uint64_t arg0, uint64_t arg1, ICStub* stub,
         ObjOperandId objId = cacheIRReader.objOperandId();
         JSObject* obj = reinterpret_cast<JSObject*>(READ_REG(objId.id()));
         const JSClass* clasp = obj->getClass();
+        // This should match MacroAssembler::branchIfIsArrayBufferMaybeShared
         if (clasp == &FixedLengthArrayBufferObject::class_ ||
             clasp == &FixedLengthSharedArrayBufferObject::class_ ||
             clasp == &ResizableArrayBufferObject::class_ ||
-            clasp == &GrowableSharedArrayBufferObject::class_) {
+            clasp == &GrowableSharedArrayBufferObject::class_ ||
+            clasp == &ImmutableArrayBufferObject::class_) {
           FAIL_IC();
         }
         DISPATCH_CACHEOP();
@@ -9373,7 +9375,10 @@ bool PortablebaselineInterpreterStackCheck(JSContext* cx, RunState& state,
   StackVal* base = reinterpret_cast<StackVal*>(pbs.base);
   StackVal* top = reinterpret_cast<StackVal*>(pbs.top);
   ssize_t margin = kStackMargin / sizeof(StackVal);
-  ssize_t needed = numActualArgs + state.script()->nslots() + margin;
+  size_t numFormals =
+      state.isInvoke() ? state.script()->function()->nargs() : 0;
+  ssize_t needed =
+      std::max(numActualArgs, numFormals) + state.script()->nslots() + margin;
   return (top - base) >= needed;
 }
 

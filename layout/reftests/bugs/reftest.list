@@ -846,7 +846,7 @@ fuzzy(0-2,0-5) == 402629-3.html 402629-3-ref.html
 == 403129-3.html 403129-3-ref.html
 == 403129-4.html 403129-4-ref.html
 random == 403134-1.html 403134-1-ref.html # bug 405377
-skip-if(winWidget&&!isDebugBuild) == 403181-1.xml 403181-1-ref.xml
+fuzzy-if(!useDrawSnapshot,130-131,177-177) skip-if(winWidget&&!isDebugBuild) == 403181-1.xml 403181-1-ref.xml
 == 403249-1a.html 403249-1-ref.html
 == 403249-1b.html 403249-1-ref.html
 == 403249-2a.html 403249-2-ref.html
@@ -1129,7 +1129,7 @@ random == 445004-1.html 445004-1-ref.html # bug 472268
 == 445142-2b.html 445142-2-ref.html
 skip-if(winWidget&&isCoverageBuild) fails == 446100-1a.html about:blank
 fuzzy-if(winWidget,177-178,127-127) fails == 446100-1b.html about:blank
-fuzzy-if(winWidget,171-172,160-160) fails-if(!winWidget) == 446100-1c.html about:blank
+fuzzy-if(winWidget,171-172,192-192) fails-if(!winWidget) == 446100-1c.html about:blank
 fails == 446100-1d.html about:blank
 fails-if(!useDrawSnapshot) == 446100-1e.html about:blank
 == 446100-1f.html about:blank
@@ -1683,7 +1683,7 @@ fuzzy(0-40,0-875) == 797797-1.html 797797-1-ref.html # 'opacity:N' and rgba(,,,N
 fuzzy(0-2,0-2310) == 797797-2.html 797797-2-ref.html # 'opacity:N' and rgba(,,,N) text don't match precisely
 == 801994-1.html 801994-1-ref.html
 == 804323-1.html 804323-1-ref.html
-fuzzy-if(Android,0-8,0-608) fails-if(useDrawSnapshot) == 811301-1.html 811301-1-ref.html
+fuzzy-if(Android,0-8,0-608) == 811301-1.html 811301-1-ref.html
 == 812824-1.html 812824-1-ref.html
 == 814677.html 814677-ref.html
 == 814952-1.html 814952-1-ref.html

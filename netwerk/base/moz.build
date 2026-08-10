@@ -330,6 +330,11 @@ if CONFIG["MOZ_WIDGET_TOOLKIT"] == "cocoa":
         "/xpcom/base",
     ]
 
+if CONFIG["MOZ_WIDGET_TOOLKIT"] == "android":
+    LOCAL_INCLUDES += [
+        "/netwerk/system/android",
+    ]
+
 GeneratedFile(
     "ascii_pac_utils.inc", script="makecppstring.py", inputs=["ascii_pac_utils.js"]
 )

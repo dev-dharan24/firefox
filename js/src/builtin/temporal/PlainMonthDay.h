@@ -33,8 +33,8 @@ class PlainMonthDayObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto PACKED_DATE_SLOT = TypedSlot<ValueType::Int32>(0);
-  static constexpr auto CALENDAR_SLOT = TypedSlot<ValueType::Int32>(1);
+  JS_DEFINE_TYPED_SLOT(0, PACKED_DATE_SLOT, Int32);
+  JS_DEFINE_TYPED_SLOT(1, CALENDAR_SLOT, Int32);
   static constexpr uint32_t SLOT_COUNT = 2;
 
   /**

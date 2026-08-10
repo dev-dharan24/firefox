@@ -533,6 +533,13 @@ export async function runSearchTheWeb(toolParams, conversation, signal) {
     couldAnswer: validated.could_answer,
   });
 
+  const titlesByUrl = new Map(results.map(item => [item.url, item.title]));
+  const readSources = readUrls.map(url => {
+    const title = titlesByUrl.get(url);
+    return title ? { url, title } : { url };
+  });
+  conversation.addCitations(readSources);
+
   return {
     ...validated,
     searched_urls: searchedUrls,

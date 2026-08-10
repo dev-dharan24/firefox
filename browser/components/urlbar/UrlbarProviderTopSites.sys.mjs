@@ -14,6 +14,7 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
+  PartnerLinkAttribution: "resource:///modules/PartnerLinkAttribution.sys.mjs",
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   TopSites: "resource:///modules/topsites/TopSites.sys.mjs",
   TOP_SITES_DEFAULT_ROWS: "resource:///modules/topsites/constants.mjs",
@@ -337,6 +338,30 @@ export class UrlbarProviderTopSites extends UrlbarProvider {
         Glean.contextualServicesTopsites.impression[`urlbar_${index}`].add(1);
       }
     });
+  }
+
+  /**
+   * @param {UrlbarQueryContext} queryContext
+   * @param {UrlbarParentController} _controller
+   * @param {object} details
+   * @param {UrlbarResult} details.result
+   */
+  onEngagement(queryContext, _controller, { result }) {
+    if (result.payload.sendAttributionRequest) {
+      lazy.PartnerLinkAttribution.makeRequest({
+        targetURL: result.payload.url,
+        source: queryContext.sapName,
+        campaignID: Services.prefs.getStringPref(
+          "browser.partnerlink.campaign.topsites"
+        ),
+      });
+
+      if (!queryContext.isPrivate) {
+        // The position is 1-based for telemetry
+        const position = result.rowIndex + 1;
+        Glean.contextualServicesTopsites.click[`urlbar_${position}`].add(1);
+      }
+    }
   }
 
   async #fetchLastVisit(url) {

@@ -88,6 +88,17 @@ const MOCK_RS_RECORDS = [
     version: `v${major}.0`,
     is_default: true,
   }))
+  // The memories relevant context prompt renders the retrieved memory list, so
+  // it needs the placeholder the real prompt has.
+  .map(record =>
+    record.feature === "memories-relevant-context"
+      ? {
+          ...record,
+          prompts:
+            "# Existing Memories\n\n## Existing Memories\n{relevantMemoriesList}",
+        }
+      : record
+  )
   // Chat resolves model+params from v2 kind:"params" records (one generic
   // fallback + one per model choice).
   .concat([

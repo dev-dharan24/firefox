@@ -426,6 +426,12 @@ export const QueryCache = {
       FRECENT_SITES_UPDATE_INTERVAL,
       ShellService
     ),
+    isOneClickSetDefaultEnabled: new CachedTargetingGetter(
+      "isOneClickSetDefaultEnabled",
+      null,
+      FRECENT_SITES_UPDATE_INTERVAL,
+      ShellService
+    ),
     currentThemes: new CachedTargetingGetter(
       "getAddonsByTypes",
       ["theme"],
@@ -885,6 +891,11 @@ const TargetingGetters = {
   },
   get isDefaultBrowserUncached() {
     return ShellService.isDefaultBrowser();
+  },
+  get isOneClickSetDefaultEnabled() {
+    return QueryCache.getters.isOneClickSetDefaultEnabled
+      .get()
+      .catch(() => null);
   },
   get devToolsOpenedCount() {
     return lazy.devtoolsSelfXSSCount;

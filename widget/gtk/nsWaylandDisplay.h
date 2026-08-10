@@ -197,6 +197,8 @@ class nsWaylandDisplay {
   MonitorConfig* GetMonitorConfig(int x, int y);
   bool RemoveMonitorConfig(int aId);
 
+  bool IsTFSupported(int aTF);
+
   ~nsWaylandDisplay();
 
  private:

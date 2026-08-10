@@ -1663,18 +1663,14 @@ void ArrayMemoryView::visitSetInitializedLength(MSetInitializedLength* ins) {
     return;
   }
 
-  // Replace by the new initialized length.  Note that the argument of
-  // MSetInitializedLength is the last index and not the initialized length.
-  // To obtain the length, we need to add 1 to it, and thus we need to create
-  // a new constant that we register in the ArrayState.
+  // Replace by the new initialized length.
   state_ = BlockState::Copy(alloc_, state_);
   if (!state_) {
     oom_ = true;
     return;
   }
 
-  int32_t initLengthValue = ins->index()->maybeConstantValue()->toInt32() + 1;
-  MConstant* initLength = MConstant::NewInt32(alloc_, initLengthValue);
+  MConstant* initLength = MConstant::NewInt32(alloc_, ins->length());
   ins->block()->insertBefore(ins, initLength);
   ins->block()->insertBefore(ins, state_);
   state_->setInitializedLength(initLength);
@@ -1965,7 +1961,7 @@ bool ArgumentsReplacer::escapes(MInstruction* ins, bool guardedForMapped) {
         MLoadFixedSlot* load = def->toLoadFixedSlot();
 
         // We can replace arguments.callee.
-        if (load->slot() == ArgumentsObject::CALLEE_SLOT) {
+        if (load->slot() == ArgumentsObject::CALLEE_SLOT.index()) {
           MOZ_ASSERT(guardedForMapped);
           continue;
         }
@@ -2424,9 +2420,8 @@ MNewArrayObject* ArgumentsReplacer::inlineArgsArray(MInstruction* ins,
     auto* elements = MElements::New(alloc(), newArray);
     ins->block()->insertBefore(ins, elements);
 
-    MConstant* index = nullptr;
     for (uint32_t i = 0; i < count; i++) {
-      index = MConstant::NewInt32(alloc(), i);
+      auto* index = MConstant::NewInt32(alloc(), i);
       ins->block()->insertBefore(ins, index);
 
       MDefinition* arg = actualArgs->getArg(begin + i);
@@ -2438,7 +2433,9 @@ MNewArrayObject* ArgumentsReplacer::inlineArgsArray(MInstruction* ins,
       ins->block()->insertBefore(ins, barrier);
     }
 
-    auto* initLength = MSetInitializedLength::New(alloc(), elements, index);
+    auto* initLength =
+        MSetInitializedLength::New(alloc(), elements, count,
+                                   /* needsPreBarrier = */ false);
     ins->block()->insertBefore(ins, initLength);
   }
 
@@ -2615,7 +2612,7 @@ void ArgumentsReplacer::visitLoadFixedSlot(MLoadFixedSlot* ins) {
     return;
   }
 
-  MOZ_ASSERT(ins->slot() == ArgumentsObject::CALLEE_SLOT);
+  MOZ_ASSERT(ins->slot() == ArgumentsObject::CALLEE_SLOT.index());
 
   MDefinition* replacement;
   if (isInlinedArguments()) {

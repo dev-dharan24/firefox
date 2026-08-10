@@ -14,8 +14,7 @@ namespace js {
 using JSONParseNode = JSString;
 
 class ParseRecordObject : public NativeObject {
-  static constexpr auto PARSE_NODE_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(0);
+  JS_DEFINE_TYPED_SLOT(0, PARSE_NODE_SLOT, String, Undefined);
   static constexpr uint32_t VALUE_SLOT = 1;
   static constexpr uint32_t SLOT_COUNT = 2;
 

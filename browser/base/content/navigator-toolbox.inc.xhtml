@@ -45,8 +45,10 @@
               stopwatchid="tabClick">
 # If the name (tabbrowser-arrowscrollbox) or structure of this changes
 # significantly, there is an optimization in
-# DisplayPortUtils::MaybeCreateDisplayPortInFirstScrollFrameEncountered based
-# the current structure that we may want to revisit.
+# DisplayPortUtils::MaybeCreateDisplayPortInFirstScrollFrameEncountered based on
+# the current structure that we may want to revisit. It relies on the
+# arrowscrollbox's own scroll container being a direct child frame, so that it
+# can be given a displayport without walking the tabs inside it.
           <div id="pinned-drop-indicator">
             <html:img id="pinned-drop-indicator-icon" src="chrome://browser/skin/pin.svg" role="presentation" loading="lazy"/>
             <span id="pinned-drop-indicator-text" data-l10n-id="pinned-tabs-drop-indicator"></span>
@@ -518,7 +520,7 @@
                       class="toolbarbutton-1"
                       aria-haspopup="dialog"
                       aria-expanded="false"
-                      data-l10n-id="smartwindow-group-tabs-button">
+                      data-l10n-id="smartwindow-organize-tabs-button">
       </toolbarbutton>
     </toolbaritem>
 

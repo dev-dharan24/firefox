@@ -1003,14 +1003,7 @@ enum class RecorderType : int8_t {
   WEBRENDER
 };
 
-enum class FontType : int8_t {
-  DWRITE,
-  GDI,
-  MAC,
-  FONTCONFIG,
-  FREETYPE,
-  UNKNOWN
-};
+enum class FontType : int8_t { DWRITE, MAC, FONTCONFIG, FREETYPE, UNKNOWN };
 
 enum class NativeSurfaceType : int8_t {
   D3D10_TEXTURE,

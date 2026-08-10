@@ -556,6 +556,8 @@ nsresult ResolveHTTPSRecord(const nsACString& aHost,
                             nsIDNSService::DNSFlags aFlags,
                             TypeRecordResultType& aResult, uint32_t& aTTL) {
   nsAutoCString host(aHost);
+  // The last AliasMode (SvcPriority 0) TargetName we followed, if any.
+  nsAutoCString aliasTarget;
 
   // Follow HTTPS AliasMode (SvcPriority 0) targets across separate lookups.
   // Recursive resolvers do not chase the alias for us, so we re-query the
@@ -573,10 +575,10 @@ nsresult ResolveHTTPSRecord(const nsACString& aHost,
       rv = ResolveHTTPSRecordImpl(host, aFlags, aResult, aTTL, aliasName);
     }
 
-    if (NS_FAILED(rv)) {
-      // The resolver reported an error. Don't mask it by following a stale
-      // alias target that a previous iteration may have left behind, and make
-      // sure we don't surface a partial result.
+    if (NS_FAILED(rv) && rv != NS_ERROR_UNKNOWN_HOST) {
+      // A hard error (e.g. a malformed response). Don't mask it by following a
+      // stale alias target that a previous iteration may have left behind, and
+      // make sure we don't surface a partial result.
       aResult = AsVariant(Nothing());
       return rv;
     }
@@ -589,8 +591,26 @@ nsresult ResolveHTTPSRecord(const nsACString& aHost,
         !aliasName.Equals(host, nsCaseInsensitiveCStringComparator)) {
       LOG("ResolveHTTPSRecord following alias %s => %s", host.get(),
           aliasName.get());
+      aliasTarget = aliasName;
       host = std::move(aliasName);
       continue;
+    }
+
+    // No ServiceMode HTTPS record was found for this name.
+    if (!aliasTarget.IsEmpty()) {
+      // RFC 9460: an HTTPS AliasMode record must be followed to its TargetName
+      // even when the target has no HTTPS record of its own. Return the alias
+      // record so the connection is routed to the target; Happy Eyeballs then
+      // issues A/AAAA/HTTPS queries for it.
+      LOG("ResolveHTTPSRecord returning AliasMode record for %s",
+          aliasTarget.get());
+      SVCB alias;
+      alias.mSvcFieldPriority = 0;
+      alias.mSvcDomainName = aliasTarget;
+      CopyableTArray<SVCB> records;
+      records.AppendElement(std::move(alias));
+      aResult = AsVariant(std::move(records));
+      return NS_OK;
     }
 
     return NS_ERROR_UNKNOWN_HOST;

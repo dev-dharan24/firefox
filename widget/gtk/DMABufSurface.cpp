@@ -545,7 +545,7 @@ void DMABufSurface::FenceSet() {
       egl->IsExtensionSupported(EGLExtension::ANDROID_native_fence_sync)) {
     FenceDeleteLocked(lock);
 
-    mSync = egl->fCreateSync(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
+    mSync = egl->fCreateSyncKHR(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
     if (mSync) {
       auto rawFd = egl->fDupNativeFenceFDANDROID(mSync);
       mSyncFd = new gfx::FileHandleWrapper(UniqueFileHandle(rawFd));
@@ -566,7 +566,8 @@ void DMABufSurface::FenceWait(RefPtr<gl::GLContext> aGL,
 
   const EGLint attribs[] = {LOCAL_EGL_SYNC_NATIVE_FENCE_FD_ANDROID,
                             syncFd.get(), LOCAL_EGL_NONE};
-  EGLSync sync = egl->fCreateSync(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
+  EGLSync sync =
+      egl->fCreateSyncKHR(LOCAL_EGL_SYNC_NATIVE_FENCE_ANDROID, attribs);
   if (!sync) {
     gfxCriticalNoteOnce << "CreateSync failed";
     int rawFd = syncFd.get();

@@ -1145,6 +1145,11 @@ bool Assembler::oom() const {
 // expects all pools that need to be placed have been placed. If they haven't
 // then we need to go an flush the pools :(
 size_t Assembler::size() const { return m_buffer.size(); }
+// Returns the size of the buffer we can currently read, hence ignoring any
+// un-flushed data in currently-under-construction constant pool(s).
+size_t Assembler::readableSize() const {
+  return m_buffer.sizeExcludingCurrentPool();
+}
 // Size of the relocation table, in bytes.
 size_t Assembler::jumpRelocationTableBytes() const {
   return jumpRelocations_.length();

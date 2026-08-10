@@ -579,14 +579,14 @@ bool InvokeFromInterpreterStub(JSContext* cx,
   RootedFunction fun(cx, CalleeTokenToFunction(token));
   RootedValue rval(cx);
 
-  if (jsFrame->descriptor().isResumingGenerator()) {
+  if (jsFrame->isResumingGenerator()) {
     // Resuming a suspended generator. The ResumeFrameArgs are stored after the
     // formals with numActualArgs == 0.
 
     MOZ_RELEASE_ASSERT(fun->isGenerator());
     MOZ_ASSERT(numActualArgs == 0);
 
-    Value* resumeArgs = &argv[1 + fun->nargs()];
+    Value* resumeArgs = jsFrame->resumeArgs();
     Rooted<AbstractGeneratorObject*> genObj(
         cx, &resumeArgs[ResumeFrameArgs::GeneratorSlot]
                  .toObject()
@@ -594,6 +594,13 @@ bool InvokeFromInterpreterStub(JSContext* cx,
     RootedValue resumeValue(cx, resumeArgs[ResumeFrameArgs::ResumeValueSlot]);
     GeneratorResumeKind resumeKind =
         IntToResumeKind(resumeArgs[ResumeFrameArgs::ResumeKindSlot].toInt32());
+
+    // We're restarting the resume from scratch, so restore the generator's
+    // resume index. See ResumeFrameArgs.
+    MOZ_ASSERT(genObj->isRunning());
+    genObj->setResumeIndex(
+        resumeArgs[ResumeFrameArgs::ResumeIndexSlot].toInt32());
+    MOZ_ASSERT(genObj->isSuspended());
 
     AutoRealm ar(cx, genObj);
     if (!js::ResumeGenerator(cx, genObj, resumeValue, resumeKind, &rval)) {
@@ -621,7 +628,8 @@ bool InvokeFromInterpreterStub(JSContext* cx,
   return true;
 }
 
-static bool CheckOverRecursedImpl(JSContext* cx, size_t extra) {
+static bool CheckOverRecursedImpl(JSContext* cx, size_t extra,
+                                  bool isResumingGenerator = false) {
   // We just failed the jitStackLimit check. There are two possible reasons:
   //  1) jitStackLimit was the real stack limit and we're over-recursed
   //  2) jitStackLimit was set to JS::NativeStackLimitMin by
@@ -642,6 +650,13 @@ static bool CheckOverRecursedImpl(JSContext* cx, size_t extra) {
 #endif
 
   // This handles 2).
+  //
+  // Don't check for interrupts if we're in the middle of resuming a generator
+  // and the frame is half-initialized. Interrupt callbacks can run arbitrary JS
+  // and trigger complicated Debugger interactions.
+  if (isResumingGenerator) {
+    return true;
+  }
   gc::MaybeVerifyBarriers(cx);
   return cx->handleInterrupt();
 }
@@ -652,7 +667,7 @@ bool CheckOverRecursedBaseline(JSContext* cx, BaselineFrame* frame) {
   // The stack check in Baseline happens before pushing locals so we have to
   // account for that by including script->nslots() in the C++ recursion check.
   size_t extra = frame->script()->nslots() * sizeof(Value);
-  return CheckOverRecursedImpl(cx, extra);
+  return CheckOverRecursedImpl(cx, extra, frame->isResumingGenerator());
 }
 
 bool MutatePrototype(JSContext* cx, Handle<PlainObject*> obj,
@@ -941,7 +956,7 @@ bool CreateThisFromIC(JSContext* cx, HandleObject callee,
                                 argv);
 
   // CreateThis expects rval to be this magic value.
-  rval.set(MagicValue(JS_IS_CONSTRUCTING));
+  rval.setMagic(JS_IS_CONSTRUCTING);
 
   if (!js::CreateThis(cx, fun, newTarget, GenericObject, rval)) {
     return false;
@@ -986,7 +1001,7 @@ bool CreateThisFromICWithAllocSite(JSContext* cx, HandleObject callee,
 bool CreateThisFromIon(JSContext* cx, HandleObject callee,
                        HandleObject newTarget, MutableHandleValue rval) {
   // Return JS_IS_CONSTRUCTING for cases not supported by the inline call path.
-  rval.set(MagicValue(JS_IS_CONSTRUCTING));
+  rval.setMagic(JS_IS_CONSTRUCTING);
 
   if (!callee->is<JSFunction>()) {
     return true;
@@ -1199,15 +1214,8 @@ bool FinalSuspend(JSContext* cx, HandleObject obj, const jsbytecode* pc) {
 }
 
 bool DebugAfterYield(JSContext* cx, BaselineFrame* frame) {
-  // The BaselineFrame has just been constructed. We need to set its debuggee
-  // flag as necessary.
-  MOZ_ASSERT(!frame->isDebuggee());
-  if (frame->script()->isDebuggee()) {
-    frame->setIsDebuggee();
-    return DebugAPI::onResumeFrame(cx, frame);
-  }
-
-  return true;
+  MOZ_ASSERT_IF(frame->script()->isDebuggee(), frame->isDebuggee());
+  return DebugAPI::onResumeFrame(cx, frame);
 }
 
 bool GeneratorThrowOrReturn(JSContext* cx, BaselineFrame* frame,
@@ -1279,6 +1287,8 @@ ArrayObject* InitRestParameter(JSContext* cx, uint32_t length, Value* rest,
 
 bool HandleDebugTrap(JSContext* cx, BaselineFrame* frame,
                      const uint8_t* retAddr) {
+  MOZ_ASSERT(frame->isDebuggee());
+
   RootedScript script(cx, frame->script());
   jsbytecode* pc;
   if (frame->runningInInterpreter()) {
@@ -1299,14 +1309,11 @@ bool HandleDebugTrap(JSContext* cx, BaselineFrame* frame,
   }
 
   if (frame->isResumingGenerator()) {
-    // JSOp::AfterYield will set the frame's debuggee flag, call the
-    // onEnterFrame handler, and handle breakpoint/stepping at that op (in
-    // DebugAPI::slowPathOnResumeFrame).
-    MOZ_ASSERT(!frame->isDebuggee());
+    // Suppress breakpoints/stepping until after the JSOp::AfterYield op, which
+    // calls the onEnterFrame handler and handles breakpoint/stepping at that op
+    // (in DebugAPI::slowPathOnResumeFrame).
     return true;
   }
-
-  MOZ_ASSERT(frame->isDebuggee());
 
   if (DebugAPI::stepModeEnabled(script) && !DebugAPI::onSingleStep(cx)) {
     return false;

@@ -297,10 +297,10 @@ class LiveSavedFrameCache {
   };
 
   using EntryVector = Vector<Entry, 0, SystemAllocPolicy>;
-  EntryVector* frames;
+  EntryVector* frames{nullptr};
 
  public:
-  explicit LiveSavedFrameCache() : frames(nullptr) {}
+  explicit LiveSavedFrameCache() = default;
 
   LiveSavedFrameCache(LiveSavedFrameCache&& rhs) : frames(rhs.frames) {
     MOZ_ASSERT(this != &rhs, "self-move disallowed");

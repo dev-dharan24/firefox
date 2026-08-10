@@ -264,24 +264,6 @@ static RangeBehaviour GetRangeBehaviour(
       return RangeBehaviour::CollapseDefaultRangeAndCrossShadowBoundaryRanges;
     }
 
-    if (const CrossShadowBoundaryRange* crossShadowBoundaryRange =
-            aRange->GetCrossShadowBoundaryRange()) {
-      // Check if the existing-other-side boundary in
-      // aRange::mCrossShadowBoundaryRange has the same root
-      // as aNewRoot. If this is the case, it means
-      // aRange::mCrossShadowBoundaryRange can be used to represent this
-      // cross-boundary selection, meanwhile we collapse the default range since
-      // this is a cross-boundary selection.
-      const RangeBoundary& otherSideExistingBoundary =
-          aIsSetStart ? crossShadowBoundaryRange->EndRef()
-                      : crossShadowBoundaryRange->StartRef();
-      const nsINode* otherSideRoot =
-          RangeUtils::ComputeRootNode(otherSideExistingBoundary.GetContainer());
-      if (aNewRoot == otherSideRoot) {
-        return RangeBehaviour::CollapseDefaultRange;
-      }
-    }
-
     // Different root, but same document. So we only collapse the
     // default range if boundaries are allowed to cross shadow boundary.
     return aAllowCrossShadowBoundary == AllowRangeCrossShadowBoundary::Yes

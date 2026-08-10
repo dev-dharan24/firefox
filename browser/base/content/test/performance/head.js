@@ -434,7 +434,7 @@ async function addDummyHistoryEntries(searchStr = "") {
 
   for (let i = 0; i < NUM_VISITS; ++i) {
     visits.push({
-      // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+      // eslint-disable-next-line sdl/no-insecure-url
       uri: `http://example.com/urlbar-reflows-${i}`,
       title: `Reflow test for URL bar entry #${i} - ${searchStr}`,
     });
@@ -1331,8 +1331,8 @@ async function checkLoadedScripts({
 // window for some reason. See bug 1445161. This function allows to deal with
 // that in a central place.
 function isLikelyFocusChange(rects, frame) {
-  if (rects.length >= 3 && rects.every(r => r.y2 < 100)) {
-    // There are at least 4 areas that changed near the top of the screen.
+  if (rects.length >= 2 && rects.every(r => r.y2 < 100)) {
+    // There are at least 2 areas that changed near the top of the screen.
     // Note that we need a bit more leeway than the titlebar height, because on
     // OSX other toolbarbuttons in the navigation toolbar also get disabled
     // state.

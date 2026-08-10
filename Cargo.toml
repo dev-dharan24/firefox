@@ -71,6 +71,8 @@ members = [
   "toolkit/crashreporter/mozwer-rust",
   "toolkit/library/gtest/rust",
   "toolkit/library/rust/",
+  "toolkit/components/taskscheduler/rust",
+  "toolkit/mozapps/msixcomserver-rust",
   "services/application-services/components/viaduct-necko",
   "js/src/builtin/normalizer_glue",
 ]
@@ -424,3 +426,8 @@ libcrux-traits = { path = "build/rust/libcrux-traits" }
 # works around a rust/LLVM issue on macOS/x86_64 that makes jxl-rs decode ~3x
 # slower on PGO builds. See bug 2043090.
 jxl_simd = { path = "third_party/rust/jxl_simd" }
+
+# gleam 0.15.1 + https://github.com/servo/gleam/pull/235
+gleam = { git = "https://github.com/jamienicol/gleam", rev = "68ca4e5cc31135b843af07ff213a94b9ddce64cf" }
+# gl_generator 0.14.0 + https://github.com/rust-windowing/gl-rs/pull/566
+gl_generator = { git = "https://github.com/jamienicol/gl-rs", rev = "71c792dbfe0ec5caeb242fc90937e19098386342" }

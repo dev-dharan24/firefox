@@ -232,9 +232,9 @@ pub struct TextRunScratch {
     /// Normalized prim local rect for this run. `.min` is the run anchor:
     /// the shader transforms it to device space and adds the per-glyph
     /// device offsets. Stored here so batching emits the identical anchor
-    /// in `PrimitiveHeader.local_rect` that `request_resources` used to
+    /// in `PrimitiveHeader.pattern_rect` that `request_resources` used to
     /// compute those offsets.
-    pub local_rect: LayoutRect,
+    pub pattern_rect: LayoutRect,
     /// Per-instance GPU buffer address for the color block followed by the
     /// per-glyph offset blocks (two glyphs per block). In device mode these are
     /// glyph pen positions snapped to the device grid, relative to the
@@ -284,13 +284,13 @@ impl TextRunTemplate {
         // Only support transforms that can be coerced to simple 2D transforms.
         // Add texture padding to the rasterized glyph buffer when one anticipates
         // the glyph will need to be scaled when rendered.
-        // A perspective component that only involves m34/m44 maps the glyphs'
-        // (coplanar, z=0) plane affinely, so they can still be rasterized and
-        // device-snapped in screen space; only a perspective that varies across
-        // the plane (m14/m24, a true keystone) needs local-raster rasterization.
-        // Using `has_2d_plane_perspective` instead of `has_perspective_component`
-        // keeps flat `perspective` ancestors on the sharp device path (bug 2052019)
-        // while genuinely 3D-transformed text still falls back to local raster.
+        // Glyphs are coplanar, so the device path only needs the transform to be
+        // 2D on their z=0 plane rather than 2D outright: `is_2d_on_z_plane` keeps
+        // a flat `perspective` ancestor sharp there (bug 2052019) while sending
+        // the transforms whose device round-trip the shader can't invert - a
+        // `translateZ` under that perspective, or a 3D rotation - back to local
+        // raster, instead of displacing every glyph and shaving a slice off it
+        // (bug 2060342).
         // Color bitmap glyphs (Apple Color Emoji and any CBDT/sbix font with
         // embedded bitmap strikes) can't have a rotation or skew baked into their
         // rasterization: the platform backends force an identity glyph shape for
@@ -308,7 +308,7 @@ impl TextRunTemplate {
         // scale+translation is fine on the device path (the uniform scale already
         // folds into the font size), so those are left untouched.
         let (use_subpixel_aa, transform_glyphs, texture_padding, oversized) = if raster_space != RasterSpace::Screen ||
-            transform.has_2d_plane_perspective() || !transform.has_2d_inverse() ||
+            !transform.is_2d_on_z_plane() || !transform.has_2d_inverse() ||
             has_bitmap_strikes
         {
             (false, false, true, device_font_size > FONT_SIZE_LIMIT)
@@ -431,7 +431,7 @@ impl TextRunTemplate {
 
     pub fn request_resources(
         &self,
-        local_rect: LayoutRect,
+        pattern_rect: LayoutRect,
         transform: &LayoutToWorldTransform,
         surface: &SurfaceInfo,
         spatial_node_index: SpatialNodeIndex,
@@ -502,7 +502,7 @@ impl TextRunTemplate {
         };
 
         // World-space run anchor (device mode only).
-        let anchor_world = transform.transform_point2d(local_rect.min);
+        let anchor_world = transform.transform_point2d(pattern_rect.min);
 
         let mut glyph_offsets: Vec<DeviceVector2D> = Vec::new();
         let glyph_keys_range = if local_raster {
@@ -514,7 +514,7 @@ impl TextRunTemplate {
             glyph_offsets.reserve(self.glyphs.len());
 
             scratch.frame.glyph_keys.extend(self.glyphs.iter().map(|src| {
-                let pos = local_rect.min + src.point.to_vector();
+                let pos = pattern_rect.min + src.point.to_vector();
                 let raster_pos = DevicePoint::new(pos.x * glyph_raster_scale, pos.y * glyph_raster_scale);
                 let snapped = (raster_pos + snap_bias).floor();
                 glyph_offsets.push(snapped.to_vector());
@@ -522,30 +522,35 @@ impl TextRunTemplate {
             }))
         } else if let Some(anchor_world) = anchor_world {
             // Device mode.
-            let anchor_device = anchor_world * dps;
-
+            //
             // No run-level snap. Each glyph is placed at its exact device
-            // position; the per-glyph floor + subpixel GlyphKey carry the
+            // position; the per-glyph snap + subpixel GlyphKey carry the
             // fractional part, so the glyph renders exactly where Gecko put it
             // (bug 2050692). The run has no single snapped anchor to fold into the
             // glyphs, so a run never shifts relative to its clip/box. Stability
             // under scrolling comes from the spatial tree, which already snaps
             // scroll offsets (and should_snap frame transforms) to the device grid.
+            //
+            // Store the *unsnapped* absolute device pen and let the shader snap
+            // it. Which bias to use isn't known here: a glyph that rasterizes
+            // from an embedded bitmap strike ignores the sub-pixel offset the
+            // key asks for and lands on the grid, so it must round to nearest
+            // rather than floor with the sub-pixel bias (bug 2056856). That is
+            // only known once the glyph is rasterized, which happens after this
+            // point. Snapping a value the shader receives verbatim keeps the
+            // arithmetic exact - re-deriving the pen from the transform GPU-side
+            // would risk landing on the wrong side of a `floor` boundary at the
+            // exactly-representable fractions layout produces (x.5, x.875).
             glyph_offsets.reserve(self.glyphs.len());
 
             scratch.frame.glyph_keys.extend(self.glyphs.iter().map(|src| {
                 // Exact glyph pen position in absolute device space.
                 let glyph_world = transform
-                    .transform_point2d(local_rect.min + src.point.to_vector())
+                    .transform_point2d(pattern_rect.min + src.point.to_vector())
                     .unwrap_or(anchor_world);
                 let device_pen = glyph_world * dps;
 
-                // Floor to the device grid and store relative to the unsnapped
-                // anchor; the shader re-adds the unsnapped anchor, recovering this
-                // position. The subpixel GlyphKey (fractional part of `device_pen`)
-                // rasterizes the glyph at its exact sub-pixel offset.
-                let snapped = (device_pen + snap_bias).floor();
-                glyph_offsets.push(snapped - anchor_device);
+                glyph_offsets.push(device_pen.to_vector());
 
                 GlyphKey::new(src.index, device_pen, subpx_dir)
             }))
@@ -565,7 +570,7 @@ impl TextRunTemplate {
         scratch.frame.text_runs.push(TextRunScratch {
             used_font,
             glyph_keys_range,
-            local_rect,
+            pattern_rect,
             gpu_address,
             raster_scale,
             local_raster,

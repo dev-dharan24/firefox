@@ -1351,4 +1351,13 @@ void nsWaylandDisplay::Init() {
   }
 }
 
+bool nsWaylandDisplay::IsTFSupported(int aTF) {
+  if (aTF < sColorTransfersNum) {
+    return mSupportedTransfer[aTF] == aTF;
+  } else {
+    NS_WARNING("Unknow color transfer function!");
+    return false;
+  }
+}
+
 }  // namespace mozilla::widget

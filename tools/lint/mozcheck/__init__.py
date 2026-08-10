@@ -21,6 +21,13 @@ def _get_source_root():
         return None, None
 
 
+def _resolve_root(root):
+    # `setup` and `lint` must agree on the root, or they end up looking for
+    # (and building) the binary in two different target directories.
+    src_root, _ = _get_source_root()
+    return src_root or root
+
+
 def _get_mozcheck_target_dir(root, topobjdir):
     if topobjdir:
         return os.path.join(topobjdir, "mozcheck")
@@ -78,16 +85,15 @@ def _find_mozcheck_binary(log, root, topobjdir=None):
 
 
 def setup(root, **lintargs):
+    # Resolve the binary once, here in the parent process, rather than letting
+    # every mozlint worker race to fetch or build it (bug 2058685).
     log = lintargs.get("log")
-    _find_mozcheck_binary(log, root, lintargs.get("topobjdir"))
+    _find_mozcheck_binary(log, _resolve_root(root), lintargs.get("topobjdir"))
 
 
 def lint(paths, config, fix=None, **lintargs):
     log = lintargs["log"]
-    root = lintargs["root"]
-    src_root, _ = _get_source_root()
-    if src_root:
-        root = src_root
+    root = _resolve_root(lintargs["root"])
     binary = _find_mozcheck_binary(log, root, lintargs.get("topobjdir"))
     if not binary:
         raise LintException(

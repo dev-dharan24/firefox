@@ -5,6 +5,7 @@ avoid-blacklist-and-whitelist:
     include: ['.']
     type: external
     payload: mozcheck:lint
+    setup: mozcheck:setup
     check: rejected-words
     check-config:
         regex-pattern: (black|white)[-_]?list
@@ -69,7 +70,6 @@ avoid-blacklist-and-whitelist:
         - browser/components/urlbar/tests/unit/test_providerHeuristicFallback.js
         - browser/components/urlbar/tests/unit/test_search_suggestions.js
         - browser/components/urlbar/tests/unit/test_tokenizer.js
-        - browser/extensions/newtab/data/content/activity-stream.bundle.js
         - browser/extensions/webcompat/shims/nielsen.js
         - browser/modules/SitePermissions.sys.mjs
         - browser/tools/mozscreenshots/mozscreenshots/extension/configurations/PermissionPrompts.sys.mjs
@@ -311,6 +311,7 @@ avoid-gobbledygook:
     include: ['.']
     type: external
     payload: mozcheck:lint
+    setup: mozcheck:setup
     check: rejected-words
     check-config:
         regex-pattern: \b(gobbledy)?-?gook
@@ -338,6 +339,7 @@ forbid-moduleloaderbase-include:
     include: ['.']
     type: external
     payload: mozcheck:lint
+    setup: mozcheck:setup
     check: rejected-words
     check-config:
         regex-pattern: '#\s*include\s+"(js/loader/)?ModuleLoaderBase\.h"'

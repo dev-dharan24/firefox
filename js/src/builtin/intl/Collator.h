@@ -26,16 +26,11 @@ class CollatorObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto COLLATION_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto OPTIONS_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(2);
-  static constexpr auto INTL_COLLATOR_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(3);
-  static constexpr auto BOUND_COMPARE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(4);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE_SLOT, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, COLLATION_SLOT, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, OPTIONS_SLOT, Int32, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, INTL_COLLATOR_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, BOUND_COMPARE_SLOT, Object, Undefined);
   static constexpr uint32_t SLOT_COUNT = 5;
 
   // Box<CollatorBorrowed> causes a request for an allocation of 72,

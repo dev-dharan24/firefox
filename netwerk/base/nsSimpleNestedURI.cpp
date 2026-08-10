@@ -88,7 +88,12 @@ nsresult nsSimpleNestedURI::ReadPrivate(nsIObjectInputStream* aStream) {
   mInnerURI = do_QueryInterface(supports, &rv);
   if (NS_FAILED(rv)) return rv;
 
-  return rv;
+  // Sanity check.
+  if (!IsValidInnerURI(mInnerURI)) {
+    return NS_ERROR_MALFORMED_URI;
+  }
+
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -132,7 +137,29 @@ bool nsSimpleNestedURI::Deserialize(const mozilla::ipc::URIParams& aParams) {
   if (!nsSimpleURI::Deserialize(params.simpleParams())) return false;
 
   mInnerURI = DeserializeURI(params.innerURI());
+  if (!mInnerURI || !IsValidInnerURI(mInnerURI)) {
+    return false;
+  }
+
   return true;
+}
+
+bool nsSimpleNestedURI::IsValidInnerURI(nsIURI* aInnerURI) {
+  if (!Scheme().EqualsLiteral("view-source")) {
+    return false;
+  }
+
+  nsAutoCString innerSpec;
+  if (NS_FAILED(aInnerURI->GetAsciiSpec(innerSpec))) {
+    return false;
+  }
+
+  nsAutoCString pathQueryRef;
+  if (NS_FAILED(GetPathQueryRef(pathQueryRef))) {
+    return false;
+  }
+
+  return innerSpec == pathQueryRef;
 }
 
 // nsINestedURI

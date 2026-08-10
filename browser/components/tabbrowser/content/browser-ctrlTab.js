@@ -202,6 +202,11 @@ var ctrlTab = {
     delete this.panel;
     return (this.panel = document.getElementById("ctrlTab-panel"));
   },
+  get previewsContainer() {
+    delete this.previewsContainer;
+    return (this.previewsContainer =
+      document.getElementById("ctrlTab-previews"));
+  },
   get showAllButton() {
     delete this.showAllButton;
     this.showAllButton = document.createXULElement("button");
@@ -247,6 +252,13 @@ var ctrlTab = {
   },
   get tabPreviewCount() {
     return Math.min(this.maxTabPreviews, this.tabCount);
+  },
+  /**
+   * The number of grid columns the visible previews are laid out in, which is
+   * also the number of previews in the widest row.
+   */
+  get previewColumnCount() {
+    return Math.min(this.tabPreviewCount, this.previewsPerRow);
   },
 
   get tabList() {
@@ -298,12 +310,11 @@ var ctrlTab = {
   },
 
   _buildPreviews() {
-    let previewsContainer = document.getElementById("ctrlTab-previews");
-    previewsContainer.replaceChildren();
+    this.previewsContainer.replaceChildren();
     this.previews = [];
     for (let i = 0; i < this.maxTabPreviews; i++) {
       let preview = this._makePreview();
-      previewsContainer.appendChild(preview);
+      this.previewsContainer.appendChild(preview);
       this.previews.push(preview);
     }
     this.previews.push(this.showAllButton);
@@ -342,6 +353,11 @@ var ctrlTab = {
   },
 
   updatePreviews: function ctrlTab_updatePreviews() {
+    this.previewsContainer.style.setProperty(
+      "--ctrlTab-previews-per-row",
+      this.previewColumnCount
+    );
+
     for (let i = 0; i < this.previews.length; i++) {
       this.updatePreview(this.previews[i], this.tabList[i]);
     }
@@ -529,9 +545,7 @@ var ctrlTab = {
 
     let width = Math.min(
       screen.availWidth * 0.99,
-      this.canvasWidth *
-        1.25 *
-        Math.min(this.tabPreviewCount, this.previewsPerRow)
+      this.canvasWidth * 1.25 * this.previewColumnCount
     );
     this.panel.style.width = width + "px";
     let previewRows = Math.ceil(this.tabPreviewCount / this.previewsPerRow);

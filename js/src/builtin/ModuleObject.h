@@ -90,15 +90,12 @@ class ModuleRequestObject : public NativeObject {
     SlotCount
   };
 
-  static constexpr auto SPECIFIER_SLOT =
-      TypedSlot<ValueType::String, ValueType::Null>(SpecifierSlotIndex);
-  static constexpr auto FIRST_UNSUPPORTED_ATTRIBUTE_KEY_SLOT =
-      TypedSlot<ValueType::String, ValueType::Null, ValueType::Undefined>(
-          FirstUnsupportedAttributeKeySlotIndex);
-  static constexpr auto MODULE_TYPE_SLOT =
-      TypedSlot<ValueType::Int32>(ModuleTypeSlotIndex);
-  static constexpr auto PHASE_SLOT =
-      TypedSlot<ValueType::Int32>(PhaseSlotIndex);
+  JS_DEFINE_TYPED_SLOT(SpecifierSlotIndex, SPECIFIER_SLOT, String, Null);
+  JS_DEFINE_TYPED_SLOT(FirstUnsupportedAttributeKeySlotIndex,
+                       FIRST_UNSUPPORTED_ATTRIBUTE_KEY_SLOT, String, Null,
+                       Undefined);
+  JS_DEFINE_TYPED_SLOT(ModuleTypeSlotIndex, MODULE_TYPE_SLOT, Int32);
+  JS_DEFINE_TYPED_SLOT(PhaseSlotIndex, PHASE_SLOT, Int32);
   static constexpr uint32_t SLOT_COUNT = SlotCount;
 
  public:
@@ -232,10 +229,8 @@ using RequestedModuleVector = GCVector<RequestedModule, 0, SystemAllocPolicy>;
 class ResolvedBindingObject : public NativeObject {
   enum { ModuleSlotIndex = 0, BindingNameSlotIndex, SlotCount };
 
-  static constexpr auto MODULE_SLOT =
-      TypedSlot<ValueType::Object>(ModuleSlotIndex);
-  static constexpr auto BINDING_NAME_SLOT =
-      TypedSlot<ValueType::String>(BindingNameSlotIndex);
+  JS_DEFINE_TYPED_SLOT(ModuleSlotIndex, MODULE_SLOT, Object);
+  JS_DEFINE_TYPED_SLOT(BindingNameSlotIndex, BINDING_NAME_SLOT, String);
   static constexpr uint32_t SLOT_COUNT = SlotCount;
 
  public:
@@ -461,27 +456,21 @@ class ModuleObject : public NativeObject {
 
   // Module fields including those for AbstractModuleRecords described by:
   // https://tc39.es/ecma262/#sec-abstract-module-records
-  static constexpr auto SCRIPT_SLOT =
-      TypedSlot<ValueType::PrivateGCThing, ValueType::Undefined>(
-          ScriptSlotIndex);
-  static constexpr auto MODULE_ENVIRONMENT_SLOT =
-      TypedSlot<ValueType::Object>(ModuleEnvironmentSlotIndex);
-  static constexpr auto NAMESPACE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(NamespaceSlotIndex);
-  static constexpr auto CYCLIC_MODULE_FIELDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(
-          CyclicModuleFieldsSlotIndex);
+  JS_DEFINE_TYPED_SLOT(ScriptSlotIndex, SCRIPT_SLOT, PrivateGCThing, Undefined);
+  JS_DEFINE_TYPED_SLOT(ModuleEnvironmentSlotIndex, MODULE_ENVIRONMENT_SLOT,
+                       Object);
+  JS_DEFINE_TYPED_SLOT(NamespaceSlotIndex, NAMESPACE_SLOT, Object, Undefined);
+  JS_DEFINE_TYPED_SLOT(CyclicModuleFieldsSlotIndex, CYCLIC_MODULE_FIELDS_SLOT,
+                       Private, Undefined);
   // `SyntheticModuleFields` if a synthetic module. Otherwise `undefined`.
-  static constexpr auto SYNTHETIC_MODULE_FIELDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(
-          SyntheticModuleFieldsSlotIndex);
+  JS_DEFINE_TYPED_SLOT(SyntheticModuleFieldsSlotIndex,
+                       SYNTHETIC_MODULE_FIELDS_SLOT, Private, Undefined);
 #ifdef DEBUG
-  static constexpr auto PRELOAD_SLOT =
-      TypedSlot<ValueType::Boolean, ValueType::Undefined>(PreloadSlotIndex);
+  JS_DEFINE_TYPED_SLOT(PreloadSlotIndex, PRELOAD_SLOT, Boolean, Undefined);
 #endif
   // Module Source object for source phase imports. Otherwise `undefined`.
-  static constexpr auto MODULE_SOURCE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(ModuleSourceSlotIndex);
+  JS_DEFINE_TYPED_SLOT(ModuleSourceSlotIndex, MODULE_SOURCE_SLOT, Object,
+                       Undefined);
   static constexpr uint32_t SLOT_COUNT = SlotCount;
 
   static const JSClass class_;
@@ -633,13 +622,10 @@ struct GraphLoadingStateRecord {
 };
 
 class GraphLoadingStateRecordObject : public NativeObject {
-  static constexpr auto STATE_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(0);
-  static constexpr auto PROMISE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::Undefined>(1);
-  static constexpr auto IS_LOADING_SLOT = TypedSlot<ValueType::Int32>(2);
-  static constexpr auto PENDING_MODULES_COUNT_SLOT =
-      TypedSlot<ValueType::Int32>(3);
+  JS_DEFINE_TYPED_SLOT(0, STATE_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, PROMISE_SLOT, Object, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, IS_LOADING_SLOT, Int32);
+  JS_DEFINE_TYPED_SLOT(3, PENDING_MODULES_COUNT_SLOT, Int32);
   static constexpr uint32_t HOST_DEFINED_SLOT = 4;
   static constexpr uint32_t SLOT_COUNT = 5;
 

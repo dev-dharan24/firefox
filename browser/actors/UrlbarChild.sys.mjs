@@ -18,6 +18,7 @@ const INVOKABLE_CONTENT_ACTIONS = {
   input: new Set(["search", "setValue", "startQuery"]),
   view: new Set([
     "acknowledgeFeedback",
+    "clearTopSitesCache",
     "close",
     "updateResultMenuCommands",
     "startTail150",
@@ -141,9 +142,14 @@ export class UrlbarChild extends JSWindowActorChild {
         registerChildController: (instanceId, child) =>
           this.registerChildController(instanceId, child),
         whereToOpenLink: event => this.whereToOpenLink(event),
+        willLoadInBackground: (where, params) =>
+          this.willLoadInBackground(where, params),
         getFixupInfo: (searchString, isPrivate) =>
           Cu.cloneInto(this.getFixupInfo(searchString, isPrivate), win),
         getDisplaySpec: url => this.getDisplaySpec(url),
+        getSupportUrl: topic => this.getSupportUrl(topic),
+        isTextDirectionRTL: (value, window) =>
+          this.isTextDirectionRTL(value, window),
         getPref: name => Cu.cloneInto(lazy.UrlbarPrefs.get(name), win),
         addPrefObserver: observer => lazy.UrlbarPrefs.addObserver(observer),
         removePrefObserver: observer =>
@@ -206,6 +212,20 @@ export class UrlbarChild extends JSWindowActorChild {
   }
 
   /**
+   * Forwards to `BrowserUtils.willLoadInBackground`, for the same reason
+   * `whereToOpenLink` does: the content-web input can't import `BrowserUtils`.
+   *
+   * @param {string} where
+   *   Where the link will open, as returned by `whereToOpenLink`.
+   * @param {object} params
+   *   The params that will be passed to `openLinkIn`.
+   * @returns {boolean}
+   */
+  willLoadInBackground(where, params) {
+    return lazy.BrowserUtils.willLoadInBackground(where, params);
+  }
+
+  /**
    * Runs URI fixup for a string on behalf of the content-web input, which can't
    * reach `Services.uriFixup`. Returns only the primitives the callers need, so
    * the input never holds an `nsIURIFixupInfo`.
@@ -225,6 +245,30 @@ export class UrlbarChild extends JSWindowActorChild {
           preferredURIDisplaySpec: info.preferredURI?.displaySpec ?? null,
         }
       : null;
+  }
+
+  /**
+   * Returns the SUMO URL for a support topic.
+   *
+   * @param {string} topic
+   *   The support page slug to append to the SUMO base URL.
+   * @returns {string}
+   */
+  getSupportUrl(topic) {
+    return Services.urlFormatter.formatURLPref("app.support.baseURL") + topic;
+  }
+
+  /**
+   * Checks whether a given text has right-to-left direction or not.
+   *
+   * @param {string} value The text which should be check for RTL direction.
+   * @param {Window} window The window where 'value' is going to be displayed.
+   * @returns {boolean} Returns true if text has right-to-left direction and
+   *                    false otherwise.
+   */
+  isTextDirectionRTL(value, window) {
+    let directionality = window.windowUtils.getDirectionFromText(value);
+    return directionality == window.windowUtils.DIRECTION_RTL;
   }
 
   /**

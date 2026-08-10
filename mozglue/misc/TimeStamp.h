@@ -39,6 +39,27 @@ class BaseTimeDurationPlatformUtils {
 };
 
 /**
+ * Convert a tick count held in a double to the integer tick count used
+ * internally by BaseTimeDuration, saturating at the ends of the int64_t range.
+ * Converting an out-of-range double to int64_t is undefined behavior, so the
+ * range must be checked before the conversion rather than after.
+ */
+inline int64_t SaturatingTicksFromDouble(double aTicks) {
+  // NOTE: this MUST be a >= test, because int64_t(double(INT64_MAX))
+  // overflows and gives INT64_MIN.
+  if (aTicks >= double(INT64_MAX)) {
+    return INT64_MAX;
+  }
+
+  // This MUST be a <= test.
+  if (aTicks <= double(INT64_MIN)) {
+    return INT64_MIN;
+  }
+
+  return int64_t(aTicks);
+}
+
+/**
  * Instances of this class represent the length of an interval of time.
  * Negative durations are allowed, meaning the end is before the start.
  *
@@ -262,18 +283,7 @@ class BaseTimeDuration {
   }
 
   static BaseTimeDuration FromTicks(double aTicks) {
-    // NOTE: this MUST be a >= test, because int64_t(double(INT64_MAX))
-    // overflows and gives INT64_MIN.
-    if (aTicks >= double(INT64_MAX)) {
-      return FromTicks(INT64_MAX);
-    }
-
-    // This MUST be a <= test.
-    if (aTicks <= double(INT64_MIN)) {
-      return FromTicks(INT64_MIN);
-    }
-
-    return FromTicks(int64_t(aTicks));
+    return FromTicks(SaturatingTicksFromDouble(aTicks));
   }
 
   // Duration, result is implementation-specific difference of two TimeStamps
@@ -307,7 +317,7 @@ class TimeDurationValueCalculator {
 template <>
 inline int64_t TimeDurationValueCalculator::Multiply<double>(int64_t aA,
                                                              double aB) {
-  return static_cast<int64_t>(aA * aB);
+  return SaturatingTicksFromDouble(static_cast<double>(aA) * aB);
 }
 
 /**

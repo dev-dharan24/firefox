@@ -373,6 +373,7 @@ treeherder:
         'service-location': 'service-location'
         'service-mars': 'service-mars'
         'service-merino-manifest': 'service-merino-manifest'
+        'service-merino-weather': 'service-merino-weather'
         'service-nimbus': 'service-nimbus'
         'service-pocket': 'service-pocket'
         'service-sync': 'service-sync'

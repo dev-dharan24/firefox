@@ -60,6 +60,7 @@ const DYNAMIC_TOOLBAR_PREF_ON_TOP_PREF =
   "devtools.responsive.dynamicToolbar.onTop";
 const DYNAMIC_TOOLBAR_MAX_HEIGHT = 50; // px
 const DYNAMIC_TOOLBAR_SNAP_ANIMATION_DURATION_MS = 120; // ms
+const RESPONSIVE_MODE_CLS = "responsive-mode";
 
 function debug(_msg) {
   // console.log(`RDM manager: ${_msg}`);
@@ -254,8 +255,12 @@ class ResponsiveUI extends EventEmitter {
     );
     this.browserStackEl =
       this.browserContainerEl.querySelector(".browserStack");
+    this.browserSidebarContainerEl = this.browserContainerEl.closest(
+      ".browserSidebarContainer"
+    );
 
-    this.browserContainerEl.classList.add("responsive-mode");
+    this.browserContainerEl.classList.add(RESPONSIVE_MODE_CLS);
+    this.browserSidebarContainerEl.classList.add(RESPONSIVE_MODE_CLS);
 
     this.browserContainerEl.style.setProperty(
       "--rdm-dynamic-toolbar-max-height",
@@ -392,7 +397,8 @@ class ResponsiveUI extends EventEmitter {
     this.rdmFrame.remove();
     this.screenBox.remove();
 
-    this.browserContainerEl.classList.remove("responsive-mode");
+    this.browserContainerEl.classList.remove(RESPONSIVE_MODE_CLS);
+    this.browserSidebarContainerEl.classList.remove(RESPONSIVE_MODE_CLS);
     this.browserStackEl.style.removeProperty("--rdm-width");
     this.browserStackEl.style.removeProperty("--rdm-height");
     this.browserStackEl.style.removeProperty("--rdm-zoom");
@@ -448,6 +454,7 @@ class ResponsiveUI extends EventEmitter {
 
     // Destroy local state
     this.browserContainerEl = null;
+    this.browserSidebarContainerEl = null;
     this.browserStackEl = null;
     this.browserWindow = null;
     this.tab = null;

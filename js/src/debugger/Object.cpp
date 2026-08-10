@@ -659,7 +659,7 @@ bool DebuggerObject::CallData::promiseAllocationSiteGetter() {
   if (!cx->compartment()->wrap(cx, &allocSite)) {
     return false;
   }
-  args.rval().set(ObjectValue(*allocSite));
+  args.rval().setObject(*allocSite);
   return true;
 }
 
@@ -684,7 +684,7 @@ bool DebuggerObject::CallData::promiseResolutionSiteGetter() {
   if (!cx->compartment()->wrap(cx, &resolutionSite)) {
     return false;
   }
-  args.rval().set(ObjectValue(*resolutionSite));
+  args.rval().setObject(*resolutionSite);
   return true;
 }
 

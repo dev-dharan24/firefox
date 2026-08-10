@@ -232,7 +232,7 @@ CodeOffset MacroAssembler::nopPatchableToCall() {
   return CodeOffset(0);
 }
 
-FaultingCodeOffset MacroAssembler::wasmTrapInstruction() {
+FaultingCodeRange MacroAssembler::wasmTrapInstruction() {
   MOZ_CRASH();
   return FaultingCodeOffset();
 }

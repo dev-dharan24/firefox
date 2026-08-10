@@ -18,14 +18,14 @@
 }
 
 #ctrlTab-previews {
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(var(--ctrlTab-previews-per-row), minmax(0, 1fr));
   /* Add 10px to offset the negative margin-top on .ctrlTab-preview-inner so
      wrapped rows keep a full row of spacing instead of nearly touching. */
   row-gap: calc(var(--space-medium) + 10px);
 }
 
 .ctrlTab-preview {
-  flex: 1 1 auto;
   min-width: 0;
   padding: 0;
 }

@@ -12,6 +12,7 @@
 #include "js/PropertySpec.h"
 #include "vm/AsyncFunction.h"
 #include "vm/AsyncIteration.h"
+#include "vm/BytecodeUtil.h"   // js::SuspendPCForAfterYield
 #include "vm/FunctionFlags.h"  // js::FunctionFlags
 #include "vm/GlobalObject.h"
 #include "vm/Interpreter.h"  // js::GeneratorResumeState, js::RunScript
@@ -272,11 +273,14 @@ void AbstractGeneratorObject::resume(JSContext* cx,
   InterpreterFrame* fp = activation.regs().fp();
   fp->setResumingGenerator();
 
+  uint32_t resumeIndex = genObj->resumeIndex();
+  genObj->setRunning();
+
   // Initialize the resume args (ResumeFrameArgs) stored after the formals (for
   // function frames) or immediately before the frame (for module frames).
   MOZ_ASSERT_IF(fp->isFunctionFrame(), fp->numActualArgs() == 0);
-  ResumeFrameArgs::init(fp->resumeArgs(), arg, ObjectValue(*genObj),
-                        resumeKind);
+  ResumeFrameArgs::init(fp->resumeArgs(), arg, ObjectValue(*genObj), resumeKind,
+                        resumeIndex);
 
   if (genObj->hasArgsObj()) {
     fp->initArgsObj(genObj->argsObj());
@@ -291,7 +295,7 @@ void AbstractGeneratorObject::resume(JSContext* cx,
     storage->setDenseInitializedLength(0);
   }
 
-  uint32_t offset = script->resumeOffsets()[genObj->resumeIndex()];
+  uint32_t offset = script->resumeOffsets()[resumeIndex];
   activation.regs().pc = script->offsetToPC(offset);
 
   // Push arg, generator, resumeKind Values on the generator's stack.
@@ -300,8 +304,6 @@ void AbstractGeneratorObject::resume(JSContext* cx,
   activation.regs().sp[-3] = arg;
   activation.regs().sp[-2] = ObjectValue(*genObj);
   activation.regs().sp[-1] = Int32Value(int32_t(resumeKind));
-
-  genObj->setRunning();
 }
 
 bool js::ResumeGenerator(JSContext* cx, Handle<AbstractGeneratorObject*> genObj,
@@ -452,11 +454,11 @@ void AbstractGeneratorObject::setUnaliasedLocal(uint32_t slot,
 }
 
 void AbstractGeneratorObject::setClosed(JSContext* cx) {
-  setFixedSlot(CALLEE_OR_MODULE_SLOT, NullValue());
-  setFixedSlot(ENV_CHAIN_SLOT, NullValue());
-  setFixedSlot(ARGS_OBJ_SLOT, NullValue());
-  setFixedSlot(STACK_STORAGE_SLOT, NullValue());
-  setFixedSlot(RESUME_INDEX_SLOT, NullValue());
+  setFixedSlotTyped(CALLEE_OR_MODULE_SLOT, NullValue());
+  setFixedSlotTyped(ENV_CHAIN_SLOT, NullValue());
+  setFixedSlotTyped(ARGS_OBJ_SLOT, NullValue());
+  setFixedSlotTyped(STACK_STORAGE_SLOT, NullValue());
+  setFixedSlotTyped(RESUME_INDEX_SLOT, NullValue());
 
   DebugAPI::onGeneratorClosed(cx, this);
 }
@@ -481,17 +483,8 @@ bool AbstractGeneratorObject::isAfterYieldOrAwait(JSOp op) {
     return false;
   }
 
-  static_assert(JSOpLength_Yield == JSOpLength_InitialYield,
-                "JSOp::Yield and JSOp::InitialYield must have the same length");
-  static_assert(JSOpLength_Yield == JSOpLength_Await,
-                "JSOp::Yield and JSOp::Await must have the same length");
-
-  uint32_t offset = nextOffset - JSOpLength_Yield;
-  JSOp prevOp = JSOp(code[offset]);
-  MOZ_ASSERT(prevOp == JSOp::InitialYield || prevOp == JSOp::Yield ||
-             prevOp == JSOp::Await);
-
-  return prevOp == op;
+  jsbytecode* suspendPC = SuspendPCForAfterYield(code + nextOffset);
+  return JSOp(*suspendPC) == op;
 }
 
 template <>

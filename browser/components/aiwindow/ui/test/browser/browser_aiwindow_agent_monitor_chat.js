@@ -115,7 +115,11 @@ async function getDisplayCardActionDetail(
         );
 
         if (args.edit) {
-          card.shadowRoot.querySelector(".page-action.edit").click();
+          card.shadowRoot
+            .querySelector(
+              'moz-button[data-l10n-id="ai-tasks-alert-edit-button"]'
+            )
+            .click();
           await ContentTaskUtils.waitForCondition(
             () =>
               card.shadowRoot.querySelector(
@@ -233,8 +237,8 @@ add_task(async function test_monitor_start_dispatches_create_update() {
       Assert.ok(detail, "AIChatContent:ToolUIUpdate should fire on submit");
       Assert.equal(
         detail.updateType,
-        "create-monitor",
-        "updateType is create-monitor"
+        "create-watch",
+        "updateType is create-watch"
       );
       Assert.equal(
         detail.messageId,
@@ -303,8 +307,8 @@ add_task(async function test_monitor_cancel_dispatches_cancel_update() {
       Assert.ok(detail, "AIChatContent:ToolUIUpdate should fire on cancel");
       Assert.equal(
         detail.updateType,
-        "cancel-monitor",
-        "updateType is cancel-monitor"
+        "cancel-watch",
+        "updateType is cancel-watch"
       );
       Assert.equal(
         detail.messageId,
@@ -329,8 +333,8 @@ add_task(async function test_display_save_dispatches_update_update() {
   Assert.ok(detail, "ToolUIUpdate fires when saving an edit");
   Assert.equal(
     detail.updateType,
-    "update-monitor",
-    "saving a display card routes to update-monitor, not create"
+    "update-watch",
+    "saving a display card routes to update-watch, not create"
   );
   Assert.equal(
     detail.updateData?.mode,
@@ -341,13 +345,11 @@ add_task(async function test_display_save_dispatches_update_update() {
 });
 
 add_task(async function test_delete_dispatches_delete_update() {
-  const detail = await getDisplayCardActionDetail(".page-action.delete");
-  Assert.ok(detail, "ToolUIUpdate fires on delete");
-  Assert.equal(
-    detail.updateType,
-    "delete-monitor",
-    "updateType is delete-monitor"
+  const detail = await getDisplayCardActionDetail(
+    'moz-button[data-l10n-id="ai-tasks-alert-delete-button"]'
   );
+  Assert.ok(detail, "ToolUIUpdate fires on delete");
+  Assert.equal(detail.updateType, "delete-watch", "updateType is delete-watch");
   Assert.deepEqual(
     detail.updateData,
     { id: "monitor-id-2" },
@@ -360,11 +362,7 @@ add_task(async function test_pause_dispatches_pause_update() {
     'moz-button[data-l10n-id="ai-tasks-alert-pause-button"]'
   );
   Assert.ok(detail, "ToolUIUpdate fires on pause");
-  Assert.equal(
-    detail.updateType,
-    "pause-monitor",
-    "updateType is pause-monitor"
-  );
+  Assert.equal(detail.updateType, "pause-watch", "updateType is pause-watch");
   Assert.deepEqual(
     detail.updateData,
     { id: "monitor-id-2", paused: true },
@@ -378,11 +376,7 @@ add_task(async function test_check_now_dispatches_check_update() {
     {}
   );
   Assert.ok(detail, "ToolUIUpdate fires on check now");
-  Assert.equal(
-    detail.updateType,
-    "check-monitor",
-    "updateType is check-monitor"
-  );
+  Assert.equal(detail.updateType, "check-watch", "updateType is check-watch");
   Assert.deepEqual(
     detail.updateData,
     { id: "monitor-id-2" },

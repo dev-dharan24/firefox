@@ -590,10 +590,7 @@ export class IPProtectionPanel {
     this.#updateSiteData();
 
     if (this.state.paused) {
-      this.setState({ isEnrolling: true });
-      lazy.IPPProxyManager.refreshUsage().finally(() => {
-        this.setState({ isEnrolling: false });
-      });
+      lazy.IPPProxyManager.refreshUsage();
     }
 
     // Only check default browser on panel open if not premium to limit calls to the Shell Service

@@ -18,8 +18,7 @@ class DateObject : public NativeObject {
   // Time in milliseconds since the (Unix) epoch.
   //
   // The stored value is guaranteed to be a Double.
-  static constexpr auto UTC_TIME_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(0);
+  JS_DEFINE_TYPED_SLOT(0, UTC_TIME_SLOT, Double, Undefined);
 
  private:
   // Time zone cache key.
@@ -27,8 +26,7 @@ class DateObject : public NativeObject {
   // This value is exclusively used to verify the cached slots are still valid.
   //
   // The stored value is either an Int32 or Undefined.
-  static constexpr auto TIME_ZONE_CACHE_KEY_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Undefined>(1);
+  JS_DEFINE_TYPED_SLOT(1, TIME_ZONE_CACHE_KEY_SLOT, Int32, Undefined);
 
   /*
    * Cached slots holding local properties of the date.
@@ -41,21 +39,16 @@ class DateObject : public NativeObject {
   static constexpr uint32_t COMPONENTS_START_SLOT = 2;
 
  public:
-  static constexpr auto LOCAL_TIME_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(COMPONENTS_START_SLOT +
-                                                         0);
-  static constexpr auto LOCAL_YEAR_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Double, ValueType::Undefined>(
-          COMPONENTS_START_SLOT + 1);
-  static constexpr auto LOCAL_MONTH_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Double, ValueType::Undefined>(
-          COMPONENTS_START_SLOT + 2);
-  static constexpr auto LOCAL_DATE_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Double, ValueType::Undefined>(
-          COMPONENTS_START_SLOT + 3);
-  static constexpr auto LOCAL_DAY_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Double, ValueType::Undefined>(
-          COMPONENTS_START_SLOT + 4);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 0, LOCAL_TIME_SLOT, Double,
+                       Undefined);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 1, LOCAL_YEAR_SLOT, Int32,
+                       Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 2, LOCAL_MONTH_SLOT, Int32,
+                       Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 3, LOCAL_DATE_SLOT, Int32,
+                       Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 4, LOCAL_DAY_SLOT, Int32, Double,
+                       Undefined);
 
  private:
   /*
@@ -67,9 +60,8 @@ class DateObject : public NativeObject {
    * seconds, so recovering hours/minutes/seconds requires only trivial
    * division/modulus operations.
    */
-  static constexpr auto LOCAL_SECONDS_INTO_YEAR_SLOT =
-      TypedSlot<ValueType::Int32, ValueType::Double, ValueType::Undefined>(
-          COMPONENTS_START_SLOT + 5);
+  JS_DEFINE_TYPED_SLOT(COMPONENTS_START_SLOT + 5, LOCAL_SECONDS_INTO_YEAR_SLOT,
+                       Int32, Double, Undefined);
 
   static constexpr uint32_t RESERVED_SLOTS = COMPONENTS_START_SLOT + 6;
 

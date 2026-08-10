@@ -797,42 +797,42 @@ void MacroAssemblerCompat::wasmLoadImpl(const wasm::MemoryAccessDesc& access,
   // GenerateAtomicOperations.py
   asMasm().memoryBarrierBefore(access.sync());
 
-  FaultingCodeOffset fco;
+  FaultingCodeRange fcr;
   switch (access.type()) {
     case Scalar::Int8:
-      fco = Ldrsb(SelectGPReg(outany, out64), srcAddr);
+      fcr = Ldrsb(SelectGPReg(outany, out64), srcAddr);
       break;
     case Scalar::Uint8:
-      fco = Ldrb(SelectGPReg(outany, out64), srcAddr);
+      fcr = Ldrb(SelectGPReg(outany, out64), srcAddr);
       break;
     case Scalar::Int16:
-      fco = Ldrsh(SelectGPReg(outany, out64), srcAddr);
+      fcr = Ldrsh(SelectGPReg(outany, out64), srcAddr);
       break;
     case Scalar::Uint16:
-      fco = Ldrh(SelectGPReg(outany, out64), srcAddr);
+      fcr = Ldrh(SelectGPReg(outany, out64), srcAddr);
       break;
     case Scalar::Int32:
       if (out64 != Register64::Invalid()) {
-        fco = Ldrsw(SelectGPReg(outany, out64), srcAddr);
+        fcr = Ldrsw(SelectGPReg(outany, out64), srcAddr);
       } else {
-        fco = Ldr(SelectGPReg(outany, out64, 32), srcAddr);
+        fcr = Ldr(SelectGPReg(outany, out64, 32), srcAddr);
       }
       break;
     case Scalar::Uint32:
-      fco = Ldr(SelectGPReg(outany, out64, 32), srcAddr);
+      fcr = Ldr(SelectGPReg(outany, out64, 32), srcAddr);
       break;
     case Scalar::Int64:
-      fco = Ldr(SelectGPReg(outany, out64), srcAddr);
+      fcr = Ldr(SelectGPReg(outany, out64), srcAddr);
       break;
     case Scalar::Float32:
       // LDR does the right thing also for access.isZeroExtendSimd128Load()
-      fco = Ldr(SelectFPReg(outany, out64, 32), srcAddr);
+      fcr = Ldr(SelectFPReg(outany, out64, 32), srcAddr);
       break;
     case Scalar::Float64:
       if (access.isSplatSimd128Load() || access.isWidenSimd128Load()) {
         ScratchSimd128Scope scratch_(asMasm());
         ARMFPRegister scratch = Simd1D(scratch_);
-        fco = Ldr(scratch, srcAddr);
+        fcr = Ldr(scratch, srcAddr);
         if (access.isSplatSimd128Load()) {
           Dup(SelectFPReg(outany, out64, 128).V2D(), scratch, 0);
         } else {
@@ -862,11 +862,11 @@ void MacroAssemblerCompat::wasmLoadImpl(const wasm::MemoryAccessDesc& access,
         }
       } else {
         // LDR does the right thing also for access.isZeroExtendSimd128Load()
-        fco = Ldr(SelectFPReg(outany, out64, 64), srcAddr);
+        fcr = Ldr(SelectFPReg(outany, out64, 64), srcAddr);
       }
       break;
     case Scalar::Simd128:
-      fco = Ldr(SelectFPReg(outany, out64, 128), srcAddr);
+      fcr = Ldr(SelectFPReg(outany, out64, 128), srcAddr);
       break;
     case Scalar::Uint8Clamped:
     case Scalar::BigInt64:
@@ -876,7 +876,8 @@ void MacroAssemblerCompat::wasmLoadImpl(const wasm::MemoryAccessDesc& access,
       MOZ_CRASH("unexpected array type");
   }
 
-  append(access, wasm::TrapMachineInsnForLoad(byteSize(access.type())), fco);
+  asMasm().appendAndVerify(
+      access, wasm::TrapMachineInsnForLoad(byteSize(access.type())), fcr);
 
   asMasm().memoryBarrierAfter(access.sync());
 }
@@ -946,31 +947,31 @@ void MacroAssemblerCompat::wasmStoreImpl(const wasm::MemoryAccessDesc& access,
   // GenerateAtomicOperations.py
   asMasm().memoryBarrierBefore(access.sync());
 
-  FaultingCodeOffset fco;
+  FaultingCodeRange fcr;
   switch (access.type()) {
     case Scalar::Int8:
     case Scalar::Uint8:
-      fco = Strb(SelectGPReg(valany, val64), dstAddr);
+      fcr = Strb(SelectGPReg(valany, val64), dstAddr);
       break;
     case Scalar::Int16:
     case Scalar::Uint16:
-      fco = Strh(SelectGPReg(valany, val64), dstAddr);
+      fcr = Strh(SelectGPReg(valany, val64), dstAddr);
       break;
     case Scalar::Int32:
     case Scalar::Uint32:
-      fco = Str(SelectGPReg(valany, val64), dstAddr);
+      fcr = Str(SelectGPReg(valany, val64), dstAddr);
       break;
     case Scalar::Int64:
-      fco = Str(SelectGPReg(valany, val64), dstAddr);
+      fcr = Str(SelectGPReg(valany, val64), dstAddr);
       break;
     case Scalar::Float32:
-      fco = Str(SelectFPReg(valany, val64, 32), dstAddr);
+      fcr = Str(SelectFPReg(valany, val64, 32), dstAddr);
       break;
     case Scalar::Float64:
-      fco = Str(SelectFPReg(valany, val64, 64), dstAddr);
+      fcr = Str(SelectFPReg(valany, val64, 64), dstAddr);
       break;
     case Scalar::Simd128:
-      fco = Str(SelectFPReg(valany, val64, 128), dstAddr);
+      fcr = Str(SelectFPReg(valany, val64, 128), dstAddr);
       break;
     case Scalar::Uint8Clamped:
     case Scalar::BigInt64:
@@ -980,7 +981,8 @@ void MacroAssemblerCompat::wasmStoreImpl(const wasm::MemoryAccessDesc& access,
       MOZ_CRASH("unexpected array type");
   }
 
-  append(access, wasm::TrapMachineInsnForStore(byteSize(access.type())), fco);
+  asMasm().appendAndVerify(
+      access, wasm::TrapMachineInsnForStore(byteSize(access.type())), fcr);
 
   asMasm().memoryBarrierAfter(access.sync());
 }
@@ -2108,12 +2110,12 @@ void MacroAssembler::comment(const char* msg) { Assembler::comment(msg); }
 // ========================================================================
 // wasm support
 
-FaultingCodeOffset MacroAssembler::wasmTrapInstruction() {
+FaultingCodeRange MacroAssembler::wasmTrapInstruction() {
   AutoForbidPoolsAndNops afp(this,
                              /* max number of instructions in scope = */ 1);
-  FaultingCodeOffset fco = FaultingCodeOffset(currentOffset());
+  FaultingCodeRange fcr = FaultingCodeRange(currentOffset());
   Unreachable();
-  return fco;
+  return fcr;
 }
 
 void MacroAssembler::wasmBoundsCheck32(Condition cond, Register index,
@@ -2604,7 +2606,7 @@ static void LoadExclusive(MacroAssembler& masm,
   // AutoForbidPoolsAndNops ensures that the metadata is emitted at the
   // address of the ldxr*.  Note that the use of AutoForbidPoolsAndNops is now
   // a "second class" solution; the right way to do this would be to have the
-  // masm.<LoadInsn> calls produce an FaultingCodeOffset, and hand that value to
+  // masm.<LoadInsn> calls produce a FaultingCodeRange, and hand that value to
   // `masm.append`.
   MOZ_ASSERT(ptr.IsImmediateOffset() && ptr.offset() == 0);
 
@@ -2615,8 +2617,8 @@ static void LoadExclusive(MacroAssembler& masm,
             &masm,
             /* max number of instructions in scope = */ 1);
         if (access) {
-          masm.append(*access, wasm::TrapMachineInsn::Load8,
-                      FaultingCodeOffset(masm.currentOffset()));
+          masm.appendAndVerify(*access, wasm::TrapMachineInsn::Load8,
+                               FaultingCodeRange(masm.currentOffset()));
         }
         masm.Ldxrb(W(dest), ptr);
       }
@@ -2631,8 +2633,8 @@ static void LoadExclusive(MacroAssembler& masm,
             &masm,
             /* max number of instructions in scope = */ 1);
         if (access) {
-          masm.append(*access, wasm::TrapMachineInsn::Load16,
-                      FaultingCodeOffset(masm.currentOffset()));
+          masm.appendAndVerify(*access, wasm::TrapMachineInsn::Load16,
+                               FaultingCodeRange(masm.currentOffset()));
         }
         masm.Ldxrh(W(dest), ptr);
       }
@@ -2647,8 +2649,8 @@ static void LoadExclusive(MacroAssembler& masm,
             &masm,
             /* max number of instructions in scope = */ 1);
         if (access) {
-          masm.append(*access, wasm::TrapMachineInsn::Load32,
-                      FaultingCodeOffset(masm.currentOffset()));
+          masm.appendAndVerify(*access, wasm::TrapMachineInsn::Load32,
+                               FaultingCodeRange(masm.currentOffset()));
         }
         masm.Ldxr(W(dest), ptr);
       }
@@ -2663,8 +2665,8 @@ static void LoadExclusive(MacroAssembler& masm,
             &masm,
             /* max number of instructions in scope = */ 1);
         if (access) {
-          masm.append(*access, wasm::TrapMachineInsn::Load64,
-                      FaultingCodeOffset(masm.currentOffset()));
+          masm.appendAndVerify(*access, wasm::TrapMachineInsn::Load64,
+                               FaultingCodeRange(masm.currentOffset()));
         }
         masm.Ldxr(X(dest), ptr);
       }
@@ -2736,10 +2738,7 @@ static void CompareExchange(MacroAssembler& masm,
     masm.memoryBarrierBefore(sync);
     {
       AutoForbidPoolsAndNops afp(&masm, /* number of insns = */ 1);
-      if (access) {
-        masm.append(*access, wasm::TrapMachineInsn::Atomic,
-                    FaultingCodeOffset(masm.currentOffset()));
-      }
+      auto before = masm.currentOffset();
       switch (byteSize(type)) {
         case 1:
           masm.Casalb(R(output, targetWidth), R(newval, targetWidth), ptr);
@@ -2753,6 +2752,10 @@ static void CompareExchange(MacroAssembler& masm,
           break;
         default:
           MOZ_CRASH("CompareExchange unsupported type");
+      }
+      if (access) {
+        masm.appendAndVerify(*access, wasm::TrapMachineInsn::Atomic,
+                             FaultingCodeRange(before));
       }
     }
     masm.memoryBarrierAfter(sync);
@@ -2804,10 +2807,7 @@ static void AtomicExchange(MacroAssembler& masm,
     masm.memoryBarrierBefore(sync);
     {
       AutoForbidPoolsAndNops afp(&masm, /* number of insns = */ 1);
-      if (access) {
-        masm.append(*access, wasm::TrapMachineInsn::Atomic,
-                    FaultingCodeOffset(masm.currentOffset()));
-      }
+      auto before = masm.currentOffset();
       switch (byteSize(type)) {
         case 1:
           masm.Swpalb(R(value, targetWidth), R(output, targetWidth), ptr);
@@ -2821,6 +2821,10 @@ static void AtomicExchange(MacroAssembler& masm,
           break;
         default:
           MOZ_CRASH("AtomicExchange unsupported type");
+      }
+      if (access) {
+        masm.appendAndVerify(*access, wasm::TrapMachineInsn::Atomic,
+                             FaultingCodeRange(before));
       }
     }
     masm.memoryBarrierAfter(sync);
@@ -2872,10 +2876,7 @@ static void AtomicFetchOp(MacroAssembler& masm,
 #define FETCH_OP_CASE(op, arg)                                                \
   {                                                                           \
     AutoForbidPoolsAndNops afp(&masm, /* num insns = */ 1);                   \
-    if (access) {                                                             \
-      masm.append(*access, wasm::TrapMachineInsn::Atomic,                     \
-                  FaultingCodeOffset(masm.currentOffset()));                  \
-    }                                                                         \
+    auto before = masm.currentOffset();                                       \
     switch (byteSize(type)) {                                                 \
       case 1:                                                                 \
         if (wantResult) {                                                     \
@@ -2901,6 +2902,10 @@ static void AtomicFetchOp(MacroAssembler& masm,
         break;                                                                \
       default:                                                                \
         MOZ_CRASH("AtomicFetchOp unsupported type");                          \
+    }                                                                         \
+    if (access) {                                                             \
+      masm.appendAndVerify(*access, wasm::TrapMachineInsn::Atomic,            \
+                           FaultingCodeRange(before));                        \
     }                                                                         \
   }
 

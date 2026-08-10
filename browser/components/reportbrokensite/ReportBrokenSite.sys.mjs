@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+
 const DEFAULT_NEW_REPORT_ENDPOINT = "https://webcompat.com/issues/new";
 const MINIMUM_DESCRIPTION_LENGTH = 10;
 
@@ -405,7 +407,8 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
 
   static SCREENSHOTS_ENABLED_PREF =
     "ui.new-webcompat-reporter.screenshots.enabled";
-  static SEND_MORE_INFO_PREF = "ui.new-webcompat-reporter.send-more-info-link";
+  static SHOW_SEND_MORE_INFO_PREF =
+    "ui.new-webcompat-reporter.show-send-more-info-link";
   static NEW_REPORT_ENDPOINT_PREF =
     "ui.new-webcompat-reporter.new-report-endpoint";
 
@@ -449,7 +452,8 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
 
   #OBSERVED_PREFS = {
     [ReportBrokenSite.SCREENSHOTS_ENABLED_PREF]: "onScreenshotsPrefChanged",
-    [ReportBrokenSite.SEND_MORE_INFO_PREF]: "onSendMoreInfoPrefChanged",
+    [ReportBrokenSite.SHOW_SEND_MORE_INFO_PREF]:
+      "onShowSendMoreInfoPrefChanged",
   };
 
   constructor() {
@@ -492,8 +496,23 @@ export var ReportBrokenSite = new (class ReportBrokenSite {
     state.screenshotsDisabled = !prefValue;
   }
 
-  onSendMoreInfoPrefChanged(prefValue, state) {
-    state.sendMoreInfoButton.toggleAttribute("hidden", !prefValue);
+  onShowSendMoreInfoPrefChanged(_, state) {
+    // This pref is unset by default. In that default state, we condition our
+    // behavior here based on release channel (technically update channel)
+    // to exempt release and ESR from seeing this UI.
+    let hidden;
+    if (
+      Services.prefs.prefHasUserValue(ReportBrokenSite.SHOW_SEND_MORE_INFO_PREF)
+    ) {
+      hidden = !Services.prefs.getBoolPref(
+        ReportBrokenSite.SHOW_SEND_MORE_INFO_PREF,
+        false
+      );
+    } else {
+      // enable the send-more-info link on pre-release builds.
+      hidden = ["release", "esr"].includes(AppConstants.MOZ_UPDATE_CHANNEL);
+    }
+    state.sendMoreInfoButton.hidden = hidden;
   }
 
   uninit(win) {

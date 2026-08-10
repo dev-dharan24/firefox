@@ -69,21 +69,10 @@ ai-tasks-alert-cancel-button = Cancel
 ai-tasks-alert-save-button = Save
 ai-tasks-alert-delete-button =
   .aria-label = Delete alert
-ai-tasks-alert-edit-button =
-  .aria-label = Edit alert
+ai-tasks-alert-edit-button = Edit
 ai-tasks-alert-pause-button = Pause
 ai-tasks-alert-resume-button = Resume
 ai-tasks-alert-check-now-button = Check now
-
-## Status Messages - Success notifications shown to users after alert actions
-
-ai-tasks-alert-success-created = Alert created successfully
-ai-tasks-alert-success-deleted = Alert deleted successfully
-ai-tasks-alert-success-paused = Alert paused
-ai-tasks-alert-success-resumed = Alert resumed
-ai-tasks-alert-success-checking = Checking alert
-ai-tasks-alert-success-checked = Alert check completed
-ai-tasks-alert-success-updated = Alert updated successfully
 
 ## Dialog Headers - Titles for alert dialogs
 
@@ -94,6 +83,8 @@ ai-tasks-alert-modal-title = Create alert
 ai-tasks-page-title = Smart Window alerts
 ai-tasks-add-alert-button = Create alert
 ai-task-page-description = Create alerts for price drops, restocks, ticket sales, and more. Choose the pages to watch and Smart Window checks for changes.
+ai-tasks-no-monitors-title = Smart Window tasks aren’t available in your region
+ai-tasks-no-monitors-message = Learn more <a data-l10n-name="smart-window-link">about Smart Window</a>.
 ai-task-page-no-alerts = No alerts created yet.
 # Variables:
 #   $count (number) - The number of alerts currently active
@@ -131,6 +122,8 @@ ai-tasks-alert-add-url = Save
 ## Alert Display - Strings used when displaying alert details
 
 ai-tasks-alert-change-history = Change history
+ai-tasks-alert-on-this-page = On this page
+ai-tasks-alert-the-alert = The Alert
 # Variables:
 #   $time (DateTime) - The time to be formatted based on locale
 ai-tasks-alert-schedule-daily-at = Check daily at { DATETIME($time, timeStyle: "short") }
@@ -157,3 +150,69 @@ ai-tasks-alert-schedule-weekly-friday = Check weekly on Friday at { DATETIME($ti
 ai-tasks-alert-schedule-weekly-saturday = Check weekly on Saturday at { DATETIME($time, timeStyle: "short") }
 ai-tasks-alert-status-watching = Active
 ai-tasks-alert-status-paused = Paused
+
+## AI Window Agent chat messages
+## Shown in the chat conversation while the Agent sets up or manages a monitor.
+
+# The <a data-l10n-name="tasks"> element links to the tasks page. Its text is
+# the page address; keep it and the element (with its name) unchanged.
+# Variables:
+#   $count (number) - The maximum number of watch tasks allowed
+smartwindow-agent-monitor-limit-reached = You already have { $count } watch tasks running — that’s the limit for now. Remove one at <a data-l10n-name="tasks">about:smartwindowtasks</a> then type /watch here again.
+
+smartwindow-agent-monitor-setup = I’ve set up a task to watch this page. Tweak anything, then start it.
+
+# Shown when the user runs the watch command from a page that has no address
+# to watch (for example an internal page or a blank tab).
+smartwindow-agent-monitor-page-not-watchable =
+    I can’t watch this page — watching works on regular web pages, not { -brand-product-name }’s own screens.<br/>
+    Open the page you want checked and type /watch there.
+
+# Fallback name used for $monitorName when the watched page has no title.
+smartwindow-agent-monitor-default-name = Page Watch
+
+# The <a data-l10n-name="tasks"> element links to the tasks page. Its text is
+# the page address; keep it and the element (with its name) unchanged.
+# Variables:
+#   $monitorName (string) - The name of the page or target being watched
+#   $schedule (string) - Readable check cadence, e.g. "daily at 9:00 AM"
+smartwindow-agent-monitor-watching = I’ll check { $monitorName } { $schedule }. I’ll notify you when I find content matching your task. View or edit this task anytime at <a data-l10n-name="tasks">about:smartwindowtasks</a>.
+
+# Shown in place of the card when the user deletes a task from the chat.
+# Variables:
+#   $monitorName (string) - The name of the page or target that was being watched
+smartwindow-agent-monitor-deleted = I’ve stopped watching { $monitorName } and removed this task.
+
+# Check watch schedule, added { $schedule } in the chat message.
+# Variables:
+#   $time (date) - The scheduled check time
+smartwindow-agent-monitor-schedule-daily = daily at { DATETIME($time, hour: "numeric", minute: "2-digit") }
+
+# Variables:
+#   $time (date) - The scheduled check day and time
+smartwindow-agent-monitor-schedule-weekly = weekly on { DATETIME($time, weekday: "long") } at { DATETIME($time, hour: "numeric", minute: "2-digit") }
+
+# Status chip and change-history rows shown on a monitor card in chat.
+smartwindow-agent-monitor-status-watching = Watching
+smartwindow-agent-monitor-status-paused = Paused
+smartwindow-agent-monitor-history-check-failed = Check failed. Check again later.
+smartwindow-agent-monitor-history-no-match = Checked, didn’t meet your alert. Check again later.
+
+## Alert deletion confirmation
+
+ai-tasks-alert-delete-confirmation-title = Delete this alert?
+
+ai-tasks-alert-delete-confirmation-message =
+    This alert and its history will be permanently deleted.
+
+ai-tasks-alert-delete-confirm-button = Delete
+
+## Used in the header to show the last check result
+
+ai-tasks-alert-last-result-met = Last result: Found
+ai-tasks-alert-last-result-not-met = Last result: No match
+
+## Used in the history table as a simple status badge
+
+ai-tasks-alert-condition-met = Found
+ai-tasks-alert-condition-not-met = No match

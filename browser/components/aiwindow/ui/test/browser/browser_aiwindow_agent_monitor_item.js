@@ -117,7 +117,14 @@ add_task(async function test_edit_toggle_expands_and_shows_field() {
         events.push(e.detail?.editing)
       );
 
-      shadow.querySelector(".page-action.edit").click();
+      // First expand the card to reveal the edit button
+      shadow.querySelector(".chev").click();
+      await el.updateComplete;
+
+      // Now click the edit button
+      shadow
+        .querySelector('moz-button[data-l10n-id="ai-tasks-alert-edit-button"]')
+        .click();
       await el.updateComplete;
 
       Assert.equal(el.editing, true, "Edit button turns on editing");
@@ -199,12 +206,16 @@ add_task(async function test_submit_and_delete_dispatch_detail() {
           monitorName: "Sony WH-1000XM5 price",
           condition: "the price drops below $270",
           watchUrls: ["soundnest.com/audio/sony-wh-1000xm5"],
-          schedule: { frequency: "daily", time: "09:00", weekday: "1" },
+          schedule: { frequency: "daily", time: "09:00", weekday: 1 },
+          autoExpandAndCheck: false,
         },
         "submit carries mode, id, monitor name, condition, watch URLs and schedule"
       );
 
-      shadow.querySelector(".page-action.delete").click();
+      const deleteButton = shadow.querySelector(
+        'moz-button[data-l10n-id="ai-tasks-alert-delete-button"]'
+      );
+      deleteButton.click();
       await el.updateComplete;
       Assert.deepEqual(
         deleteDetail,

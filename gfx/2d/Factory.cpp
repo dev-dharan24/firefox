@@ -15,12 +15,6 @@
 #include "PathSkia.h"
 #include "ScaledFontBase.h"
 
-#if defined(WIN32)
-#  include "NativeFontResourceGDI.h"
-#  include "ScaledFontWin.h"
-#  include "UnscaledFontGDI.h"
-#endif
-
 #ifdef XP_DARWIN
 #  include "NativeFontResourceMac.h"
 #  include "ScaledFontMac.h"
@@ -411,8 +405,6 @@ already_AddRefed<NativeFontResource> Factory::CreateNativeFontResource(
 #ifdef WIN32
     case FontType::DWRITE:
       return NativeFontResourceDWrite::Create(aData, aSize);
-    case FontType::GDI:
-      return NativeFontResourceGDI::Create(aData, aSize);
 #elif defined(XP_DARWIN)
     case FontType::MAC:
       return NativeFontResourceMac::Create(aData, aSize);
@@ -440,9 +432,6 @@ already_AddRefed<UnscaledFont> Factory::CreateUnscaledFontFromFontDescriptor(
     case FontType::DWRITE:
       return UnscaledFontDWrite::CreateFromFontDescriptor(aData, aDataLength,
                                                           aIndex);
-    case FontType::GDI:
-      return UnscaledFontGDI::CreateFromFontDescriptor(aData, aDataLength,
-                                                       aIndex);
 #elif defined(XP_DARWIN)
     case FontType::MAC:
       return UnscaledFontMac::CreateFromFontDescriptor(aData, aDataLength,
@@ -710,13 +699,6 @@ already_AddRefed<ScaledFont> Factory::CreateScaledFontForDWriteFont(
   return MakeAndAddRef<ScaledFontDWrite>(
       aFontFace, aUnscaledFont, aSize, aUseEmbeddedBitmap, aUseMultistrikeBold,
       aGDIForced, aStyle);
-}
-
-already_AddRefed<ScaledFont> Factory::CreateScaledFontForGDIFont(
-    const void* aLogFont, const RefPtr<UnscaledFont>& aUnscaledFont,
-    Float aSize) {
-  return MakeAndAddRef<ScaledFontWin>(static_cast<const LOGFONT*>(aLogFont),
-                                      aUnscaledFont, aSize);
 }
 #endif  // WIN32
 

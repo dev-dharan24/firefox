@@ -78,7 +78,7 @@ function serveResultPages(bodies) {
   server.start(-1);
   const { primaryHost, primaryPort } = server.identity;
   const urls = paths.map(
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     path => `http://${primaryHost}:${primaryPort}${path}`
   );
   return { urls, requestCounts, server };
@@ -224,6 +224,11 @@ add_task(async function test_search_the_web_end_to_end() {
         requiresSearchHandoff: false,
       },
       "The workflow returns the validated answer and code-tracked URLs"
+    );
+    Assert.deepEqual(
+      conversation.getCitationsSnapshot(),
+      [{ url: pageUrl, title: "Widget Store" }],
+      "The read page is registered as a citation on the conversation"
     );
     Assert.equal(
       requestCounts[0],
@@ -383,6 +388,11 @@ add_task(async function test_search_the_web_reads_result_pages_up_to_limit() {
         `A read URL is one of the served result pages: ${readUrl}`
       );
     }
+    Assert.deepEqual(
+      conversation.getCitationsSnapshot().map(citation => citation.url),
+      result.read_urls,
+      "The citation snapshot matches the read URLs"
+    );
     Assert.deepEqual(
       requestCounts,
       [1, 1, 1, 0],

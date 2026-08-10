@@ -1,6 +1,6 @@
 # Writing an efficiency test
 
-Once the building blocks exist, the test is a short, fluent description of *what* to check. It
+Once the building blocks exist, the test is a short, fluent description of _what_ to check. It
 extends `BaseTest`, which owns the compose rule, retries, cleanup, and the mock web server.
 
 ## Structure
@@ -45,8 +45,9 @@ interstitial card) rather than branching logic in the test.
 
 1. Run the test in isolation until green (atomic runner or its shard).
 2. Confirm parity: every legacy assertion has an equivalent here.
-3. Only THEN add the `replacedBy` marker to the legacy test method. Adding it before green inflates
-   the conversion burndown with tests that don't actually pass.
+3. Only THEN add the `replacedBy` marker to the legacy test method — but in the **same commit** as the
+   conversion. Adding it before green inflates the conversion burndown with tests that don't actually
+   pass; leaving it for a follow-up pass means the conversion lands looking unconverted.
 4. If the moved/added test belongs to a CI-run shard package, update the Flank configs in the SAME
    diff (there are three: arm-experimental-api-tests.yml runs them; arm64-v8a.yml and
    arm64-v8a-detect-leaks.yml exclude them) — otherwise coverage silently changes.

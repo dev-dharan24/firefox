@@ -279,6 +279,45 @@ add_task(function test_ChatConversation_addAssistantMessage() {
   });
 });
 
+add_task(function test_ChatConversation_addAssistantWithL10nMessage() {
+  const conversation = new ChatConversation({});
+
+  const events = [];
+  const onUpdate = (_event, m) => events.push(["update", m]);
+  const onComplete = (_event, m) => events.push(["complete", m]);
+  conversation.on("chat-conversation:message-update", onUpdate);
+  conversation.on("chat-conversation:message-complete", onComplete);
+
+  const message = conversation.addAssistantWithL10nMessage(
+    "smartwindow-agent-monitor-limit-reached",
+    { count: 5 },
+    { l10nName: "tasks", href: "about:smartwindowtasks" }
+  );
+
+  conversation.off("chat-conversation:message-update", onUpdate);
+  conversation.off("chat-conversation:message-complete", onComplete);
+
+  Assert.withSoftAssertions(function (soft) {
+    soft.equal(message.role, MESSAGE_ROLE.ASSISTANT);
+    soft.deepEqual(message.content, {
+      type: "text",
+      body: "",
+      l10nId: "smartwindow-agent-monitor-limit-reached",
+      l10nArgs: { count: 5 },
+      link: { l10nName: "tasks", href: "about:smartwindowtasks" },
+    });
+
+    soft.ok(
+      events.some(([type, m]) => type === "update" && m === message),
+      "emits chat-conversation:message-update"
+    );
+    soft.ok(
+      events.some(([type, m]) => type === "complete" && m === message),
+      "emits chat-conversation:message-complete"
+    );
+  });
+});
+
 add_task(function test_opts_ChatConversation_addAssistantMessage() {
   const conversation = new ChatConversation({});
 
@@ -812,51 +851,6 @@ add_task(async function test_injectRealTimeContext_dedupes_when_unchanged() {
   );
 });
 
-add_task(
-  async function test_injectMemoriesContext_writes_to_userMessage_userContext() {
-    const constructMemories = lazy.sinon
-      .stub()
-      .resolves({ content: "memories data" });
-
-    const conversation = new ChatConversation({});
-    const userMessage = conversation.addUserMessage("hi");
-    await conversation.injectMemoriesContext(
-      userMessage,
-      "hello",
-      constructMemories
-    );
-
-    Assert.equal(
-      userMessage.content.userContext.memoriesContext,
-      "memories data",
-      "injectMemoriesContext writes content onto userMessage.content.userContext.memoriesContext"
-    );
-    Assert.ok(
-      constructMemories.calledWith("hello"),
-      "constructMemories should be called with the prompt"
-    );
-  }
-);
-
-add_task(
-  async function test_injectMemoriesContext_no_op_when_constructMemories_null() {
-    const constructMemories = lazy.sinon.stub().resolves(null);
-
-    const conversation = new ChatConversation({});
-    const userMessage = conversation.addUserMessage("hi");
-    await conversation.injectMemoriesContext(
-      userMessage,
-      "hello",
-      constructMemories
-    );
-
-    Assert.ok(
-      !userMessage.content.userContext?.memoriesContext,
-      "Leaves userContext.memoriesContext unset when constructMemories returns null"
-    );
-  }
-);
-
 add_task(function test_ChatConversation_renderState_filters_phantom_messages() {
   const conversation = new ChatConversation({});
 
@@ -970,6 +964,143 @@ add_task(
     );
   }
 );
+
+add_task(function test_ChatConversation_rehydratesCitationsPool() {
+  const records = [
+    { url: "https://example.com/1", title: "Source 1" },
+    { url: "https://example.com/2", title: "Source 2" },
+  ];
+  const message = new ChatMessage({
+    ordinal: 1,
+    role: MESSAGE_ROLE.ASSISTANT,
+    turnIndex: 0,
+    content: { type: "text", body: "Here is what I found" },
+    citations: records,
+  });
+
+  const conversation = new ChatConversation({ messages: [message] });
+
+  // The snapshot only covers URLs read in the current turn.
+  Assert.deepEqual(
+    conversation.getCitationsSnapshot(),
+    [],
+    "a restored conversation starts with no pending citations"
+  );
+
+  conversation.addCitations([{ url: "https://example.com/2" }]);
+  Assert.deepEqual(
+    conversation.getCitationsSnapshot(),
+    [{ url: "https://example.com/2", title: "Source 2" }],
+    "constructor rehydrates the citations pool from message snapshots"
+  );
+});
+
+add_task(async function test_receiveResponse_snapshotsCitationsOnMessage() {
+  const conversation = new ChatConversation({});
+  conversation.addAssistantMessage("text", "");
+  const assistantMsg = conversation.messages.at(-1);
+
+  const records = [{ url: "https://example.com/1", title: "Source 1" }];
+  conversation.addCitations(records);
+
+  async function* emptyStream() {}
+  await conversation.receiveResponse(emptyStream());
+
+  Assert.deepEqual(
+    assistantMsg.citations,
+    records,
+    "receiveResponse snapshots this turn's citations onto the completed message"
+  );
+});
+
+add_task(function test_applyHistoryAssets_keepsThumbnailForCitedUrl() {
+  const url = "https://example.com/1";
+  const conversation = new ChatConversation({});
+  conversation.addHistoryResults([{ url, title: "Page 1" }]);
+  conversation.applyHistoryAssets([
+    {
+      url,
+      image: "moz-page-thumb://thumb",
+      requestedThumbnail: true,
+      hasFavicon: false,
+    },
+  ]);
+  conversation.addCitations([{ url, title: "Source 1" }]);
+  // A citation request sends no thumbnail
+  conversation.applyHistoryAssets([
+    { url, image: null, requestedThumbnail: false, hasFavicon: true },
+  ]);
+
+  Assert.equal(
+    conversation.getHistoryResultsSnapshot()[0].image,
+    "moz-page-thumb://thumb",
+    "citation-only asset resolution keeps the history record’s thumbnail"
+  );
+  Assert.ok(
+    conversation.getHistoryResultsSnapshot()[0].hasFavicon,
+    "history record picks up the resolved favicon availability"
+  );
+  Assert.ok(
+    conversation.getCitationsSnapshot()[0].hasFavicon,
+    "citation picks up the resolved favicon availability"
+  );
+
+  conversation.applyHistoryAssets([
+    { url, image: null, requestedThumbnail: true, hasFavicon: true },
+  ]);
+  Assert.equal(
+    conversation.getHistoryResultsSnapshot()[0].image,
+    null,
+    "an evicted thumbnail still clears when a thumbnail was requested"
+  );
+});
+
+add_task(async function test_addUserMessage_clearsPendingCitations() {
+  const conversation = new ChatConversation({});
+  conversation.addCitations([{ url: "https://example.com/1", title: "S1" }]);
+
+  conversation.addUserMessage("A follow-up question", "https://example.com/");
+  conversation.addAssistantMessage("text", "");
+  const assistantMsg = conversation.messages.at(-1);
+
+  async function* emptyStream() {}
+  await conversation.receiveResponse(emptyStream());
+
+  Assert.deepEqual(
+    assistantMsg.citations,
+    [],
+    "addUserMessage clears pending citations so chips belong to their own reply"
+  );
+});
+
+add_task(async function test_retryMessage_clearsPendingCitations() {
+  const conversation = new ChatConversation({});
+  const userMsg = conversation.addUserMessage(
+    "Search the web",
+    "https://example.com/"
+  );
+  conversation.addAssistantMessage("text", "Here is what I found");
+  conversation.addCitations([{ url: "https://example.com/1", title: "S1" }]);
+
+  await conversation.retryMessage(userMsg);
+
+  Assert.deepEqual(
+    conversation.getCitationsSnapshot(),
+    [],
+    "retryMessage clears the pending citations from the previous turn"
+  );
+
+  conversation.addAssistantMessage("text", "");
+  const assistantMsg = conversation.messages.at(-1);
+  async function* emptyStream() {}
+  await conversation.receiveResponse(emptyStream());
+
+  Assert.deepEqual(
+    assistantMsg.citations,
+    [],
+    "the regenerated reply does not inherit citations from the previous turn"
+  );
+});
 
 add_task(async function test_addUserMessage_sets_memories_fields() {
   const conversation = new ChatConversation({});
@@ -1199,48 +1330,6 @@ add_task(
     Assert.ok(
       !conversation.securityProperties.privateData,
       "privateData should remain false when hasTabInfo is false"
-    );
-  }
-);
-
-add_task(
-  async function test_injectMemoriesContext_setsPrivateData_when_memoriesFound() {
-    const conversation = new ChatConversation({});
-    const userMessage = conversation.addUserMessage("hi");
-    const constructMemories = lazy.sinon
-      .stub()
-      .resolves({ content: "some memory" });
-
-    await conversation.injectMemoriesContext(
-      userMessage,
-      "hello",
-      constructMemories
-    );
-
-    conversation.securityProperties.commit();
-    Assert.ok(
-      conversation.securityProperties.privateData,
-      "privateData should be true after commit when memories were found"
-    );
-  }
-);
-
-add_task(
-  async function test_injectMemoriesContext_doesNotSetPrivateData_when_noMemories() {
-    const conversation = new ChatConversation({});
-    const userMessage = conversation.addUserMessage("hi");
-    const constructMemories = lazy.sinon.stub().resolves(null);
-
-    await conversation.injectMemoriesContext(
-      userMessage,
-      "hello",
-      constructMemories
-    );
-
-    conversation.securityProperties.commit();
-    Assert.ok(
-      !conversation.securityProperties.privateData,
-      "privateData should remain false when no memories were found"
     );
   }
 );

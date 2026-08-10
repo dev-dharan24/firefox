@@ -1015,6 +1015,7 @@ class GCRuntime {
   void updateAtomsBitmap();
   void sweepCCWrappers();
   void sweepRealmGlobals();
+  void sweepWasmInstances();
   void sweepEmbeddingWeakPointers(JS::GCContext* gcx);
   void sweepMisc();
   void sweepCompressionTasks();

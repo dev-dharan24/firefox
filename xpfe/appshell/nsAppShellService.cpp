@@ -516,8 +516,7 @@ nsresult nsAppShellService::JustCreateTopWindow(
   uint32_t barMask = nsIWebBrowserChrome::CHROME_MENUBAR |
                      nsIWebBrowserChrome::CHROME_TOOLBAR |
                      nsIWebBrowserChrome::CHROME_LOCATIONBAR |
-                     nsIWebBrowserChrome::CHROME_TITLEBAR |
-                     nsIWebBrowserChrome::CHROME_STATUSBAR;
+                     nsIWebBrowserChrome::CHROME_TITLEBAR;
   if (widgetInitData.mWindowType == widget::WindowType::Dialog &&
       ((aChromeMask & pipMask) == pipMask) && !(aChromeMask & barMask)) {
     widgetInitData.mPiPType = mozilla::widget::PiPType::MediaPiP;
@@ -552,10 +551,7 @@ nsresult nsAppShellService::JustCreateTopWindow(
              nsIWebBrowserChrome::CHROME_ALL) {
     widgetInitData.mBorderStyle = BorderStyle::All;
   } else {
-    widgetInitData.mBorderStyle = BorderStyle::None;  // assumes none == 0x00
-    if (aChromeMask & nsIWebBrowserChrome::CHROME_WINDOW_BORDERS) {
-      widgetInitData.mBorderStyle |= BorderStyle::Border;
-    }
+    widgetInitData.mBorderStyle = BorderStyle::Border;
     if (aChromeMask & nsIWebBrowserChrome::CHROME_TITLEBAR) {
       widgetInitData.mBorderStyle |= BorderStyle::Title;
     }

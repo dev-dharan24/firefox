@@ -139,15 +139,17 @@ static void GeneratePixel(SwizzleOp aOp, SurfaceFormat aDstFormat, uint8_t aB,
   }
 }
 
-// Reference CMYK -> RGB conversion matching the scalar cmyk_convert_bgra in
-// nsJPEGDecoder: R = C*K/255, G = M*K/255, B = Y*K/255 (truncating), with the
-// channels optionally inverted first. The result is packed via GeneratePixel so
-// the destination byte order is handled consistently.
+// Reference CMYK -> RGB conversion matching the scalar SwizzleCmykRowFallback:
+// R = iC*iK/255, G = iM*iK/255, B = iY*iK/255 (truncating), with i meaning
+// inverted. The result is packed via GeneratePixel so the destination byte
+// order is handled consistently.
 static void GenerateCmykPixel(bool aInverted, SurfaceFormat aDstFormat,
                               uint8_t aC, uint8_t aM, uint8_t aY, uint8_t aK,
                               uint8_t* aDst) {
   uint32_t iC = aC, iM = aM, iY = aY, iK = aK;
-  if (aInverted) {
+
+  // Invert if necessary, as the math expects inverted CMYK.
+  if (!aInverted) {
     iC = 255 - iC;
     iM = 255 - iM;
     iY = 255 - iY;
@@ -967,14 +969,16 @@ TEST(Moz2D, SwizzleRow)
 
 TEST(Moz2D, SwizzleRowCmyk)
 {
-  const uint8_t in_cmyk[10 * 4] = {
-      200, 50,  10,  255,  // K=255: color passes through (R=C, G=M, B=Y)
+  // We use inverted CMYK here as it's preferred in the field and is easier to
+  // explain
+  const uint8_t in_inverted_cmyk[10 * 4] = {
+      200, 50,  10,  255,  // K=255: color passes through (R=iC, G=iM, B=iY)
       200, 50,  10,  0,    // K=0: fully black
       255, 255, 255, 255,  // all max -> 255,255,255
       0,   0,   0,   0,    // all min -> 0,0,0
       128, 128, 128, 128,  // floor edge: 128*128/255 = 64.25 -> 64
-      255, 0,   0,   255,  // only C -> only R (catches R/B swap)
-      0,   0,   255, 255,  // only Y -> only B (catches R/B swap)
+      255, 0,   0,   255,  // only iC -> only R (catches R/B swap)
+      0,   0,   255, 255,  // only iY -> only B (catches R/B swap)
       2,   2,   2,   128,  // truncation: 2*128/255 = 1.003 -> 1
       255, 255, 255, 1,    // tiny K: 255*1/255 = 1
       100, 150, 200, 77,   // arbitrary mid values
@@ -982,15 +986,15 @@ TEST(Moz2D, SwizzleRowCmyk)
   uint8_t out[10 * 4];
 
   // clang-format off
-  const uint8_t check_bgrx[10 * 4] = {
+  const uint8_t check_inverted_bgrx[10 * 4] = {
        10, 50, 200, 255,  0,  0,  0, 255, 255, 255, 255, 255,
         0,  0,   0, 255, 64, 64, 64, 255,   0,   0, 255, 255,
       255,  0,   0, 255,  1,  1,  1, 255,   1,   1,   1, 255,
        60, 45,  30, 255,
   };
 
-  // InvertedCMYK: each channel is inverted (255 - x) before the conversion.
-  const uint8_t check_inverted_bgrx[10 * 4] = {
+  // Non-inverted CMYK: each channel is inverted (255 - x) during the conversion.
+  const uint8_t check_bgrx[10 * 4] = {
         0,   0,   0, 255, 245, 205,  55, 255, 0,  0,   0, 255,
       255, 255, 255, 255,  63,  63,  63, 255, 0,  0,   0, 255,
         0,   0,   0, 255, 126, 126, 126, 255, 0,  0,   0, 255,
@@ -1002,7 +1006,7 @@ TEST(Moz2D, SwizzleRowCmyk)
     SwizzleRowFn func = RowFnFor(SwizzleOp::Copy, SurfaceFormat::CMYK,
                                  SurfaceFormat::B8G8R8X8, arch);
     if (func) {
-      func(in_cmyk, out, 10);
+      func(in_inverted_cmyk, out, 10);
       EXPECT_TRUE(ArrayEqual(out, check_bgrx));
     } else {
       EXPECT_NE(arch, SwizzleArch::eAny);
@@ -1012,7 +1016,7 @@ TEST(Moz2D, SwizzleRowCmyk)
     func = RowFnFor(SwizzleOp::Copy, SurfaceFormat::InvertedCMYK,
                     SurfaceFormat::B8G8R8X8, arch);
     if (func) {
-      func(in_cmyk, out, 10);
+      func(in_inverted_cmyk, out, 10);
       EXPECT_TRUE(ArrayEqual(out, check_inverted_bgrx));
     } else {
       EXPECT_NE(arch, SwizzleArch::eAny);

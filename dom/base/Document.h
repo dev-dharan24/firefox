@@ -4204,7 +4204,9 @@ class Document : public nsINode,
   void MaybeSkipTransitionAfterVisibilityChange();
 
   void ScheduleViewTransitionUpdateCallback(ViewTransition* aVt);
-  MOZ_CAN_RUN_SCRIPT void FlushViewTransitionUpdateCallbackQueue();
+
+  // Returns whether any callback ran.
+  MOZ_CAN_RUN_SCRIPT bool FlushViewTransitionUpdateCallbackQueue();
 
   // Returns some ViewTransition::TypeList or Nothing if skip transition.
   // https://drafts.csswg.org/css-view-transitions-2/#resolve-view-transition-rule
@@ -5959,6 +5961,7 @@ class Document : public nsINode,
                                               ErrorResult& aError);
 
   class SpeculationRules& SpeculationRules();
+  class SpeculationRules* GetSpeculationRules();
 
   nsIURI* GetTlsCertificateBindingURI() const {
     return mTLSCertificateBindingURI;

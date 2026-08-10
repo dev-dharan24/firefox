@@ -142,7 +142,7 @@ class Animation : public DOMEventTargetHelper,
 
   AnimationTimeline* GetTimelineFromJS() const {
     auto* timeline = GetTimeline();
-    if (timeline && timeline->IsInactiveTimeline()) {
+    if (timeline && timeline->IsUnresolvedTimeline()) {
       // See:
       // https://github.com/w3c/csswg-drafts/issues/13807#issuecomment-4390005560
       return nullptr;
@@ -608,7 +608,7 @@ class Animation : public DOMEventTargetHelper,
 
   bool HasFiniteActiveTimeline() const {
     return mTimeline && !mTimeline->IsMonotonicallyIncreasing() &&
-           !mTimeline->IsInactiveTimeline();
+           !mTimeline->IsUnresolvedTimeline();
   }
 
   RefPtr<AnimationTimeline> mTimeline;

@@ -9,7 +9,7 @@ const m = parseModule(`
   throw new Error("err");
 `);
 
-moduleLink(m);
+moduleLoadAndLink(m);
 moduleEvaluate(m).catch(() => 0);
 drainJobQueue();
 

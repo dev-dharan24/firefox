@@ -91,6 +91,7 @@ export const DEFAULT_ENGINE_ID = "smart-openai";
  */
 export const MODEL_FEATURES = Object.freeze({
   CHAT: "chat",
+  SMART_FORM_FILL: "smart-form-fill",
   TITLE_GENERATION: "title-generation",
   CONVERSATION_STARTERS_SIDEBAR_SYSTEM: "conversation-starters-sidebar-system",
   CONVERSATION_SUGGESTIONS_SIDEBAR_STARTER:
@@ -139,6 +140,7 @@ export const SERVICE_TYPES = Object.freeze({
  */
 export const PURPOSES = Object.freeze({
   CHAT: "chat",
+  SMART_FORM_FILL: "smart-form-fill",
   TITLE_GENERATION: "title-generation",
   CONVERSATION_STARTERS_SIDEBAR: "convo-starters-sidebar",
   MEMORY_GENERATION: "memory-generation",
@@ -160,6 +162,7 @@ export const FEATURE_MAJOR_VERSIONS = Object.freeze({
   get [MODEL_FEATURES.CHAT]() {
     return Services.prefs.getBoolPref(MISTRAL_RELEASE_PREF, false) ? 11 : 10;
   },
+  [MODEL_FEATURES.SMART_FORM_FILL]: 1,
   [MODEL_FEATURES.TITLE_GENERATION]: 1,
   [MODEL_FEATURES.CONVERSATION_STARTERS_SIDEBAR_SYSTEM]: 1,
   [MODEL_FEATURES.CONVERSATION_SUGGESTIONS_SIDEBAR_STARTER]: 3,

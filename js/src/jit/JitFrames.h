@@ -127,9 +127,10 @@ struct VMFunctionData;
  *  Resuming a generator:
  *    When resuming a suspended generator or async function/module, the caller
  *    also pushes the resume args (see ResumeFrameArgs): the resume value, the
- *    generator object, and the resume kind. For function callees these are
- *    pushed above the formals and numActualArgs is 0. Module callees have no
- *    ThisV and no arguments, so the resume args occupy those slots instead.
+ *    generator object, the resume kind, and the resume index. For function
+ *    callees these are pushed above the formals and numActualArgs is 0. Module
+ *    callees have no ThisV and no arguments, so the resume args occupy those
+ *    slots instead.
  *    The caller signals their presence with the IsResumingGenerator descriptor
  *    bit, which also tells the callee's prologue to dispatch to the resume
  *    point. JSOp::AfterYield clears the bit, after which these slots must no
@@ -448,6 +449,7 @@ class CommonFrameLayout {
   FrameType prevType() const { return descriptor_.type(); }
   void changePrevType(FrameType type) { descriptor_.changeType(type); }
   bool hasCachedSavedFrame() const { return descriptor_.hasCachedSavedFrame(); }
+  bool isResumingGenerator() const { return descriptor_.isResumingGenerator(); }
   void setHasCachedSavedFrame() { descriptor_.setHasCachedSavedFrame(); }
   void clearHasCachedSavedFrame() { descriptor_.clearHasCachedSavedFrame(); }
   uint8_t* returnAddress() const { return returnAddress_; }
@@ -494,14 +496,16 @@ class JitFrameLayout : public CommonFrameLayout {
   JS::Value* actualArgs() { return thisAndActualArgs() + 1; }
   uintptr_t numActualArgs() const { return descriptor().numActualArgs(); }
 
-  static constexpr size_t offsetOfModuleResumeSlots() {
+  static constexpr size_t offsetOfModuleResumeArgs() {
     return sizeof(JitFrameLayout);
   }
-  JS::Value* moduleResumeSlots() {
-    MOZ_ASSERT(descriptor().isResumingGenerator());
+  JS::Value* moduleResumeArgs() {
+    MOZ_ASSERT(isResumingGenerator());
     MOZ_ASSERT(!CalleeTokenIsFunction(calleeToken()));
     return reinterpret_cast<JS::Value*>(this + 1);
   }
+
+  JS::Value* resumeArgs();
 
   // Computes a reference to a stack or argument slot, where a slot is a
   // distance from the base frame pointer, as would be used for LStackSlot

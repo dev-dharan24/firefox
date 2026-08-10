@@ -107,9 +107,6 @@ tags = "os_integration"
 ["test_popup_blocker_chrome.xhtml"]
 
 ["test_queryCaretRect.html"]
-skip-if = [
-  "nova", # Bug 2057931
-]
 
 ["test_resize_move_windows.xhtml"]
 support-files = [

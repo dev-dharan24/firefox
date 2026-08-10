@@ -157,6 +157,7 @@ class FirefoxWebDriver(WebDriver):
         if self.browser_binary:
             fx_options["binary"] = self.browser_binary
             if self.headless:
+                fx_options.setdefault("args", [])
                 fx_options["args"].append("--headless")
 
         if self.device_serial:

@@ -145,7 +145,8 @@ add_task(async function test_paused_content_upgraded() {
 
 /**
  * Tests that opening the panel while paused re-checks usage, showing the
- * loading state until the refresh completes and then the paused screen.
+ * paused screen immediately (not a loading state) while the refresh is in
+ * flight and keeping it once the refresh completes.
  */
 add_task(async function test_showing_refreshes_usage_when_paused() {
   setupService({
@@ -175,12 +176,12 @@ add_task(async function test_showing_refreshes_usage_when_paused() {
     "Usage should be refreshed when opening the panel while paused"
   );
   Assert.ok(
-    content.shadowRoot.querySelector("#enrolling-container"),
-    "Loading state should be shown while usage is refreshing"
+    content.statusBoxEl,
+    "Paused screen should be shown immediately while usage is refreshing"
   );
   Assert.ok(
-    !content.statusBoxEl,
-    "Paused screen should be hidden while usage is refreshing"
+    !content.shadowRoot.querySelector("#enrolling-container"),
+    "Loading state should not be shown while usage is refreshing"
   );
 
   resolve();
@@ -189,10 +190,6 @@ add_task(async function test_showing_refreshes_usage_when_paused() {
   await TestUtils.waitForCondition(
     () => content.statusBoxEl,
     "Paused screen should be shown once the usage refresh completes"
-  );
-  Assert.ok(
-    !content.shadowRoot.querySelector("#enrolling-container"),
-    "Loading state should be hidden once the usage refresh completes"
   );
 
   await setPanelState();

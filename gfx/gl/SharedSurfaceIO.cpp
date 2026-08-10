@@ -99,13 +99,13 @@ void SharedSurface_IOSurface::ProducerReleaseImpl() {
     if (egl->IsExtensionSupported(
             EGLExtension::ANGLE_metal_shared_event_sync)) {
       const uint64_t signalValue = 1;
-      const EGLint attribs[] = {
+      const EGLAttrib attribs[] = {
           LOCAL_EGL_SYNC_METAL_SHARED_EVENT_SIGNAL_VALUE_LO_ANGLE,
-          static_cast<EGLint>(signalValue & 0xFFFFFFFF),
+          static_cast<EGLAttrib>(signalValue & 0xFFFFFFFF),
           LOCAL_EGL_SYNC_METAL_SHARED_EVENT_SIGNAL_VALUE_HI_ANGLE,
-          static_cast<EGLint>(signalValue >> 32), LOCAL_EGL_NONE};
-      const EGLSync sync =
-          egl->fCreateSync(LOCAL_EGL_SYNC_METAL_SHARED_EVENT_ANGLE, attribs);
+          static_cast<EGLAttrib>(signalValue >> 32), LOCAL_EGL_NONE};
+      const EGLSync sync = egl->fCreateSyncEGL15(
+          LOCAL_EGL_SYNC_METAL_SHARED_EVENT_ANGLE, attribs);
       if (!sync) {
         gfxCriticalNote << "Creating EGL_SYNC_METAL_SHARED_EVENT sync failed";
         gl->fFinish();

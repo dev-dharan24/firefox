@@ -174,17 +174,21 @@ nsDocShellLoadState::nsDocShellLoadState(
       }
     }
 
+    // NOTE: Eventually this should probably be called on a LoadedOriginSet, but
+    // we don't track this on the load state yet.
     if (!ValidatePrincipalCouldPotentiallyBeLoadedBy(
             mTriggeringPrincipal, GetEffectiveTriggeringRemoteType(),
             {ValidatePrincipalOptions::AllowExpanded,
-             ValidatePrincipalOptions::AllowSystem})) {
+             ValidatePrincipalOptions::AlwaysAllowSystem,
+             ValidatePrincipalOptions::AllowNotLoadedOrigin})) {
       aActor->FatalError(
           "nsDocShellLoadState with invalid triggering principal");
       return;
     }
     if (!ValidatePrincipalCouldPotentiallyBeLoadedBy(
             mPrincipalToInherit, GetEffectiveTriggeringRemoteType(),
-            {ValidatePrincipalOptions::AllowNullPtr})) {
+            {ValidatePrincipalOptions::AllowNullPtr,
+             ValidatePrincipalOptions::AllowNotLoadedOrigin})) {
       aActor->FatalError("nsDocShellLoadState with invalid principalToInherit");
       return;
     }

@@ -24,6 +24,7 @@ for it:
    `SPHINX_PYTHON_PACKAGE_DIRS += ["mozpackage"]`.
 5. In `docs/config.yml`, defines in which category the doc
    should go.
+6. Run the linter with `./mach lint -l md`
 
 Markdown files are parsed with [MyST], a CommonMark-compatible parser
 that supports Sphinx roles and directives. To use a Sphinx directive in

@@ -272,10 +272,13 @@ function getDefaultWidgetSize() {
  * - Forecast enabled + maximized → user had the large forecast widget → "large"
  * - Forecast enabled + not maximized → user had the medium forecast widget → "medium"
  */
-// @nova-cleanup(remove-pref): Replace this function with a _migratePref call
-// that writes the computed size as a user pref for widgets.weather.size, then
-// change widgets.weather.size in PREFS_CONFIG to value: "" (consistent with
-// other widget size prefs; new users fall through to defaultSize in the registry).
+// @nova-cleanup(remove-pref): Do NOT fold this into the pref removal -- it does
+// not read nova.enabled, and changing it is user-data-affecting. Split it to its
+// own bug: replace with a one-time _migratePref that writes the computed size as
+// a user pref, then set widgets.weather.size to value: "" like the other widget
+// size prefs. A user who had classic weather but never picked a size currently
+// gets "small" recomputed each startup and would otherwise silently resize, so
+// it needs QA against an upgraded profile.
 function getWeatherWidgetSize() {
   const forecastSystemEnabled = Services.prefs.getBoolPref(
     "browser.newtabpage.activity-stream.widgets.system.weatherForecast.enabled",
@@ -376,6 +379,22 @@ export const PREFS_CONFIG = new Map([
     "showSponsoredTopSites",
     {
       title: "Show sponsored top sites",
+      value: true,
+    },
+  ],
+  [
+    "system.showWebNotifications",
+    {
+      title:
+        "System pref gating the web notifications feature. Off means the feature does not exist for this profile: no capture, no surfaces, and no toggle in the customize menu",
+      value: false,
+    },
+  ],
+  [
+    "showWebNotifications",
+    {
+      title:
+        "User pref for showing web notifications on newtab. Only consulted when system.showWebNotifications is set",
       value: true,
     },
   ],
@@ -993,7 +1012,10 @@ export const PREFS_CONFIG = new Map([
     "discoverystream.sections.ordering",
     {
       title: "Name of the sections ordering to render from Remote Settings",
-      value: "",
+      // Channel-derived (resolves on the host), so it's set in Nightly but stays
+      // empty after the XPI train-hops to Beta/Release. Hardcoding the value
+      // would bake it into the XPI and wrongly activate it on other channels.
+      value: AppConstants.NIGHTLY_BUILD ? "default" : "",
     },
   ],
   [
@@ -1556,6 +1578,14 @@ export const PREFS_CONFIG = new Map([
     },
   ],
   [
+    "widgets.stocks.interaction",
+    {
+      title:
+        "Boolean flag for determining if a user has interacted with the stocks widget",
+      value: false,
+    },
+  ],
+  [
     "widgets.pictureOfTheDay.enabled",
     {
       title: "Enables the picture of the day widget",
@@ -1600,8 +1630,53 @@ export const PREFS_CONFIG = new Map([
   [
     "widgets.privacy.maxCount",
     {
-      title: "Max trackers-blocked count shown before the '+' cap",
+      title:
+        "Today-count that fires the Privacy widget 'daily cap' celebration",
       value: 100,
+    },
+  ],
+  [
+    "widgets.privacy.maxDisplayCount",
+    {
+      title: "Ceiling for the tracker-count readout before the '+' (e.g. 999+)",
+      value: 999,
+    },
+  ],
+  [
+    "widgets.privacy.blankChance",
+    {
+      title:
+        "Probability (0..1) an eligible Privacy widget info message is shown blank",
+      // Stored as a string: prefs have no float type, so a numeric 0.4 would
+      // land as 0 and disable blanks. resolvePrivacyBlankChance parses it.
+      value: "0.4",
+    },
+  ],
+  [
+    "widgets.privacy.showVpnMessages",
+    {
+      title:
+        "Allow VPN promotional messages in the Privacy widget (off by default; not all users are VPN-eligible)",
+      value: false,
+    },
+  ],
+  [
+    "widgets.privacy.forceMessageId",
+    {
+      title:
+        "Debug: pin the Privacy widget to one catalog message id (QA/design; empty = normal scheduling)",
+      value: "",
+    },
+  ],
+  [
+    "widgets.privacy.messageState",
+    {
+      // Parent-only scheduler bookkeeping (frequency caps, milestone
+      // watermarks, etc.) owned by PrivacyFeed. skipBroadcast keeps the blob
+      // out of the content-synced prefs.
+      title: "Privacy widget message scheduler state (JSON, internal)",
+      skipBroadcast: true,
+      value: "{}",
     },
   ],
   [
@@ -2153,6 +2228,13 @@ const FEEDS_DATA = [
     value: true,
   },
   {
+    name: "webnotificationsfeed",
+    factory: () => new lazy.WebNotificationsFeed(),
+    title:
+      "Captures web notifications (Service-Worker and page) for newtab surfaces",
+    value: true,
+  },
+  {
     name: "stocksfeed",
     factory: () => new lazy.StocksFeed(),
     title: "Handles fetching and caching stocks data",
@@ -2226,12 +2308,6 @@ const FEEDS_DATA = [
     factory: () => new lazy.ExternalComponentsFeed(),
     title: "Handles updating the registry of external components",
     value: true,
-  },
-  {
-    name: "webnotificationsfeed",
-    factory: () => new lazy.WebNotificationsFeed(),
-    title: "Handles snapshotting the platform NotificationDB",
-    value: false,
   },
 ];
 

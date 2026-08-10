@@ -86,6 +86,9 @@ const DEFAULT_THEME_ID = "default-theme@mozilla.org";
  *   aria-labels are provided for accessibility.
  * @property {boolean} showNativeThemeOption
  *   Whether to show the native theme checkbox. Only applies on Linux.
+ * @property {string} deviceAppearance
+ *   The device's system appearance: "light" or "dark". Used to display the
+ *   correct theme colors when appearance is set to "device".
  * @fires themechange - Fired when appearance, theme, or nativeTheme changes.
  * Detail contains {property, value}
  */
@@ -98,6 +101,7 @@ export class ThemePicker extends MozLitElement {
     layout: { type: String },
     showLabels: { type: Boolean },
     showNativeThemeOption: { type: Boolean },
+    deviceAppearance: { type: String },
   };
 
   static queries = {
@@ -115,6 +119,7 @@ export class ThemePicker extends MozLitElement {
     this.controller = ThemePicker.createController(this);
     this.layout = "full";
     this.showNativeThemeOption = false;
+    this.deviceAppearance = "light";
   }
 
   /**
@@ -171,8 +176,10 @@ export class ThemePicker extends MozLitElement {
    * @param {ThemePickerTheme} theme
    */
   themeStyle(theme) {
+    let effectiveAppearance =
+      this.appearance === "device" ? this.deviceAppearance : this.appearance;
     let colors =
-      this.appearance == "dark"
+      effectiveAppearance === "dark"
         ? theme.themePickerColors.dark
         : theme.themePickerColors.light;
     return styleMap({

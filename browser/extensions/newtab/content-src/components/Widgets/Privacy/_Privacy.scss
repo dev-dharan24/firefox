@@ -10,6 +10,7 @@
   padding: var(--space-large);
 
   &.medium-widget {
+    padding-block-start: var(--space-small);
     grid-row: span 2;
   }
 
@@ -50,22 +51,26 @@
   align-items: flex-start;
   justify-content: flex-end;
 
-  // Medium styles
-  .medium-widget & {
-    font-size: var(--font-size-xsmall);
+  .privacy-count-text {
+    display: flex;
+    flex-direction: column;
+
+    .medium-widget & {
+      margin-block-end: var(--space-medium);
+    }
+
+    .has-streak.medium-widget &,
+    .has-tip-msg.medium-widget & {
+      margin-block-end: 0;
+    }
   }
 
+  .has-streak.medium-widget &,
   .has-tip-msg.medium-widget & {
-    justify-content: flex-end;
-    flex-direction: row;
-    align-items: stretch;
-    gap: var(--space-large);
-
-    .privacy-tip, .privacy-count {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
+    .privacy-count {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--space-small);
     }
   }
 
@@ -74,6 +79,12 @@
     align-items: flex-start;
     justify-content: flex-end;
     gap: var(--space-large);
+  }
+
+  // Streak reuses the count-block layout (no divider): count then message
+  // stacked, with a little breathing room between them.
+  .has-streak & {
+    gap: var(--space-small);
   }
 
   // Empty state: center the image + message in the card.
@@ -123,7 +134,7 @@
   }
 
   .privacy-count-number {
-    font-size: calc(var(--font-size-root) * 2.75); // ~42px
+    font-size: calc(var(--font-size-root) * 2.5); // ~36px
     .large-widget & {
       font-size: calc(var(--font-size-root) * 4.5); // ~67px
     }
@@ -139,17 +150,16 @@
   margin: 0;
   border: 0;
   background-color: var(--border-color);
+  block-size: var(--border-width);
 
   .medium-widget & {
-    inline-size: var(--border-width);
-  }
-
-  .large-widget & {
-    block-size: var(--border-width);
+    margin-block-end: var(--space-small);
   }
 }
 
 .privacy-tip {
+  align-self: stretch;
+
   .large-widget & {
     align-items: center;
     display: flex;
@@ -157,6 +167,36 @@
   }
 
   .privacy-tip-message {
+    align-self: flex-start;
+    margin: 0;
+  }
+}
+
+// Message text stacked above its CTA button (icon, when present, sits beside
+// this column in the large layout). The streak block stacks the same way.
+.privacy-tip-content,
+.privacy-streak {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+}
+
+.privacy-tip-content {
+  align-items: flex-end;
+  gap: var(--space-xxsmall);
+
+  .large-widget & {
+    gap: var(--space-small);
+  }
+}
+
+.privacy-streak {
+  align-items: flex-end;
+  width: 100%;
+  gap: var(--space-small);
+
+  .privacy-tip-message {
+    align-self: flex-start;
     margin: 0;
   }
 }

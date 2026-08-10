@@ -509,11 +509,6 @@ already_AddRefed<CookiePersistentStorage> CookiePersistentStorage::Create() {
   return storage.forget();
 }
 
-CookiePersistentStorage::CookiePersistentStorage()
-    : mMonitor("CookiePersistentStorage"),
-      mInitialized(false),
-      mCorruptFlag(OK) {}
-
 void CookiePersistentStorage::NotifyChangedInternal(
     nsICookieNotification* aNotification, bool aOldCookieIsSession) {
   MOZ_ASSERT(aNotification);

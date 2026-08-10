@@ -420,6 +420,7 @@ browsertime-benchmark:
                                     - [jetstream2, js2]
                                     - [jetstream3, js3]
                                     - [matrix-react-bench, mrb]
+                                    - [media-capabilities, mc]
                                     - [motionmark-1-3, mm-1.3]
                                     - [motionmark-htmlsuite-1-3, mm-h-1.3]
                                     - [speedometer2, sp2]

@@ -4,30 +4,29 @@
 
 //! # Taskbar Pinning
 //!
-//! This module abstracts over the WinRT and COM APIs to pin a given shortcut
-//! with matching AppUserModelId (AUMID) to the Windows taskbar.
+//! This module abstracts over the WinRT and COM APIs relevant to Windows
+//! Taskbar pinning.
 
-use crate::util::thread::{self, MainThreadGuard};
-use nserror::{
-    NS_ERROR_NOT_AVAILABLE, NS_ERROR_NOT_SAME_THREAD, NS_ERROR_UNEXPECTED, NS_OK, nsresult,
-};
+use nserror::{NS_ERROR_FAILURE, NS_ERROR_UNEXPECTED, nsresult};
 use nsstring::{nsAString, nsString};
-use xpcom::{
-    Promise, RefPtr,
-    interfaces::{nsIWindowsShellService, nsIWritableVariant},
-};
+use windows::ApplicationModel::Package;
+use xpcom::interfaces::{nsIWinTaskbar, nsIWindowsShellService};
+
+use crate::util::thread_guard::{self, MainThreadGuard};
 
 mod com;
+mod ffi;
+mod shortcut;
 mod winrt;
 
-// Result from the attempt to pin to taskbar.
+/// Result from the attempt to pin to taskbar.
 enum PinResult {
-    // Pin request affirmed by user.
+    /// Pin request affirmed by user.
     Pinned,
-    // Pin request rejected by user or system.
+    /// Pin request rejected by user or system.
     Rejected,
-    // Either returned before pin request was acted upon, or fell back to an API
-    // where success isn't known.
+    /// Either returned before pin request was acted upon, or fell back to an
+    /// API where success isn't known.
     Unknown,
 }
 
@@ -41,23 +40,9 @@ impl From<PinResult> for u8 {
     }
 }
 
-impl TryFrom<PinResult> for RefPtr<nsIWritableVariant> {
-    type Error = nsresult;
-
-    fn try_from(result: PinResult) -> Result<Self, Self::Error> {
-        let variant = xpcom::create_instance::<nsIWritableVariant>(c"@mozilla.org/variant;1")
-            .ok_or_else(|| {
-                log::error!("Failed to create writable variant.");
-                NS_ERROR_UNEXPECTED
-            })?;
-
-        // SAFETY: No invariants to uphold as parameter is POD.
-        unsafe { variant.SetAsUint8(result.into()) }
-            .to_result()
-            .inspect_err(|e| log::error!("Failed to set Uint8 on nsIWritableVariant: {e:?}"))?;
-
-        Ok(variant)
-    }
+/// Checks whether any taskbar pinning API is available.
+fn can_pin(main_guard: MainThreadGuard) -> bool {
+    winrt::is_pinning_allowed() || com::is_pinning_available(main_guard)
 }
 
 /// Pins the shortcut with matching AUMID to the taskbar.
@@ -84,6 +69,58 @@ async fn pin_app(
     })
 }
 
+/// Checks if the current app is pinned.
+async fn is_pinned(aumid: &nsAString) -> Result<bool, nsresult> {
+    match Package::Current() {
+        Ok(package) => {
+            if !matches_default_aumid(&aumid)? {
+                // Bug 1911343: We only support pinning and checking pin status of the
+                // default app on MSIX.
+                return Err(NS_ERROR_FAILURE);
+            }
+
+            winrt::is_current_app_pinned(package).await.map_err(|e| {
+                log::error!(
+                    "Error checking whether the current app is pinned to the taskbar: {e:?}"
+                );
+                NS_ERROR_FAILURE
+            })
+        }
+        Err(_) => {
+            let aumid = nsString::from(aumid);
+
+            thread_guard::spawn_background_guard(
+                "shell_windows::taskbar::is_pinned",
+                async move |bg_guard| shortcut::is_app_pinned(&aumid.to_string(), bg_guard),
+            )
+            .await
+            .map_err(|e| {
+                log::error!(
+                    "Error checking whether the current app is pinned to the taskbar: {e:?}"
+                );
+                NS_ERROR_FAILURE
+            })
+        }
+    }
+}
+
+/// Unpins the provided shortcut from the taskbar.
+fn unpin_shortcut(shortcut_path: &nsAString, main_guard: MainThreadGuard) -> Result<(), nsresult> {
+    com::modify_taskbar(com::PinOp::UnPin, shortcut_path, main_guard).map(|_| ())
+}
+
+/// Checks if the provided AUMID matches the app default AUMID.
+fn matches_default_aumid(aumid: &nsAString) -> Result<bool, nsresult> {
+    let taskbar = xpcom::create_instance::<nsIWinTaskbar>(c"@mozilla.org/windows-taskbar;1")
+        .ok_or(NS_ERROR_UNEXPECTED)?;
+
+    let mut default_aumid = nsString::new();
+    // SAFETY: `group_id` is a valid writable XPCOM string.
+    unsafe { taskbar.GetDefaultGroupId(&mut *default_aumid) }.to_result()?;
+
+    Ok(*aumid == default_aumid)
+}
+
 /// Records Glean telemetry for the attempted pin to taskbar using WinRT.
 fn record_winrt_pin_telemetry(pin_result: &Result<PinResult, winrt::WinRtPinError>) {
     use firefox_on_glean::metrics::taskbar::{self, PinWinrtExtra};
@@ -99,93 +136,4 @@ fn record_winrt_pin_telemetry(pin_result: &Result<PinResult, winrt::WinRtPinErro
     taskbar::pin_winrt.record(PinWinrtExtra {
         result: Some(metric_extra.into()),
     });
-}
-
-/// FFI accessible interface to check if taskbar pinning APIs are available.
-///
-/// # Safety
-///
-/// No safety considerations, marked unsafe to satisfy FFI requirements.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shell_windows_taskbar_can_pin_to_taskbar() -> nsresult {
-    let main_guard = match thread::get_main_thread_guard() {
-        Some(m) => m,
-        None => {
-            log::error!("Must be called on main thread to check for pinning APIs.");
-            return NS_ERROR_NOT_SAME_THREAD;
-        }
-    };
-
-    match winrt::is_pinning_allowed() || com::is_pinning_available(main_guard) {
-        true => NS_OK,
-        false => NS_ERROR_NOT_AVAILABLE,
-    }
-}
-
-/// FFI accessible interface to asynchronously pin a given shortcut and AUMID to
-/// the taskbar.
-///
-/// # Safety
-///
-/// The caller is responsible for ensuring all pointers point to initialized
-/// memory if non-null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shell_windows_taskbar_pin_app_to_taskbar(
-    aumid: &nsAString,
-    shortcut_path: &nsAString,
-    fire_and_forget: bool,
-    promise: &Promise,
-) -> nsresult {
-    let main_guard = match thread::get_main_thread_guard() {
-        Some(m) => m,
-        None => {
-            log::error!("Pinning must be called from main thread to resolve DOM promise.");
-            return NS_ERROR_NOT_SAME_THREAD;
-        }
-    };
-
-    let aumid = nsString::from(aumid);
-    let shortcut_path = nsString::from(shortcut_path);
-    let promise = RefPtr::new(promise);
-
-    moz_task::spawn_local("Pin to Taskbar", async move {
-        let result: Result<RefPtr<nsIWritableVariant>, nsresult> =
-            pin_app(&aumid, &shortcut_path, fire_and_forget, main_guard)
-                .await
-                .and_then(TryInto::try_into);
-
-        match result {
-            Ok(variant) => promise.resolve_with_variant(&variant),
-            Err(e) => promise.reject_with_nsresult(e),
-        }
-    })
-    .detach();
-
-    NS_OK
-}
-
-/// FFI accessible interface to unpin a given shortcut from the taskbar.
-///
-/// # Safety
-///
-/// The caller is responsible for ensuring all pointers point to initialized
-/// memory if non-null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn shell_windows_taskbar_unpin_shortcut_from_taskbar(
-    shortcut_path: &nsAString,
-) -> nsresult {
-    let main_guard = match thread::get_main_thread_guard() {
-        Some(m) => m,
-        None => {
-            log::error!(
-                "Unpinning must be called from the main thread to ensure the underlying COM API is run from an STA thread."
-            );
-            return NS_ERROR_NOT_SAME_THREAD;
-        }
-    };
-
-    match com::modify_taskbar(com::PinOp::UnPin, shortcut_path, main_guard) {
-        Ok(_) => NS_OK,
-        Err(e) => e,
-    }
 }

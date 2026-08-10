@@ -26,7 +26,7 @@ task-defaults:
     attributes:
         retrigger: true
     use-python: system
-    use-uv: false
+    use-uv: true
     worker-type:
         by-test-platform:
             windows11.*-asan/.*: win11-64-25h2-large
@@ -330,6 +330,8 @@ tasks:
             - trainhop-release
             - no-nova
             - no-nova+vertical-tabs
+            - urlbar-ipc
+            - webrender-sw+urlbar-ipc
         run-on-projects:
             by-variant:
                 trainhop-beta:
@@ -404,6 +406,21 @@ tasks:
                         linux.*64(-shippable)?/opt: ['trunk']
                         macosx1[45].*64(-shippable)?(-qr)?/opt: ['trunk']
                         windows11.*-64.*(-shippable)?/opt: ['trunk']
+                        default: []
+                urlbar-ipc:
+                    by-test-platform:
+                        .*-artifact.*: []
+                        .*-asan.*: []
+                        .*-ccov.*: []
+                        macosx1[45].*64(-shippable)?(-qr)?/opt: ['mozilla-central']
+                        windows11.*-64.*(-shippable)?/opt: ['autoland', 'mozilla-central']
+                        default: []
+                webrender-sw+urlbar-ipc:
+                    by-test-platform:
+                        .*-artifact.*: []
+                        .*-asan.*: []
+                        .*-ccov.*: []
+                        linux.*64(-shippable)?/opt: ['autoland', 'mozilla-central']
                         default: []
                 default:
                     by-test-platform:

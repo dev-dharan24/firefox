@@ -31,16 +31,7 @@ dmd
 heap_scan_mode
 ```
 
-```{toctree}
-:caption: The DevTools Memory panel
-:maxdepth: 1
+## The DevTools Memory panel
 
-memory
-basic_operations
-aggregate_view
-tree_map_view
-dominators
-dominators_view
-DOM_allocation_example
-monster_example
-```
+The Memory panel is documented in the DevTools user documentation, under
+[Memory](/devtools-user/memory/index.md).

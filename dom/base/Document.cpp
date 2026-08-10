@@ -12315,11 +12315,6 @@ bool Document::CanSavePresentation(nsIRequest* aNewRequest,
   // Check if we have pending network requests
   nsCOMPtr<nsILoadGroup> loadGroup = GetDocumentLoadGroup();
   if (loadGroup) {
-    nsCOMPtr<nsISimpleEnumerator> requests;
-    loadGroup->GetRequests(getter_AddRefs(requests));
-
-    bool hasMore = false;
-
     // We want to bail out if we have any requests other than aNewRequest (or
     // in the case when aNewRequest is a part of a multipart response the base
     // channel the multipart response is coming in on).
@@ -12329,32 +12324,40 @@ bool Document::CanSavePresentation(nsIRequest* aNewRequest,
       part->GetBaseChannel(getter_AddRefs(baseChannel));
     }
 
-    while (NS_SUCCEEDED(requests->HasMoreElements(&hasMore)) && hasMore) {
-      nsCOMPtr<nsISupports> elem;
-      requests->GetNext(getter_AddRefs(elem));
-
-      nsCOMPtr<nsIRequest> request = do_QueryInterface(elem);
-      if (request && request != aNewRequest && request != baseChannel) {
-        // Favicon loads don't need to block caching.
-        nsCOMPtr<nsIChannel> channel = do_QueryInterface(request);
-        if (channel) {
-          nsCOMPtr<nsILoadInfo> li = channel->LoadInfo();
-          if (li->InternalContentPolicyType() ==
-              nsIContentPolicy::TYPE_INTERNAL_IMAGE_FAVICON) {
-            continue;
-          }
-        }
-
-        if (MOZ_UNLIKELY(MOZ_LOG_TEST(gPageCacheLog, LogLevel::Verbose))) {
-          nsAutoCString requestName;
-          request->GetName(requestName);
-          MOZ_LOG(gPageCacheLog, LogLevel::Verbose,
-                  ("Save of %s blocked because document has request %s",
-                   uri.get(), requestName.get()));
-        }
-        aBFCacheCombo |= BFCacheStatus::REQUEST;
-        ret = false;
+    bool blocked = false;
+    loadGroup->VisitRequests([&](nsIRequest* aRequest) {
+      if (aRequest == aNewRequest || aRequest == baseChannel.get()) {
+        return true;
       }
+
+      // Favicon loads don't need to block caching.
+      nsCOMPtr<nsIChannel> channel = do_QueryInterface(aRequest);
+      if (channel) {
+        nsCOMPtr<nsILoadInfo> li = channel->LoadInfo();
+        if (li->InternalContentPolicyType() ==
+            nsIContentPolicy::TYPE_INTERNAL_IMAGE_FAVICON) {
+          return true;
+        }
+      }
+
+      blocked = true;
+
+      // Further requests can only set the same bit; keep going only to log.
+      if (MOZ_LIKELY(!MOZ_LOG_TEST(gPageCacheLog, LogLevel::Verbose))) {
+        return false;
+      }
+
+      nsAutoCString requestName;
+      aRequest->GetName(requestName);
+      MOZ_LOG(gPageCacheLog, LogLevel::Verbose,
+              ("Save of %s blocked because document has request %s", uri.get(),
+               requestName.get()));
+      return true;
+    });
+
+    if (blocked) {
+      aBFCacheCombo |= BFCacheStatus::REQUEST;
+      ret = false;
     }
   }
 
@@ -17429,19 +17432,20 @@ void Document::ScheduleViewTransitionUpdateCallback(ViewTransition* aVt) {
 }
 
 // https://drafts.csswg.org/css-view-transitions-1/#flush-the-update-callback-queue
-void Document::FlushViewTransitionUpdateCallbackQueue() {
+bool Document::FlushViewTransitionUpdateCallbackQueue() {
   // 1. For each transition in document’s update callback queue, call the update
   // callback given transition.
   // Note: we move mViewTransitionUpdateCallbacks into a temporary array to make
   // sure no one updates the array when iterating.
-  auto callbacks = std::move(mViewTransitionUpdateCallbacks);
+  const auto callbacks = std::move(mViewTransitionUpdateCallbacks);
   MOZ_ASSERT(mViewTransitionUpdateCallbacks.IsEmpty());
-  for (RefPtr<ViewTransition>& vt : callbacks) {
+  for (const RefPtr<ViewTransition>& vt : callbacks) {
     MOZ_KnownLive(vt)->CallUpdateCallback(IgnoreErrors());
   }
 
   // 2. Set document’s update callback queue to an empty list.
   // mViewTransitionUpdateCallbacks is empty after the 1st step.
+  return !callbacks.IsEmpty();
 }
 
 // https://html.spec.whatwg.org/#update-the-visibility-state
@@ -21540,6 +21544,10 @@ class SpeculationRules& Document::SpeculationRules() {
     mSpeculationRules = MakeRefPtr<class SpeculationRules>(this);
   }
   return *mSpeculationRules;
+}
+
+class SpeculationRules* Document::GetSpeculationRules() {
+  return mSpeculationRules;
 }
 
 }  // namespace mozilla::dom

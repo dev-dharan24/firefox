@@ -54,12 +54,9 @@ add_task(async function () {
     { name: "foo.Partition Key", dontMatch: true },
   ]);
 
-  const nestedExampleComFooId = getCookieId(
-    "foo",
-    "example.com",
-    "/",
-    "(https,example.com,f)"
-  );
+  const nestedExampleComFooId = getCookieId("foo", "example.com", "/", {
+    partitionKey: "(https,example.com,f)",
+  });
   await selectTableItem(nestedExampleComFooId);
   checkCell(nestedExampleComFooId, "value", "partitioned-nested");
   checkCell(nestedExampleComFooId, "partitionKey", "https://example.com");
@@ -72,7 +69,7 @@ add_task(async function () {
     "fooThirdPartyPartitioned",
     MAIN_DOMAIN,
     "/",
-    "(https,example.com)"
+    { partitionKey: "(https,example.com)" }
   );
   await selectTableItem(thirdPartyPartitionedId);
   checkCell(thirdPartyPartitionedId, "value", "partitioned-third-party");

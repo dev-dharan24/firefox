@@ -120,10 +120,21 @@ RenderThread::RenderThread(RefPtr<nsIThread> aThread)
 
 RenderThread::~RenderThread() {
   MOZ_ASSERT(mRenderTexturesDeferred.empty());
-  if (mRenderBackendPool) {
-    wr_render_backend_pool_delete(mRenderBackendPool);
-  }
+  DestroyRenderBackendPool();
   wr_chunk_pool_delete(mChunkPool);
+}
+
+void RenderThread::DestroyRenderBackendPool() {
+  if (!mRenderBackendPool) {
+    return;
+  }
+
+  // This waits for the pool's threads to exit. They register themselves with
+  // the profiler, which lazily creates an nsThread wrapper that is only
+  // released when the thread exits, so a thread still winding down when XPCOM
+  // writes its leak log is reported as a leak.
+  wr_render_backend_pool_delete(mRenderBackendPool);
+  mRenderBackendPool = nullptr;
 }
 
 // static
@@ -229,6 +240,11 @@ void RenderThread::ShutDown() {
   // spinning the MT event loop.
   nsCOMPtr<nsIThread> oldThread = sRenderThread->GetRenderThread();
   oldThread->Shutdown();
+
+  // Tear down the shared render backend threads here rather than relying on
+  // the RenderThread destructor, so that they are guaranteed to be gone
+  // before the rest of Gecko shuts down.
+  sRenderThread->DestroyRenderBackendPool();
 
   layers::SharedSurfacesParent::Shutdown();
 
@@ -1703,11 +1719,6 @@ static already_AddRefed<gl::GLContext> CreateGLContextANGLE(
 
   if (StaticPrefs::gfx_webrender_prefer_robustness_AtStartup()) {
     flags |= gl::CreateContextFlags::PREFER_ROBUSTNESS;
-  }
-
-  if (egl->IsExtensionSupported(
-          gl::EGLExtension::MOZ_create_context_provoking_vertex_dont_care)) {
-    flags |= gl::CreateContextFlags::PROVOKING_VERTEX_DONT_CARE;
   }
 
   // Create GLContext with dummy EGLSurface, the EGLSurface is not used.

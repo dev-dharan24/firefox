@@ -67,7 +67,6 @@
       this.arrowScrollbox = document.getElementById(
         "tabbrowser-arrowscrollbox"
       );
-      this.arrowScrollbox.addEventListener("wheel", this, true);
       this.arrowScrollbox.addEventListener("underflow", this);
       this.arrowScrollbox.addEventListener("overflow", this);
       this.pinnedTabsContainer = document.getElementById(
@@ -186,6 +185,9 @@
         "browser.tabs.closeTabByDblclick",
         false
       );
+
+      // The base class set these up before we had the arrowscrollbox.
+      this.updateWheelListeners();
 
       XPCOMUtils.defineLazyPreferenceGetter(
         this,
@@ -749,11 +751,27 @@
       this.tabDragAndDrop.handle_dragleave(event);
     }
 
+    /**
+     * Only reached while switching tabs by scrolling is enabled, since that's
+     * when the listener exists.
+     */
     on_wheel(event) {
-      if (
-        Services.prefs.getBoolPref("toolkit.tabbox.switchByScrolling", false)
-      ) {
-        event.stopImmediatePropagation();
+      // The tabs are switched from the legacy scroll event in tabbox.js. Keep
+      // the arrowscrollbox from scrolling on top of that.
+      event.stopImmediatePropagation();
+    }
+
+    updateWheelListeners() {
+      super.updateWheelListeners();
+
+      if (!this.arrowScrollbox) {
+        // Called from the base class constructor, before init().
+        return;
+      }
+      if (this.switchByScrolling) {
+        this.arrowScrollbox.addEventListener("wheel", this, true);
+      } else {
+        this.arrowScrollbox.removeEventListener("wheel", this, true);
       }
     }
 
@@ -1770,6 +1788,7 @@
         Services.prefs.removeObserver("privacy.userContext", this.boundObserve);
       }
       CustomizableUI.removeListener(this);
+      this.previewPanel?.forceReset();
     }
 
     updateTabSoundLabel(tab) {

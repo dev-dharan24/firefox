@@ -42,6 +42,9 @@ const VIEW_MODES = {
   ALERTS: "Alerts",
 };
 
+const REVEAL_BUTTON_AGENT_SHEET =
+  "chrome://global/content/megalist/megalist-agent.css";
+
 export class MegalistAlpha extends MozLitElement {
   constructor() {
     super();
@@ -106,8 +109,21 @@ export class MegalistAlpha extends MozLitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this.#hideNativeRevealButton();
     this.#messageToViewModel("Refresh");
     this.#sendCommand("UpdateDisplayMode", { value: this.displayMode });
+  }
+
+  #hideNativeRevealButton() {
+    try {
+      const utils = window.windowUtils;
+      utils.loadSheetUsingURIString(
+        REVEAL_BUTTON_AGENT_SHEET,
+        utils.AGENT_SHEET
+      );
+    } catch (e) {
+      // NS_ERROR_INVALID_ARG means the sheet is already loaded for this document.
+    }
   }
 
   async getUpdateComplete() {
@@ -318,8 +334,8 @@ export class MegalistAlpha extends MozLitElement {
 
     const loginForm = this.shadowRoot.querySelector("login-form");
     const loginFromForm = {
-      origin: loginForm.originValue || loginForm.originField.input.value,
-      username: loginForm.usernameField.input.value.trim(),
+      origin: loginForm.originValue || loginForm.originField?.value,
+      username: loginForm.usernameField.value.trim(),
       password: loginForm.passwordField.value,
     };
     if (this.#hasPendingEditChange(loginFromForm)) {

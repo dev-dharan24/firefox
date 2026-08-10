@@ -301,7 +301,12 @@ for (const type of [
   "WEATHER_USER_OPT_IN_LOCATION",
   "WEBEXT_CLICK",
   "WEBEXT_DISMISS",
+  "WEB_NOTIFICATIONS_ADDED",
+  "WEB_NOTIFICATIONS_CLICK",
+  "WEB_NOTIFICATIONS_DISMISS",
+  "WEB_NOTIFICATIONS_DISMISS_ALL",
   "WEB_NOTIFICATIONS_ERROR",
+  "WEB_NOTIFICATIONS_REMOVED",
   "WEB_NOTIFICATIONS_REQUEST",
   "WEB_NOTIFICATIONS_UPDATED",
   "WIDGETS_CONTAINER_ACTION",
@@ -317,6 +322,7 @@ for (const type of [
   "WIDGETS_LISTS_USER_IMPRESSION",
   "WIDGETS_OPT_IN",
   "WIDGETS_PICTURE_SET_WALLPAPER",
+  "WIDGETS_PRIVACY_CTA",
   "WIDGETS_PRIVACY_UPDATE",
   "WIDGETS_SPORTS_CHANGE_FOLLOWED_ONLY",
   "WIDGETS_SPORTS_CHANGE_LIVE_INDEX",
@@ -765,6 +771,12 @@ const PREF_WIDGETS_PRIVACY_ENABLED = "widgets.privacy.enabled";
 const PREF_PRIVACY_SIZE = "widgets.privacy.size";
 const PREF_WIDGETS_SYSTEM_PRIVACY_ENABLED =
   "widgets.system.privacy.enabled";
+const PREF_PRIVACY_MAX_COUNT = "widgets.privacy.maxCount";
+const PREF_PRIVACY_MAX_DISPLAY_COUNT = "widgets.privacy.maxDisplayCount";
+const PREF_PRIVACY_BLANK_CHANCE = "widgets.privacy.blankChance";
+const PREF_PRIVACY_SHOW_VPN_MESSAGES = "widgets.privacy.showVpnMessages";
+const PREF_PRIVACY_FORCE_MESSAGE_ID = "widgets.privacy.forceMessageId";
+const PREF_PRIVACY_MESSAGE_STATE = "widgets.privacy.messageState";
 const PREF_WIDGETS_CROSSWORD_ENABLED = "widgets.crossword.enabled";
 const PREF_CROSSWORD_SIZE = "widgets.crossword.size";
 const PREF_WIDGETS_SYSTEM_CROSSWORD_ENABLED =
@@ -1124,6 +1136,98 @@ function resolveCrosswordEndpoint(prefs) {
     prefs.trainhopConfig?.widgets?.crosswordEndpoint ||
     prefs[PREF_CROSSWORD_ENDPOINT]
   );
+}
+
+/**
+ * Resolves the today-count at which the Privacy widget fires its "daily cap"
+ * celebration message. This is NOT the display ceiling — the readout keeps
+ * showing the real number past this point (see resolvePrivacyDisplayCount).
+ * Priority: trainhopConfig > pref > 100. Routed through this helper (never the
+ * raw pref) per the trainhop-gate convention.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+function resolvePrivacyMaxCount(prefs) {
+  return (
+    prefs.trainhopConfig?.widgets?.privacyMaxCount ||
+    prefs[PREF_PRIVACY_MAX_COUNT] ||
+    100
+  );
+}
+
+/**
+ * Resolves the ceiling for the tracker-count readout: above it the number
+ * shows as "{cap}+" so it stays a tidy few characters. Default 999 (three
+ * digits). Distinct from resolvePrivacyMaxCount (the daily-cap celebration
+ * threshold). Priority: trainhopConfig > pref > 999.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+function resolvePrivacyDisplayCount(prefs) {
+  return (
+    prefs.trainhopConfig?.widgets?.privacyMaxDisplayCount ||
+    prefs[PREF_PRIVACY_MAX_DISPLAY_COUNT] ||
+    999
+  );
+}
+
+/**
+ * Resolves the Privacy widget "blank chance" — the probability (0..1) that an
+ * eligible info message is suppressed to keep the experience calm. It's compared
+ * against Math.random(), so it MUST be a 0–1 fraction (0.4 = 40%), not a percent.
+ * A value > 1 (e.g. 40) would blank every message; guard against that by warning
+ * and falling back to the default. Priority: trainhopConfig > pref > 0.4.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {number}
+ */
+function resolvePrivacyBlankChance(prefs) {
+  const DEFAULT = 0.4;
+  const trainhop = prefs.trainhopConfig?.widgets?.privacyBlankChance;
+  // The pref is stored as a string ("0.4") because Firefox prefs have no float
+  // type — a numeric default would land as 0 and silently disable blanks.
+  // trainhopConfig comes from JSON, so it's already a number.
+  const rawPref = prefs[PREF_PRIVACY_BLANK_CHANCE];
+  const raw = typeof trainhop === "number" ? trainhop : parseFloat(rawPref);
+  if (Number.isNaN(raw)) {
+    // Warn on a present-but-unparseable value (a misconfig); stay quiet when
+    // the pref is simply unset.
+    if (rawPref !== undefined && rawPref !== "") {
+      console.warn(
+        `widgets.privacy.blankChance is ${JSON.stringify(
+          rawPref
+        )}; expected a 0-1 number. Using ${DEFAULT}.`
+      );
+    }
+    return DEFAULT;
+  }
+  if (raw < 0 || raw > 1) {
+    console.warn(
+      `widgets.privacy.blankChance is ${raw}; expected a 0-1 fraction (0.4 = 40%). Using ${DEFAULT}.`
+    );
+    return DEFAULT;
+  }
+  return raw;
+}
+
+/**
+ * Resolves whether the Privacy widget may show VPN promotional messages. Off by
+ * default: not all users are eligible for the built-in VPN (unsupported region,
+ * enterprise-managed, removed from the toolbar), and promoting an unavailable
+ * feature erodes trust. An experiment can enable them for eligible cohorts — or
+ * force them off. Priority: trainhopConfig > pref > false.
+ *
+ * @param {object} prefs - current pref values from the Redux store
+ * @returns {boolean}
+ */
+function resolvePrivacyShowVpnMessages(prefs) {
+  const trainhop = prefs.trainhopConfig?.widgets?.privacyShowVpnMessages;
+  if (typeof trainhop === "boolean") {
+    return trainhop;
+  }
+  return !!prefs[PREF_PRIVACY_SHOW_VPN_MESSAGES];
 }
 
 /**
@@ -4260,6 +4364,9 @@ const SponsorLabel = ({
   sponsor,
   context,
   newSponsoredLabel,
+  // @nova-cleanup(remove-conditional): Delete this prop and keep only the
+  // source-wrapper branch below; the classic FluentOrText label goes away, along
+  // with the now-unused FluentOrText import and the classList variable.
   novaEnabled
 }) => {
   const classList = `story-sponsored-label ${newSponsoredLabel || ""} clamp`;
@@ -4882,6 +4989,8 @@ class _DSCard extends (external_React_default()).PureComponent {
       readTime: displayReadTime
     } = DiscoveryStream;
     const sectionsEnabled = Prefs.values[DSCard_PREF_SECTIONS_ENABLED];
+    // @nova-cleanup(remove-pref): Delete this read and the two novaEnabled props
+    // passed to DSContextFooter below; that component drops the prop entirely.
     const novaEnabled = Prefs.values["nova.enabled"];
     // We can ignore hideDescriptions if we are in sections.
     const excerpt = !hideDescriptions || sectionsEnabled ? this.props.excerpt : "";
@@ -5641,6 +5750,7 @@ const AdBanner = ({
 
 
 
+// @nova-cleanup(remove-pref): Delete this const; see the showNovaHeader read below.
 const CardGrid_PREF_NOVA_ENABLED = "nova.enabled";
 const PREF_SECTIONS_CARDS_ENABLED = "discoverystream.sections.cards.enabled";
 const CardGrid_PREF_SECTIONS_ENABLED = "discoverystream.sections.enabled";
@@ -5927,6 +6037,9 @@ class _CardGrid extends (external_React_default()).PureComponent {
     // Handle the case where a user has dismissed all recommendations
     const isEmpty = data.recommendations.length === 0;
     const prefs = this.props.Prefs.values;
+    // @nova-cleanup(remove-conditional): Delete novaEnabled and replace
+    // showNovaHeader with `const showHeader = !sectionsEnabled;`, renaming the
+    // two showNovaHeader uses in the JSX below.
     const novaEnabled = prefs[CardGrid_PREF_NOVA_ENABLED];
     const sectionsEnabled = prefs[CardGrid_PREF_SECTIONS_ENABLED];
     const showNovaHeader = novaEnabled && !sectionsEnabled;
@@ -7472,17 +7585,6 @@ const INITIAL_STATE = {
     // For can be a queue in the future, but for now is one item
     toastQueue: [],
   },
-  // Snapshot of the platform NotificationDB (persisted web notifications).
-  // Distinct from `Notifications` above, which is in-newtab toast UI state.
-  // Normalized: `notifications` is the canonical id-keyed table; `byOrigin`
-  // is an id-only index. Fed by WebNotificationsFeed.
-  WebNotifications: {
-    initialized: false,
-    lastUpdated: null,
-    notifications: {},
-    byOrigin: {},
-    error: null,
-  },
   InferredPersonalization: {
     initialized: false,
     lastUpdated: null,
@@ -7510,6 +7612,16 @@ const INITIAL_STATE = {
   SectionsLayout: {
     configs: {},
     orderings: {},
+  },
+  // Web notifications surfaced on newtab. Distinct from `Notifications` above,
+  // which is in-newtab toast UI state. `notifications` is the canonical
+  // id-keyed table; `byOrigin` is an id-only index. Fed by WebNotificationsFeed.
+  WebNotifications: {
+    initialized: false,
+    lastUpdated: null,
+    notifications: {},
+    byOrigin: {},
+    error: null,
   },
   Weather: {
     initialized: false,
@@ -7624,6 +7736,20 @@ const INITIAL_STATE = {
     // "sites where we blocked something"; see PrivacyFeed).
     sitesToday: 0,
     lastUpdated: null,
+    // Secondary-message decision chosen by PrivacyFeed's selector
+    // (Bug 2050954). variant: empty | blank | streak | tip. `category` is the
+    // message family (CATEGORY) so the UI can tell a celebration from an
+    // ordinary tip; `icon` is an icon key (see Privacy.jsx); `countArg` is the
+    // l10n plural/var arg.
+    variant: null,
+    messageId: null,
+    category: null,
+    icon: null,
+    countArg: null,
+    // SpecialMessageAction for the message's CTA button (null → no button).
+    cta: null,
+    // When set, the count readout shows "{countCeiling}+" (the daily-cap render).
+    countCeiling: null,
   },
 };
 
@@ -8474,6 +8600,39 @@ function Notifications(prevState = INITIAL_STATE.Notifications, action) {
   }
 }
 
+/** Merges one notification into the id table and origin index. */
+function addWebNotification(prevState, notification) {
+  const { id, origin } = notification;
+  const originIds = prevState.byOrigin[origin] || [];
+  return {
+    ...prevState,
+    initialized: true,
+    notifications: { ...prevState.notifications, [id]: notification },
+    byOrigin: {
+      ...prevState.byOrigin,
+      [origin]: originIds.includes(id) ? originIds : [...originIds, id],
+    },
+  };
+}
+
+/** Drops a list of `{origin, id}` pairs from the id table and origin index. */
+function removeWebNotifications(prevState, removed) {
+  const notifications = { ...prevState.notifications };
+  const byOrigin = { ...prevState.byOrigin };
+  for (const { origin, id } of removed) {
+    delete notifications[id];
+    const remaining = (byOrigin[origin] || []).filter(
+      existing => existing !== id
+    );
+    if (remaining.length) {
+      byOrigin[origin] = remaining;
+    } else {
+      delete byOrigin[origin];
+    }
+  }
+  return { ...prevState, notifications, byOrigin };
+}
+
 function WebNotifications(prevState = INITIAL_STATE.WebNotifications, action) {
   switch (action.type) {
     case actionTypes.WEB_NOTIFICATIONS_UPDATED:
@@ -8485,11 +8644,12 @@ function WebNotifications(prevState = INITIAL_STATE.WebNotifications, action) {
         byOrigin: action.data.byOrigin,
         error: null,
       };
+    case actionTypes.WEB_NOTIFICATIONS_ADDED:
+      return addWebNotification(prevState, action.data.notification);
+    case actionTypes.WEB_NOTIFICATIONS_REMOVED:
+      return removeWebNotifications(prevState, action.data.removed);
     case actionTypes.WEB_NOTIFICATIONS_ERROR:
-      return {
-        ...prevState,
-        error: action.data,
-      };
+      return { ...prevState, error: action.data };
     default:
       return prevState;
   }
@@ -8545,11 +8705,12 @@ const PictureOfTheDay = (prevState = INITIAL_STATE.PictureOfTheDay, action) => {
 function PrivacyWidget(prevState = INITIAL_STATE.PrivacyWidget, action) {
   switch (action.type) {
     case actionTypes.WIDGETS_PRIVACY_UPDATE:
+      // Merge whatever the feed sent: SYSTEM_TICK/INIT broadcast counts only
+      // (message fields absent → kept); NEW_TAB_INIT also carries the
+      // selector's message decision.
       return {
         ...prevState,
-        trackersToday: action.data.trackersToday,
-        sitesToday: action.data.sitesToday,
-        lastUpdated: action.data.lastUpdated,
+        ...action.data,
         initialized: true,
       };
     default:
@@ -8815,7 +8976,6 @@ const reducers = {
   Sections,
   Messages,
   Notifications,
-  WebNotifications,
   Pocket,
   InferredPersonalization,
   DiscoveryStream,
@@ -8824,6 +8984,7 @@ const reducers = {
   ListsWidget,
   Wallpapers,
   SectionsLayout,
+  WebNotifications,
   Weather,
   Stocks,
   ExternalComponents,
@@ -9014,6 +9175,496 @@ function PinnedAreaOverlay({
     "data-l10n-id": "newtab-shortcuts-pinned-area"
   })))));
 }
+;// CONCATENATED MODULE: ./content-src/lib/web-notification-match.mjs
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Some apps serve their app (and register their notification service worker)
+// on a subdomain, but users pin the apex. A tile at the apex would never match
+// the origin its notifications are stored under. These aliases redirect the
+// apex (and www) to that app origin. Kept explicit rather than collapsing to a
+// registrable domain, which would wrongly merge unrelated siblings such as
+// Google's mail/calendar/docs onto a single tile.
+const ORIGIN_ALIASES = new Map([
+  ["https://gmail.com", "https://mail.google.com"],
+  ["https://www.gmail.com", "https://mail.google.com"],
+  ["https://slack.com", "https://app.slack.com"],
+  ["https://www.slack.com", "https://app.slack.com"],
+]);
+
+// Stable reference so selectors don't return a fresh array on every store
+// update for sites with no notifications.
+const EMPTY_IDS = Object.freeze([]);
+
+/**
+ * @param {string} url
+ * @returns {?string} The http(s) origin, or null for other schemes / bad input.
+ */
+function originFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.origin;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * The origin a tile's notifications are stored under, resolving known apex
+ * aliases. Unknown origins pass through unchanged, so the worst case is an
+ * exact-match miss, never a wrong-app match.
+ *
+ * @param {string} url
+ * @returns {?string}
+ */
+function notificationKeyForUrl(url) {
+  const siteOrigin = originFromUrl(url);
+  if (!siteOrigin) {
+    return null;
+  }
+  return ORIGIN_ALIASES.get(siteOrigin) ?? siteOrigin;
+}
+
+/**
+ * The stored notification ids for the site a tile points at.
+ *
+ * @param {object} state Newtab Redux state.
+ * @param {string} url The tile's url.
+ * @returns {string[]}
+ */
+function getNotificationIdsForUrl(state, url) {
+  const key = notificationKeyForUrl(url);
+  return (key && state.WebNotifications.byOrigin[key]) || EMPTY_IDS;
+}
+
+/**
+ * Whether to render any web notifications surface. The feature has to exist for
+ * this profile (`system.showWebNotifications`, the gate that also decides
+ * whether the customize toggle is offered at all) and the user has to want it
+ * (`showWebNotifications`, what that toggle writes).
+ *
+ * @param {object} state Newtab Redux state.
+ * @returns {boolean}
+ */
+function isWebNotificationsEnabled(state) {
+  const prefs = state.Prefs.values;
+  return Boolean(
+    prefs["system.showWebNotifications"] && prefs.showWebNotifications
+  );
+}
+
+;// CONCATENATED MODULE: ./content-src/lib/web-notification-icon.mjs
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Notification icons are third-party URLs chosen by the notifying site. Loading
+// one directly would tell that site the user's IP and when their New Tab
+// rendered, so icons go through the same image proxy the stories use: the fetch
+// is made by the CDN rather than by the user. Resizing comes along for free.
+const IMAGE_PROXY_ORIGIN = "https://img-getpocket.cdn.mozilla.net";
+
+// Icons render at --size-item-large (32px); request 2x so they stay sharp on
+// HiDPI. `no_upscale()` leaves a smaller source alone rather than blowing it up.
+const ICON_SIZE = 64;
+
+const PROXY_FILTERS =
+  "filters:format(webp):quality(75):no_upscale():strip_exif()";
+
+/**
+ * The proxied URL for a notification icon.
+ *
+ * Returns null for anything that cannot be proxied, and callers then render no
+ * icon at all rather than falling back to the origin URL — a fallback would
+ * reintroduce the direct third-party load this exists to prevent.
+ *
+ * @param {string} [url] The icon URL the notification carried.
+ * @returns {?string}
+ */
+function proxiedIconUrl(url) {
+  if (!url) {
+    return null;
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (e) {
+    return null;
+  }
+  if (parsed.protocol !== "https:") {
+    return null;
+  }
+  return `${IMAGE_PROXY_ORIGIN}/${ICON_SIZE}x${ICON_SIZE}/${PROXY_FILTERS}/${encodeURIComponent(
+    url
+  )}`;
+}
+
+;// CONCATENATED MODULE: ./content-src/components/TopSitesHoverCard/CardWebNotifications/CardWebNotifications.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+
+
+
+
+
+// Origins whose notification icon just repeats the site's own shortcut icon, so
+// listing it is visual noise. Hand-curated; grown as needed.
+const ICON_SUPPRESS_ORIGINS = new Set(["https://apnews.com"]);
+
+// Biggest units first, so the loop returns the coarsest one that fits.
+// Anything under a minute falls through to the "just now" string.
+const RELATIVE_TIME_UNITS = [["year", 365 * 24 * 60 * 60 * 1000], ["month", 30 * 24 * 60 * 60 * 1000], ["week", 7 * 24 * 60 * 60 * 1000], ["day", 24 * 60 * 60 * 1000], ["hour", 60 * 60 * 1000], ["minute", 60 * 1000]];
+
+/**
+ * Picks the largest relative-time unit that fits ("2 hours ago", "5 days ago").
+ * Returns null when the delta is under a minute, so the caller can show
+ * "just now" instead.
+ *
+ * @param {number} timestamp ms epoch the notification was posted.
+ * @param {string} [locale] BCP-47 locale; falls back to the runtime default.
+ * @param {number} now ms epoch to measure against.
+ * @returns {?string}
+ */
+function formatRelativeTime(timestamp, locale, now) {
+  const delta = timestamp - now;
+  const abs = Math.abs(delta);
+  for (const [unit, ms] of RELATIVE_TIME_UNITS) {
+    if (abs >= ms) {
+      return new Intl.RelativeTimeFormat(locale || undefined, {
+        numeric: "auto"
+      }).format(Math.round(delta / ms), unit);
+    }
+  }
+  return null;
+}
+function NotificationTime({
+  timestamp,
+  locale,
+  now
+}) {
+  if (!timestamp) {
+    return null;
+  }
+  const relative = formatRelativeTime(timestamp, locale, now);
+  const dateTime = new Date(timestamp).toISOString();
+  // A null relative string means it's under a minute, so show "just now".
+  if (relative === null) {
+    return /*#__PURE__*/external_React_default().createElement("time", {
+      className: "top-sites-hover-card-notification-time",
+      dateTime: dateTime,
+      "data-l10n-id": "newtab-topsites-hover-card-just-now"
+    });
+  }
+  return /*#__PURE__*/external_React_default().createElement("time", {
+    className: "top-sites-hover-card-notification-time",
+    dateTime: dateTime
+  }, relative);
+}
+
+/**
+ * A notification's icon, proxied. Renders nothing when the icon cannot be
+ * proxied or the proxy fails to serve it — there is deliberately no fallback to
+ * the origin URL, which is the load the proxy exists to avoid.
+ */
+function NotificationIcon({
+  notification
+}) {
+  const [failed, setFailed] = external_React_default().useState(false);
+  if (ICON_SUPPRESS_ORIGINS.has(notification.origin)) {
+    return null;
+  }
+  const src = proxiedIconUrl(notification.icon);
+  if (!src || failed) {
+    return null;
+  }
+  return /*#__PURE__*/external_React_default().createElement("img", {
+    src: src,
+    alt: "",
+    className: "top-sites-hover-card-notification-icon",
+    onError: () => setFailed(true)
+  });
+}
+function NotificationList({
+  notifications,
+  locale,
+  now,
+  onActivate,
+  onDismiss
+}) {
+  return /*#__PURE__*/external_React_default().createElement("ul", {
+    className: "top-sites-hover-card-notifications"
+  }, notifications.map(notification => {
+    return /*#__PURE__*/external_React_default().createElement("li", {
+      className: "top-sites-hover-card-notification",
+      key: notification.id,
+      dir: notification.dir || "auto"
+    }, /*#__PURE__*/external_React_default().createElement("button", {
+      type: "button",
+      className: "top-sites-hover-card-notification-activate",
+      onClick: () => onActivate(notification)
+    }, /*#__PURE__*/external_React_default().createElement(NotificationIcon, {
+      notification: notification
+    }), /*#__PURE__*/external_React_default().createElement("div", {
+      className: "top-sites-hover-card-notification-text"
+    }, /*#__PURE__*/external_React_default().createElement("span", {
+      className: "top-sites-hover-card-notification-title"
+    }, notification.title), notification.body ? /*#__PURE__*/external_React_default().createElement("span", {
+      className: "top-sites-hover-card-notification-body"
+    }, notification.body) : null, /*#__PURE__*/external_React_default().createElement(NotificationTime, {
+      timestamp: notification.timestamp,
+      locale: locale,
+      now: now
+    }))), /*#__PURE__*/external_React_default().createElement("button", {
+      type: "button",
+      className: "top-sites-hover-card-notification-dismiss",
+      "data-l10n-id": "newtab-topsites-hover-card-dismiss",
+      onClick: () => onDismiss(notification)
+    }));
+  }));
+}
+
+/**
+ * Web notifications variant of the top-sites hover card. Lists the hovered
+ * site's web notifications, most recent first, and renders nothing when the
+ * site has no notifications. The list scrolls in place past roughly three
+ * entries rather than spilling into a separate surface.
+ *
+ * This is one discrete content card behind the TopSitesHoverCard shell, which
+ * renders exactly one variant per tile (see hover-card-content.jsx). Clicking a
+ * service-worker notification fires its origin and dismisses it; the dismiss and
+ * mark-all controls remove entries durably via WebNotificationsFeed.
+ *
+ * @param link The top site link object for the hovered tile.
+ */
+function CardWebNotifications({
+  link
+}) {
+  const dispatch = (0,external_ReactRedux_namespaceObject.useDispatch)();
+  const locale = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.App.locale);
+  const byId = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.WebNotifications.notifications);
+  const ids = (0,external_ReactRedux_namespaceObject.useSelector)(state => getNotificationIdsForUrl(state, link?.url));
+  const notifications = ids.map(id => byId[id]).filter(Boolean).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  if (!notifications.length) {
+    return null;
+  }
+  const site = link?.label || link?.hostname || originFromUrl(link?.url) || "";
+  const now = Date.now();
+  const openSettings = () => {
+    dispatch({
+      type: actionTypes.SHOW_PERSONALIZE
+    });
+    dispatch(actionCreators.UserEvent({
+      event: "SHOW_PERSONALIZE"
+    }));
+  };
+  const activate = notification => dispatch(actionCreators.AlsoToMain({
+    type: actionTypes.WEB_NOTIFICATIONS_CLICK,
+    data: {
+      origin: notification.origin,
+      id: notification.id
+    }
+  }));
+  const dismiss = notification => dispatch(actionCreators.AlsoToMain({
+    type: actionTypes.WEB_NOTIFICATIONS_DISMISS,
+    data: {
+      origin: notification.origin,
+      id: notification.id
+    }
+  }));
+  const dismissAll = () => dispatch(actionCreators.AlsoToMain({
+    type: actionTypes.WEB_NOTIFICATIONS_DISMISS_ALL,
+    data: {
+      origin: notifications[0].origin
+    }
+  }));
+  return /*#__PURE__*/external_React_default().createElement("div", {
+    className: "top-sites-hover-card",
+    role: "group"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "top-sites-hover-card-inner"
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "top-sites-hover-card-header"
+  }, /*#__PURE__*/external_React_default().createElement("span", {
+    className: "top-sites-hover-card-header-title",
+    "data-l10n-id": "newtab-topsites-hover-card-header",
+    "data-l10n-args": JSON.stringify({
+      site
+    })
+  }), /*#__PURE__*/external_React_default().createElement("div", {
+    className: "top-sites-hover-card-header-actions"
+  }, /*#__PURE__*/external_React_default().createElement("button", {
+    type: "button",
+    className: "top-sites-hover-card-mark-read",
+    "data-l10n-id": "newtab-topsites-hover-card-mark-all-read",
+    onClick: dismissAll
+  }), /*#__PURE__*/external_React_default().createElement("button", {
+    type: "button",
+    className: "top-sites-hover-card-settings",
+    "data-l10n-id": "newtab-topsites-hover-card-settings",
+    onClick: openSettings
+  }))), /*#__PURE__*/external_React_default().createElement(NotificationList, {
+    notifications: notifications,
+    locale: locale,
+    now: now,
+    onActivate: activate,
+    onDismiss: dismiss
+  })));
+}
+
+;// CONCATENATED MODULE: ./content-src/components/TopSitesHoverCard/CardAd/CardAd.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Sponsored-tile variant of the top-sites hover card. A placeholder today: it
+ * renders nothing, but its presence in the content registry routes sponsored
+ * tiles here (ad-wins precedence) so notifications never appear on an ad tile.
+ * A real sponsored hover card can grow in here without touching the shell.
+ *
+ * @returns {null}
+ */
+function CardAd() {
+  return null;
+}
+
+;// CONCATENATED MODULE: ./content-src/components/TopSitesHoverCard/hover-card-content.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+
+
+/**
+ * Ordered content registry for the top-sites hover card. The shell renders
+ * exactly one variant — the first whose `match` accepts the tile — so content
+ * types never mix in a single card. Order is precedence: a sponsored tile
+ * matches the ad variant first, keeping notifications off ad tiles.
+ *
+ * Each variant component takes `{ link }` and is responsible for rendering
+ * nothing when it has nothing to show, so an unmatched-but-empty variant never
+ * paints an empty card.
+ *
+ * @type {Array<{key: string, match: (link: object) => boolean, Component: Function}>}
+ */
+const HOVER_CARD_CONTENT = [{
+  key: "ad",
+  match: link => Boolean(link?.isSponsored || link?.sponsored_tile_id || link?.show_sponsored_label || link?.sponsored_position),
+  Component: CardAd
+}, {
+  key: "notifications",
+  match: () => true,
+  Component: CardWebNotifications
+}];
+;// CONCATENATED MODULE: ./content-src/components/TopSitesHoverCard/TopSitesHoverCard.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+
+
+
+
+/**
+ * Applies the web notifications feature gate, then routes the tile to exactly
+ * one content variant from the registry (see hover-card-content.jsx). The
+ * chosen variant owns the full card chrome and decides whether it has anything
+ * to paint.
+ *
+ * @param link The top site link object for the hovered tile.
+ */
+function HoverCardContent({
+  link
+}) {
+  const enabled = (0,external_ReactRedux_namespaceObject.useSelector)(isWebNotificationsEnabled);
+  if (!enabled) {
+    return null;
+  }
+  const variant = HOVER_CARD_CONTENT.find(entry => entry.match(link));
+  if (!variant) {
+    return null;
+  }
+  const {
+    Component
+  } = variant;
+  return /*#__PURE__*/external_React_default().createElement(Component, {
+    link: link
+  });
+}
+
+/**
+ * Floating card shown on hover over a top site tile, rendered as a descendant
+ * of the tile's `.top-site-inner`, which owns the positioning context and CSS
+ * hover visibility.
+ *
+ * Every tile renders this, including bare tile mounts in unit tests that have
+ * no redux Provider. Bail before any store access in that case; the running
+ * app always has a Provider, so the content renders normally there.
+ *
+ * @param link The top site link object for the hovered tile.
+ */
+function TopSitesHoverCard({
+  link
+}) {
+  const store = external_React_default().useContext(external_ReactRedux_namespaceObject.ReactReduxContext);
+  if (!store) {
+    return null;
+  }
+  return /*#__PURE__*/external_React_default().createElement(HoverCardContent, {
+    link: link
+  });
+}
+
+;// CONCATENATED MODULE: ./content-src/components/TopSiteWebNotification/TopSiteWebNotification.jsx
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+
+
+function Badge({
+  link
+}) {
+  const enabled = (0,external_ReactRedux_namespaceObject.useSelector)(isWebNotificationsEnabled);
+  const count = (0,external_ReactRedux_namespaceObject.useSelector)(state => getNotificationIdsForUrl(state, link?.url).length);
+  if (!enabled || !count) {
+    return null;
+  }
+  return /*#__PURE__*/external_React_default().createElement("div", {
+    className: "top-site-web-notification"
+  }, count);
+}
+
+/**
+ * Count badge on a top site tile for the site's web notifications. Rendered on
+ * every tile (including bare tile mounts in tests with no redux Provider), so it
+ * bails before any store access when there is no store; the running app always
+ * has one.
+ *
+ * @param link The top site link object for the tile.
+ */
+function TopSiteWebNotification({
+  link
+}) {
+  const store = external_React_default().useContext(external_ReactRedux_namespaceObject.ReactReduxContext);
+  if (!store) {
+    return null;
+  }
+  return /*#__PURE__*/external_React_default().createElement(Badge, {
+    link: link
+  });
+}
+
 ;// CONCATENATED MODULE: ./content-src/components/TopSites/TopSiteImpressionWrapper.jsx
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -9142,6 +9793,8 @@ function TopSite_extends() { return TopSite_extends = Object.assign ? Object.ass
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
 
 
 
@@ -9493,6 +10146,8 @@ class TopSiteLink extends (external_React_default()).PureComponent {
       className: "tile",
       "aria-hidden": true
     }, /*#__PURE__*/external_React_default().createElement("div", {
+      className: "icon-stack"
+    }, /*#__PURE__*/external_React_default().createElement("div", {
       className: selectedColor ? "icon-wrapper letter-fallback" : "icon-wrapper",
       "data-fallback": letterFallback,
       style: selectedColor ? {
@@ -9505,6 +10160,8 @@ class TopSiteLink extends (external_React_default()).PureComponent {
       className: "top-site-icon default-icon",
       "data-fallback": smallFaviconStyle ? "" : letterFallback,
       style: smallFaviconStyle
+    })), /*#__PURE__*/external_React_default().createElement(TopSiteWebNotification, {
+      link: link
     }))), link.isPinned && /*#__PURE__*/external_React_default().createElement("div", {
       className: "icon icon-pin-small"
     }), /*#__PURE__*/external_React_default().createElement("div", {
@@ -9517,7 +10174,9 @@ class TopSiteLink extends (external_React_default()).PureComponent {
     }), title), /*#__PURE__*/external_React_default().createElement("span", {
       className: "sponsored-label",
       "data-l10n-id": "newtab-topsite-sponsored"
-    }))), children, impressionStats), this.props.addButton);
+    }))), children, impressionStats, /*#__PURE__*/external_React_default().createElement(TopSitesHoverCard, {
+      link: link
+    })), this.props.addButton);
   }
 }
 TopSiteLink.defaultProps = {
@@ -14602,6 +15261,7 @@ const PREF_WIDGETS_LISTS_MAX_LISTITEMS = "widgets.lists.maxListItems";
 const PREF_WIDGETS_LISTS_BADGE_ENABLED = "widgets.lists.badge.enabled";
 const PREF_WIDGETS_LISTS_BADGE_LABEL = "widgets.lists.badge.label";
 const PREF_WIDGETS_LISTS_SIZE = "widgets.lists.size";
+// @nova-cleanup(remove-pref): Delete this const; see getListsWidgetSize below.
 const Lists_PREF_NOVA_ENABLED = "nova.enabled";
 const LISTS_EMPTY_STATE_ILLUSTRATION = "chrome://newtab/content/data/content/assets/lists-empty-state-comet.svg";
 const LISTS_CELEBRATION = {
@@ -14694,6 +15354,11 @@ function Lists({
   const [isCreatingNewList, setIsCreatingNewList] = (0,external_React_namespaceObject.useState)(false);
   const [showCompactCompleted, setShowCompactCompleted] = (0,external_React_namespaceObject.useState)(false);
   const selectedList = (0,external_React_namespaceObject.useMemo)(() => lists[selected], [lists, selected]);
+
+  // @nova-cleanup(remove-pref): Delete novaEnabled and collapse
+  // getListsWidgetSize to just the Nova branch, deleting everything after it
+  // (the PREF_WIDGETS_LISTS_SIZE fallback chain) and the now-unused
+  // PREF_WIDGETS_LISTS_SIZE const.
   const novaEnabled = prefs[Lists_PREF_NOVA_ENABLED];
   const listsWidget = WIDGET_REGISTRY.find(w => w.id === "lists");
   const getListsWidgetSize = () => {
@@ -15179,6 +15844,7 @@ function Lists({
     }));
   }
   return /*#__PURE__*/external_React_default().createElement("article", {
+    // @nova-cleanup(remove-conditional): Always apply col-4.
     className: `lists widget ${novaEnabled ? "col-4" : ""} ${listsSizeClass} ${isMaximized ? "is-maximized" : ""}${showEmptyState ? " is-empty" : ""}${hasVisibleTasks ? " has-visible-tasks" : ""}${isAddingTask ? " is-adding-task" : ""}${isCelebrating ? " is-celebrating" : ""}`,
     ref: el => {
       widgetRef.current = el;
@@ -15268,7 +15934,10 @@ function Lists({
     widgetSize: widgetsMayBeMaximized ? widgetSize : "medium",
     learnMoreL10nId: "newtab-widget-lists-menu-learn-more",
     onLearnMore: handleListInteraction,
-    sizeSubmenu: novaEnabled && widgetsMayBeMaximized && /*#__PURE__*/external_React_default().createElement(SizeSubmenu, {
+    sizeSubmenu:
+    // @nova-cleanup(remove-conditional): Drop the novaEnabled check,
+    // keep widgetsMayBeMaximized.
+    novaEnabled && widgetsMayBeMaximized && /*#__PURE__*/external_React_default().createElement(SizeSubmenu, {
       submenuId: "lists-size-submenu",
       sizes: ["medium", "large"],
       checkedSize: widgetSize,
@@ -15656,7 +16325,7 @@ const isAtMaxLength = currentValue => {
   return currentValue.length >= 2;
 };
 
-// @nova-cleanup(remove): Drop after Nova ships
+// Drop this if the spinbutton is ever replaced with a native control.
 /**
  * Validates whether the next state of the Nova spinbutton is acceptable.
  * Allows up to 2 digits, an optional single colon, and up to 2 more digits.
@@ -16254,7 +16923,8 @@ const FocusTimer = ({
     });
   }, [dispatch]);
 
-  // @nova-cleanup(remove-conditional): Drop the legacy callers and inline this for Nova
+  // @nova-cleanup(remove-conditional): Keep this function. Its only classic
+  // caller is the legacy body removed below; no change needed here.
   const setTimerMinutes = (0,external_React_namespaceObject.useCallback)(nextMinutes => {
     const clamped = Math.max(1, Math.min(99, nextMinutes));
     const totalSeconds = clamped * 60;
@@ -16288,7 +16958,8 @@ const FocusTimer = ({
     handleTimerInteraction();
   }, [dispatch, duration, timerType, widgetSize, handleTimerInteraction]);
 
-  // @nova-cleanup(remove-conditional): Inline this once the Nova spinbutton is the only path
+  // @nova-cleanup(remove-conditional): Keep this function; it drives the Nova
+  // spinbutton. No change needed here.
   const commitSpinbuttonDuration = (0,external_React_namespaceObject.useCallback)(() => {
     const el = activeMinutesRef.current;
     if (!el) {
@@ -16338,7 +17009,7 @@ const FocusTimer = ({
     handleTimerInteraction();
   }, [dispatch, duration, timerType, widgetSize, handleTimerInteraction, timeLeft]);
 
-  // @nova-cleanup(remove-conditional): Remove if the Nova spinbutton is replaced
+  // Drop this if the spinbutton is ever replaced with a native control.
   const handleSpinBeforeInput = e => {
     const input = e.data;
     if (input === null || input === undefined) {
@@ -16353,7 +17024,7 @@ const FocusTimer = ({
     }
   };
 
-  // @nova-cleanup(remove-conditional): Remove if the Nova spinbutton is replaced
+  // Drop this if the spinbutton is ever replaced with a native control.
   const handleSpinKeyDown = e => {
     let next = minutesValue;
     switch (e.key) {
@@ -16387,7 +17058,7 @@ const FocusTimer = ({
     setTimerMinutes(next);
   };
 
-  // @nova-cleanup(remove-conditional): Remove with the Nova radiogroup
+  // Drop this if the Focus/Break radiogroup is ever replaced.
   const handleRadiogroupKeyDown = e => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") {
       return;
@@ -16677,6 +17348,8 @@ function LocationSearch({
   const [selectedLocation, setSelectedLocation] = (0,external_React_namespaceObject.useState)("");
   const suggestedLocations = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Weather.suggestedLocations);
   const locationSearchString = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Weather.locationSearchString);
+  // @nova-cleanup(remove-pref): Delete this read and the novaEnabled guard on
+  // the use-current-location button below; keep showCurrentLocation.
   const novaEnabled = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values["nova.enabled"]);
   const weatherOptIn = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values["system.showWeatherOptIn"]);
   const optInAccepted = (0,external_ReactRedux_namespaceObject.useSelector)(state => state.Prefs.values["weather.optInAccepted"]);
@@ -22133,26 +22806,24 @@ const Privacy_USER_ACTION_TYPES = {
 const PRIVACY_ENTRY = WIDGET_REGISTRY.find(w => w.id === "privacy");
 const ICON_BASE_URL = "chrome://newtab/content/data/content/assets/";
 
-// Renders a widget icon by asset filename. The wrapper div is the alignment
-// hook. TEMP (Bug 2049390): callers pass a static filename for now; the
-// per-message icon mapping (shield/planet/star/bolt/kit) is a follow-up commit.
-const privacyImage = filename => /*#__PURE__*/external_React_default().createElement("div", {
+// Icon key (from the message decision / PrivacyMessages.sys.mjs) -> asset.
+const ICON_ASSETS = {
+  shield: "widget-privacy-shield.svg",
+  shieldCheck: "widget-privacy-shield-check.svg",
+  planet: "widget-privacy-planet.svg",
+  bolt: "widget-privacy-bolt.svg",
+  star: "widget-privacy-star.svg",
+  kit: "widget-privacy-kit.svg"
+};
+
+// Renders a widget icon by icon key. The wrapper div is the alignment hook.
+const privacyImage = iconKey => /*#__PURE__*/external_React_default().createElement("div", {
   className: "privacy-image"
 }, /*#__PURE__*/external_React_default().createElement("img", {
   className: "privacy-image-icon",
-  src: `${ICON_BASE_URL}${filename}`,
+  src: `${ICON_BASE_URL}${ICON_ASSETS[iconKey] || ICON_ASSETS.shieldCheck}`,
   alt: ""
 }));
-const PREF_PRIVACY_MAX_COUNT = "widgets.privacy.maxCount";
-const DEFAULT_PRIVACY_MAX_COUNT = 100;
-
-// Resolves the count at which the readout caps to "N+". trainhopConfig wins so
-// an experiment can override the pref's default; then the pref
-// (widgets.privacy.maxCount, default 100); then a defensive fallback. Routed
-// through a helper (never the raw pref) per the trainhop-gate convention.
-function resolvePrivacyMaxCount(prefs) {
-  return prefs.trainhopConfig?.widgets?.privacyMaxCount || prefs[PREF_PRIVACY_MAX_COUNT] || DEFAULT_PRIVACY_MAX_COUNT;
-}
 function Privacy({
   dispatch,
   widgetsMayBeMaximized,
@@ -22171,12 +22842,49 @@ function Privacy({
   // when it's skipped (e.g. the backward-compat guard in PrivacyFeed on older
   // platforms) — show no metric state rather than a misleading empty/zero one.
   const initialized = privacyData?.initialized ?? false;
-  // Ceiling the readout at "{maxCount}+" so the number stays a tidy single line.
-  const maxCount = resolvePrivacyMaxCount(prefs);
-  const displayCount = trackersToday > maxCount ? `${maxCount}+` : `${trackersToday}`;
-  const isEmptyState = trackersToday === 0;
-  const showTip = !isEmptyState;
+
+  // Message decision chosen by PrivacyFeed's selector (Bug 2050954).
+  const {
+    variant,
+    messageId,
+    icon,
+    countArg,
+    cta,
+    countCeiling
+  } = privacyData ?? {};
   const isLarge = widgetSize === "large";
+
+  // Normally show the real count, only ceiling the readout at "{cap}+"
+  // (default 999) so it stays a tidy few characters. On the daily-cap render
+  // the selector sets countCeiling (100), so that one load shows "100+"; the
+  // next load clears it and the real number returns.
+  const displayCap = resolvePrivacyDisplayCount(prefs);
+  let displayCount = `${trackersToday}`;
+  if (typeof countCeiling === "number") {
+    displayCount = `${countCeiling}+`;
+  } else if (trackersToday > displayCap) {
+    displayCount = `${displayCap}+`;
+  }
+
+  // trackersToday === 0 is the sole trigger for the empty layout. It must not
+  // also key off `variant === "empty"`: a SYSTEM_TICK refreshes the count
+  // without touching `variant`, so a tab opened at zero would stay empty even
+  // after its count climbs, until the next tab re-runs the selector.
+  const isEmptyState = trackersToday === 0;
+  // Streak and tip both use the count + divider + message layout; "blank"
+  // shows the count only (plus a CTA).
+  const isStreak = !isEmptyState && variant === "streak";
+  const isTip = !isEmptyState && variant === "tip";
+  const isBlank = !isEmptyState && variant === "blank";
+  const hasMessage = (isStreak || isTip) && messageId;
+  // Telemetry id for a CTA click. The blank state has no messageId, so give it
+  // a stable, distinguishable id — otherwise its clicks report null and the
+  // most-shown state can't be attributed (Dré).
+  const ctaMessageId = isBlank ? "newtab-privacy-blank" : messageId;
+  // The single icon sits beside the count, except in the large tip layout where
+  // it sits inside the tip.
+  const iconBesideCount = !isEmptyState && !(isTip && isLarge);
+  const iconInTip = isTip && isLarge;
   const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
     if (impressionFired.current) {
       return;
@@ -22252,8 +22960,61 @@ function Privacy({
       }));
     });
   }
+
+  // Runs the message's CTA. The SpecialMessageAction descriptor lives on the
+  // decision (`cta`); the parent (PrivacyFeed) executes it — content only
+  // forwards it and logs the interaction.
+  function handleCtaClick() {
+    (0,external_ReactRedux_namespaceObject.batch)(() => {
+      dispatch(actionCreators.OnlyToMain({
+        type: actionTypes.WIDGETS_PRIVACY_CTA,
+        data: {
+          action: cta,
+          message_id: ctaMessageId
+        }
+      }));
+      dispatch(actionCreators.OnlyToMain({
+        type: actionTypes.WIDGETS_USER_EVENT,
+        data: {
+          widget_name: "privacy",
+          widget_source: "widget",
+          user_action: "message_cta",
+          action_value: ctaMessageId,
+          widget_size: widgetSize
+        }
+      }));
+    });
+  }
+
+  // The message resolves via its Fluent `messageId` (Bug 2048389); `countArg`
+  // feeds the plural/variable l10n args.
+  const messageEl = className => /*#__PURE__*/external_React_default().createElement("p", {
+    className: className,
+    "data-l10n-id": messageId,
+    "data-l10n-args": countArg ? JSON.stringify(countArg) : undefined
+  });
+
+  // CTA button for messages that carry one (`cta`); its label is the message's
+  // `-cta` companion Fluent id. Value-only messages render as moz-button text.
+  const ctaButton = cta && messageId ? /*#__PURE__*/external_React_default().createElement("moz-button", {
+    className: "privacy-cta",
+    "data-l10n-id": `${messageId}-cta`,
+    onClick: handleCtaClick,
+    size: "small",
+    type: "primary"
+  }) : null;
+
+  // The blank state has no tip copy (messageId is null) but still shows a
+  // "View protections" CTA, borrowing info-1's companion label for now.
+  const blankCta = isBlank && cta ? /*#__PURE__*/external_React_default().createElement("moz-button", {
+    className: "privacy-cta",
+    "data-l10n-id": "newtab-privacy-message-info-1-cta",
+    onClick: handleCtaClick,
+    size: "small",
+    type: "primary"
+  }) : null;
   return /*#__PURE__*/external_React_default().createElement("article", {
-    className: `privacy widget col-4 ${widgetSize}-widget${initialized && isEmptyState ? " is-empty" : ""}${initialized && showTip ? " has-tip-msg" : ""}`,
+    className: `privacy widget col-4 ${widgetSize}-widget${initialized && isEmptyState ? " is-empty" : ""}${initialized && isTip ? " has-tip-msg" : ""}${initialized && isStreak ? " has-streak" : ""}`,
     ref: el => {
       widgetRef.current = [el];
     }
@@ -22295,16 +23056,18 @@ function Privacy({
     className: "privacy-body"
   }, initialized && (isEmptyState ? /*#__PURE__*/external_React_default().createElement("div", {
     className: "privacy-empty"
-  }, privacyImage("widget-privacy-shield.svg"), /*#__PURE__*/external_React_default().createElement("p", {
+  }, privacyImage("shield"), /*#__PURE__*/external_React_default().createElement("p", {
     className: "privacy-empty-message",
     "data-l10n-id": "newtab-privacy-empty"
   })) : /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("div", {
     className: "privacy-count"
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "privacy-count-number-wrapper"
-  }, !isLarge && privacyImage("widget-privacy-shield-check.svg"), /*#__PURE__*/external_React_default().createElement("span", {
+  }, iconBesideCount && privacyImage(icon || "shieldCheck"), /*#__PURE__*/external_React_default().createElement("span", {
     className: "privacy-count-number"
-  }, displayCount)), /*#__PURE__*/external_React_default().createElement("span", {
+  }, displayCount)), /*#__PURE__*/external_React_default().createElement("div", {
+    className: "privacy-count-text"
+  }, /*#__PURE__*/external_React_default().createElement("span", {
     className: "privacy-count-label",
     "data-l10n-id": "newtab-privacy-trackers-blocked-today",
     "data-l10n-args": JSON.stringify({
@@ -22316,14 +23079,17 @@ function Privacy({
     "data-l10n-args": JSON.stringify({
       count: sitesToday
     })
-  })), showTip && /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("hr", {
+  }))), isStreak && hasMessage && /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("hr", {
+    className: "privacy-divider"
+  }), /*#__PURE__*/external_React_default().createElement("div", {
+    className: "privacy-streak"
+  }, messageEl("privacy-tip-message"), ctaButton)), isTip && hasMessage && /*#__PURE__*/external_React_default().createElement((external_React_default()).Fragment, null, /*#__PURE__*/external_React_default().createElement("hr", {
     className: "privacy-divider"
   }), /*#__PURE__*/external_React_default().createElement("div", {
     className: "privacy-tip"
-  }, isLarge && privacyImage("widget-privacy-shield-check.svg"), /*#__PURE__*/external_React_default().createElement("p", {
-    className: "privacy-tip-message",
-    "data-l10n-id": "newtab-privacy-message-informed-5"
-  })))))));
+  }, iconInTip && privacyImage(icon || "shieldCheck"), /*#__PURE__*/external_React_default().createElement("div", {
+    className: "privacy-tip-content"
+  }, messageEl("privacy-tip-message"), ctaButton))), blankCta))));
 }
 
 ;// CONCATENATED MODULE: ./content-src/components/Widgets/Crossword/Crossword.jsx
@@ -22332,6 +23098,7 @@ function Privacy({
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 // eslint-disable-next-line no-unused-vars
+
 
 
 
@@ -22400,6 +23167,11 @@ const MENU_ACTION_ITEMS = [{
   action: "reveal_grid",
   hideWhenCompleted: true
 }];
+
+// This allow list allows us to filter out the echos coming from context-menu interactions,
+// as well as per-cell/per-keystroke actions which were creating noisy telemetry event dispatches.
+// This way, only the necessary events are sent to Glean.
+const INTERACTION_TELEMETRY_ALLOWLIST = new Set(["play_started", "hint_revealed", "related_article_clicked", "admire_crossword_clicked", "endgame_reveal_incorrect"]);
 const CROSSWORD_ENTRY = WIDGET_REGISTRY.find(w => w.id === "crossword");
 
 // Flipped to true the first time the user interacts with the crossword. Used to
@@ -22415,8 +23187,16 @@ function Crossword({
   const widgetSize = resolveWidgetSize(CROSSWORD_ENTRY, prefs);
   const hasInteracted = prefs[PREF_CROSSWORD_INTERACTION];
   const crosswordEndpoint = resolveCrosswordEndpoint(prefs);
-  const impressionFired = (0,external_React_namespaceObject.useRef)(false);
   const iframeRef = (0,external_React_namespaceObject.useRef)(null);
+  const {
+    impressionRef,
+    recordUserAction,
+    recordEnabled
+  } = useWidgetTelemetry({
+    dispatch,
+    widget: CROSSWORD_ENTRY,
+    widgetSize
+  });
 
   // Set once the widget reports the puzzle is finished, so menu actions that
   // only apply to an in-progress game (Solve puzzle) can be hidden.
@@ -22497,16 +23277,11 @@ function Crossword({
         break;
       case EVENT_TYPES.PUZZLE_COMPLETED:
         setPuzzleCompleted(true);
-        dispatch(actionCreators.AlsoToMain({
-          type: actionTypes.WIDGETS_USER_EVENT,
-          data: {
-            widget_name: "crossword",
-            widget_source: "iframe",
-            user_action: "puzzle_completed",
-            action_value: payload.hintsTaken,
-            widget_size: widgetSize
-          }
-        }));
+        recordUserAction("puzzle_completed", {
+          source: "iframe",
+          value: payload.hintsTaken,
+          alsoToMain: true
+        });
         break;
       case EVENT_TYPES.INTERACTION:
         // Viewing the completed grid or opening the all-clues panel both need
@@ -22514,22 +23289,20 @@ function Crossword({
         if (LARGE_LAYOUT_INTERACTIONS.has(payload.action)) {
           setShowLarge(true);
         }
+        // Flip the "New" badge pref for every real interaction, but only
+        // forward the curated allowlist to Glean (see the allowlist comment).
         handleInteraction();
-        dispatch(actionCreators.AlsoToMain({
-          type: actionTypes.WIDGETS_USER_EVENT,
-          data: {
-            widget_name: "crossword",
-            widget_source: "iframe",
-            user_action: "interaction",
-            action_value: payload.action,
-            widget_size: widgetSize
-          }
-        }));
+        if (INTERACTION_TELEMETRY_ALLOWLIST.has(payload.action)) {
+          recordUserAction(payload.action, {
+            source: "iframe",
+            alsoToMain: true
+          });
+        }
         break;
       default:
         break;
     }
-  }, [dispatch, handleInteraction, widgetSize]);
+  }, [recordUserAction, handleInteraction]);
 
   // Listen for events from the widget, discarding anything that fails origin,
   // source, channel, or payload validation before it can touch Redux/telemetry.
@@ -22561,31 +23334,10 @@ function Crossword({
   const handleMenuAction = (0,external_React_namespaceObject.useCallback)(action => {
     handleInteraction();
     postMenuAction(action);
-    dispatch(actionCreators.OnlyToMain({
-      type: actionTypes.WIDGETS_USER_EVENT,
-      data: {
-        widget_name: "crossword",
-        widget_source: "context_menu",
-        user_action: "menu_action",
-        action_value: action,
-        widget_size: widgetSize
-      }
-    }));
-  }, [handleInteraction, postMenuAction, dispatch, widgetSize]);
-  const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
-    if (impressionFired.current) {
-      return;
-    }
-    impressionFired.current = true;
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.WIDGETS_IMPRESSION,
-      data: {
-        widget_name: "crossword",
-        widget_size: widgetSize
-      }
-    }));
-  }, [dispatch, widgetSize]);
-  const widgetRef = useIntersectionObserver(handleIntersection);
+    recordUserAction(action, {
+      source: "context_menu"
+    });
+  }, [handleInteraction, postMenuAction, recordUserAction]);
   function handleCrosswordHide() {
     (0,external_ReactRedux_namespaceObject.batch)(() => {
       dispatch(actionCreators.OnlyToMain({
@@ -22595,15 +23347,9 @@ function Crossword({
           value: false
         }
       }));
-      dispatch(actionCreators.OnlyToMain({
-        type: actionTypes.WIDGETS_ENABLED,
-        data: {
-          widget_name: "crossword",
-          widget_source: "context_menu",
-          enabled: false,
-          widget_size: widgetSize
-        }
-      }));
+      recordEnabled(false, {
+        source: "context_menu"
+      });
     });
   }
   const handleChangeSize = (0,external_React_namespaceObject.useCallback)(size => {
@@ -22616,18 +23362,13 @@ function Crossword({
           value: size
         }
       }));
-      dispatch(actionCreators.OnlyToMain({
-        type: actionTypes.WIDGETS_USER_EVENT,
-        data: {
-          widget_name: "crossword",
-          widget_source: "context_menu",
-          user_action: Crossword_USER_ACTION_TYPES.CHANGE_SIZE,
-          action_value: size,
-          widget_size: size
-        }
-      }));
+      recordUserAction(Crossword_USER_ACTION_TYPES.CHANGE_SIZE, {
+        source: "context_menu",
+        value: size,
+        size
+      });
     });
-  }, [dispatch, handleInteraction]);
+  }, [dispatch, handleInteraction, recordUserAction]);
   const sizeSubmenuRef = useSizeSubmenu(handleChangeSize);
   function handleLearnMore() {
     handleInteraction();
@@ -22638,15 +23379,9 @@ function Crossword({
           url: "https://support.mozilla.org/kb/firefox-new-tab-widgets"
         }
       }));
-      dispatch(actionCreators.OnlyToMain({
-        type: actionTypes.WIDGETS_USER_EVENT,
-        data: {
-          widget_name: "crossword",
-          widget_source: "context_menu",
-          user_action: "learn_more",
-          widget_size: widgetSize
-        }
-      }));
+      recordUserAction("learn_more", {
+        source: "context_menu"
+      });
     });
   }
   function handlePoweredByParticle() {
@@ -22658,22 +23393,14 @@ function Crossword({
           url: "https://particle.news"
         }
       }));
-      dispatch(actionCreators.OnlyToMain({
-        type: actionTypes.WIDGETS_USER_EVENT,
-        data: {
-          widget_name: "crossword",
-          widget_source: "context_menu",
-          user_action: "powered_by_particle",
-          widget_size: widgetSize
-        }
-      }));
+      recordUserAction("powered_by_particle", {
+        source: "context_menu"
+      });
     });
   }
   return /*#__PURE__*/external_React_default().createElement("article", {
     className: `crossword widget col-4 ${displaySize}-widget`,
-    ref: el => {
-      widgetRef.current = [el];
-    }
+    ref: impressionRef
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "crossword-title-wrapper"
   }, /*#__PURE__*/external_React_default().createElement("div", {
@@ -22876,13 +23603,11 @@ function StockTicker({
 
 
 
-
 // The Stocks widget's error box. It only mounts while there's an error, so the
-// intersection observer set up on mount reports WIDGETS_ERROR the first time the
-// message is actually on screen.
+// intersection observer set up on mount reports the load error the first time
+// the message is actually on screen.
 function StocksError({
-  widgetSize,
-  dispatch
+  recordError
 }) {
   const errorFired = (0,external_React_namespaceObject.useRef)(false);
   const handleErrorIntersection = (0,external_React_namespaceObject.useCallback)(() => {
@@ -22890,17 +23615,8 @@ function StocksError({
       return;
     }
     errorFired.current = true;
-    // Fire from content so the event ties to this tab's session, matching the
-    // other widgets' error telemetry.
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.WIDGETS_ERROR,
-      data: {
-        widget_name: "stocks",
-        widget_size: widgetSize,
-        error_type: "load_error"
-      }
-    }));
-  }, [dispatch, widgetSize]);
+    recordError("load_error");
+  }, [recordError]);
   const errorRef = useIntersectionObserver(handleErrorIntersection);
   return (
     /*#__PURE__*/
@@ -22937,15 +23653,11 @@ function StocksError({
 
 
 
-const Stocks_USER_ACTION_TYPES = {
-  CHANGE_SIZE: "change_size",
-  SEARCH_TICKERS: "search_tickers",
-  LEARN_MORE: "learn_more"
-};
 const STOCKS_ENTRY = WIDGET_REGISTRY.find(w => w.id === "stocks");
 const STOCKS_PLACEHOLDER_COUNT = 4;
 function Stocks_Stocks({
   dispatch,
+  handleUserInteraction,
   widgetsMayBeMaximized,
   widgetEnabledMap
 }) {
@@ -22959,21 +23671,23 @@ function Stocks_Stocks({
   // default can apply.
   const widgetSize = resolveWidgetSize(STOCKS_ENTRY, prefs);
   const showError = error && !tickers.length;
-  const impressionFired = (0,external_React_namespaceObject.useRef)(false);
-  const handleIntersection = (0,external_React_namespaceObject.useCallback)(() => {
-    if (impressionFired.current) {
-      return;
-    }
-    impressionFired.current = true;
-    dispatch(actionCreators.AlsoToMain({
-      type: actionTypes.WIDGETS_IMPRESSION,
-      data: {
-        widget_name: "stocks",
-        widget_size: widgetSize
-      }
-    }));
-  }, [dispatch, widgetSize]);
-  const widgetRef = useIntersectionObserver(handleIntersection);
+
+  // Show the "New" badge until the user first interacts with the widget;
+  // handleInteraction flips widgets.stocks.interaction, which removes it.
+  const hasInteracted = prefs["widgets.stocks.interaction"];
+  const {
+    impressionRef,
+    recordUserAction,
+    recordError
+  } = useWidgetTelemetry({
+    dispatch,
+    widget: STOCKS_ENTRY,
+    widgetSize
+  });
+
+  // Any user action flips widgets.stocks.interaction (idempotent, one-way),
+  // matching the other widgets. Hiding the widget is not an interaction.
+  const handleInteraction = (0,external_React_namespaceObject.useCallback)(() => handleUserInteraction("stocks"), [handleUserInteraction]);
   const handleChangeSize = (0,external_React_namespaceObject.useCallback)(size => {
     (0,external_ReactRedux_namespaceObject.batch)(() => {
       dispatch(actionCreators.OnlyToMain({
@@ -22983,56 +23697,45 @@ function Stocks_Stocks({
           value: size
         }
       }));
-      dispatch(actionCreators.OnlyToMain({
-        type: actionTypes.WIDGETS_USER_EVENT,
-        data: {
-          widget_name: "stocks",
-          widget_source: "context_menu",
-          user_action: Stocks_USER_ACTION_TYPES.CHANGE_SIZE,
-          action_value: size,
-          widget_size: size
-        }
-      }));
+      recordUserAction("change_size", {
+        source: "context_menu",
+        value: size,
+        size
+      });
+      handleInteraction();
     });
-  }, [dispatch]);
+  }, [dispatch, recordUserAction, handleInteraction]);
 
   // Placeholder: a real ticker search will replace this telemetry-only stub in
   // a follow-up.
   function handleSearchTickers() {
-    dispatch(actionCreators.OnlyToMain({
-      type: actionTypes.WIDGETS_USER_EVENT,
-      data: {
-        widget_name: "stocks",
-        widget_source: "context_menu",
-        user_action: Stocks_USER_ACTION_TYPES.SEARCH_TICKERS,
-        widget_size: widgetSize
-      }
-    }));
+    recordUserAction("search_tickers", {
+      source: "context_menu"
+    });
+    handleInteraction();
   }
 
   // The shared footer opens the support link; here we only record the click.
   function handleLearnMore() {
-    dispatch(actionCreators.OnlyToMain({
-      type: actionTypes.WIDGETS_USER_EVENT,
-      data: {
-        widget_name: "stocks",
-        widget_source: "context_menu",
-        user_action: Stocks_USER_ACTION_TYPES.LEARN_MORE,
-        widget_size: widgetSize
-      }
-    }));
+    recordUserAction("learn_more", {
+      source: "context_menu"
+    });
+    handleInteraction();
   }
   return /*#__PURE__*/external_React_default().createElement("article", {
     className: `stocks widget col-4 ${widgetSize}-widget`,
-    ref: el => {
-      widgetRef.current = [el];
-    }
+    ref: impressionRef
   }, /*#__PURE__*/external_React_default().createElement("div", {
     className: "stocks-title-wrapper"
-  }, /*#__PURE__*/external_React_default().createElement("span", {
+  }, /*#__PURE__*/external_React_default().createElement("div", {
+    className: "stocks-badge-title-wrapper"
+  }, !hasInteracted && !!tickers.length && /*#__PURE__*/external_React_default().createElement("moz-badge", {
+    className: "stocks-new-badge",
+    "data-l10n-id": "newtab-widget-lists-label-new"
+  }), /*#__PURE__*/external_React_default().createElement("span", {
     className: "stocks-title",
     "data-l10n-id": "newtab-stocks-widget-title"
-  }), /*#__PURE__*/external_React_default().createElement("div", {
+  })), /*#__PURE__*/external_React_default().createElement("div", {
     className: "stocks-context-menu-wrapper"
   }, /*#__PURE__*/external_React_default().createElement("moz-button", {
     className: "stocks-context-menu-button",
@@ -23064,8 +23767,7 @@ function Stocks_Stocks({
   })))), /*#__PURE__*/external_React_default().createElement("div", {
     className: "stocks-body"
   }, showError && /*#__PURE__*/external_React_default().createElement(StocksError, {
-    widgetSize: widgetSize,
-    dispatch: dispatch
+    recordError: recordError
   }), !showError && widgetSize === "medium" && /*#__PURE__*/external_React_default().createElement("ul", {
     className: `stocks-grid${tickers.length ? "" : " stocks-grid--loading"}`
   }, tickers.length ? tickers.map(t => /*#__PURE__*/external_React_default().createElement(StockTicker, {
@@ -24597,7 +25299,8 @@ function Widgets() {
     className: "widgets-add-button-icon"
   }))), novaEnabled && /*#__PURE__*/external_React_default().createElement("moz-button", {
     className: "widgets-row-toggle",
-    type: "default",
+    type: "muted",
+    size: "small",
     "aria-expanded": rowExpanded,
     "aria-controls": "widgets-container",
     onClick: handleToggleRowExpandedClick,
@@ -26745,6 +27448,7 @@ class ContentSection extends (external_React_default()).PureComponent {
       pocketRegion,
       mayHaveInferredPersonalization,
       mayHaveWeather,
+      mayHaveWebNotifications,
       mayHaveWidgets,
       mayHaveTimerWidget,
       mayHaveListsWidget,
@@ -26780,7 +27484,8 @@ class ContentSection extends (external_React_default()).PureComponent {
       pocketEnabled,
       weatherEnabled,
       showInferredPersonalizationEnabled,
-      topSitesRowsCount
+      topSitesRowsCount,
+      webNotificationsEnabled
     } = enabledSections;
     const {
       timerEnabled,
@@ -26976,7 +27681,15 @@ class ContentSection extends (external_React_default()).PureComponent {
       value: String(num),
       "data-l10n-id": "newtab-custom-row-selector2",
       "data-l10n-args": `{"num": ${num}}`
-    })))))))),
+    })))), mayHaveWebNotifications && /*#__PURE__*/external_React_default().createElement("div", {
+      className: "more-information"
+    }, /*#__PURE__*/external_React_default().createElement("moz-toggle", {
+      id: "web-notifications-toggle",
+      pressed: webNotificationsEnabled || null,
+      ontoggle: this.onPreferenceSelect,
+      "data-preference": "showWebNotifications",
+      "data-l10n-id": "newtab-custom-web-notifications-toggle"
+    })))))),
     // @nova-cleanup(remove-conditional): Remove novaEnabled check, keep divider
     novaEnabled && mayHaveWidgets && /*#__PURE__*/external_React_default().createElement("span", {
       className: "divider",
@@ -27260,6 +27973,7 @@ class _CustomizeMenu extends (external_React_default()).PureComponent {
       mayHaveTopicSections: this.props.mayHaveTopicSections,
       mayHaveInferredPersonalization: this.props.mayHaveInferredPersonalization,
       mayHaveWeather: this.props.mayHaveWeather,
+      mayHaveWebNotifications: this.props.mayHaveWebNotifications,
       mayHaveWidgets: this.props.mayHaveWidgets,
       mayHaveWeatherForecast: this.props.mayHaveWeatherForecast,
       weatherDisplay: this.props.weatherDisplay,
@@ -29574,6 +30288,7 @@ class BaseContent extends (external_React_default()).PureComponent {
       pocketEnabled: prefs["feeds.section.topstories"],
       showInferredPersonalizationEnabled: prefs[Base_PREF_INFERRED_PERSONALIZATION_USER],
       topSitesRowsCount: prefs.topSitesRows,
+      webNotificationsEnabled: prefs.showWebNotifications,
       weatherEnabled: novaEnabled ? prefs["widgets.weather.enabled"] : prefs.showWeather
     };
     const pocketRegion = prefs["feeds.system.topstories"];
@@ -29582,6 +30297,7 @@ class BaseContent extends (external_React_default()).PureComponent {
     // system.showWeather / trainhopConfig.weather), so it keeps its own check
     // plus the additive widgetsSettings.weatherVisible override.
     const mayHaveWeather = prefs["system.showWeather"] || prefs.trainhopConfig?.weather?.enabled || prefs.trainhopConfig?.widgetsSettings?.weatherVisible;
+    const mayHaveWebNotifications = prefs["system.showWebNotifications"];
     const supportUrl = prefs["support.url"];
 
     // Widget toggle visibility is resolved by the shared registry helpers, which
@@ -29737,6 +30453,7 @@ class BaseContent extends (external_React_default()).PureComponent {
         mayHaveTopicSections: mayHavePersonalizedTopicSections,
         mayHaveInferredPersonalization: mayHaveInferredPersonalization,
         mayHaveWeather: mayHaveWeather,
+        mayHaveWebNotifications: mayHaveWebNotifications,
         mayHaveWidgets: mayHaveWidgets,
         mayHaveTimerWidget: mayHaveTimerWidget,
         mayHaveListsWidget: mayHaveListsWidget,
@@ -29833,6 +30550,7 @@ class BaseContent extends (external_React_default()).PureComponent {
       mayHaveTopicSections: mayHavePersonalizedTopicSections,
       mayHaveInferredPersonalization: mayHaveInferredPersonalization,
       mayHaveWeather: mayHaveWeather,
+      mayHaveWebNotifications: mayHaveWebNotifications,
       mayHaveWidgets: mayHaveWidgets,
       mayHaveTimerWidget: mayHaveTimerWidget,
       mayHaveListsWidget: mayHaveListsWidget,

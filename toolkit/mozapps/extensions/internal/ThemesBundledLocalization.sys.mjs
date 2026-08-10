@@ -8,40 +8,11 @@ import { XPCOMUtils } from "resource://gre/modules/XPCOMUtils.sys.mjs";
 const DEFAULT_THEME_ID = "default-theme@mozilla.org";
 const PREF_NOVA_ENABLED = "browser.nova.enabled";
 
-// Fluent ids that currently live in locales-preview/nova-aboutAddons.ftl
-// rather than browser/appExtensionFields.ftl. This Set is meant to be
-// removed once all theme names' Fluent ids move into appExtensionFields.ftl.
-//
-// TODO(Bug 2052034): remove along with moving new fluent strings out
-// of locales-preview.
-const PREVIEW_THEME_L10N_IDS = new Set([
-  "extension-default-theme-name2",
-  "extension-default-theme-description2",
-  "extension-nova-sun-name",
-  "extension-nova-spark-name",
-  "extension-nova-flame-name",
-  "extension-nova-flare-name",
-  "extension-nova-lavender-name",
-  "extension-nova-dusk-name",
-  "extension-nova-lagoon-name",
-  "extension-nova-pine-name",
-  "extension-nova-tide-name",
-  "extension-nova-ash-name",
-  "extension-nova-smoke-name",
-]);
-
 const lazy = XPCOMUtils.declareLazy({
   l10n: () =>
     new Localization(
       // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
       ["browser/appExtensionFields.ftl", "branding/brand.ftl"],
-      true
-    ),
-  // TODO(Bug 2052034): remove along with moving new fluent strings out
-  // of locales-preview.
-  novaPreviewL10n: () =>
-    new Localization(
-      ["locales-preview/nova-aboutAddons.ftl", "branding/brand.ftl"],
       true
     ),
   novaEnabled: { pref: PREF_NOVA_ENABLED, default: false },
@@ -133,8 +104,8 @@ export function hasThemeIdBundledLocalization(addonId) {
  * @returns {string} Fluent id.
  */
 export function getL10nIdForThemeProp(addonId, prop) {
-  // TODO(Bug 2052034): remove this special case (keeping the pre-Nova name for default
-  // theme unchanged) until we are moving new fluent strings out of locales-preview.
+  // Keep the pre-Nova name/description for the default theme unchanged when
+  // Nova is disabled.
   if (addonId === DEFAULT_THEME_ID && !lazy.novaEnabled) {
     switch (prop) {
       case "name":
@@ -152,12 +123,12 @@ export function getL10nIdForThemeProp(addonId, prop) {
  * AddonWrapper.
  */
 export function getL10nThemeString(addonId, prop) {
-  // TODO: Agree with Thunderbird engineering how we should allow thunderbird to
+  // TODO (Bug 2059562): Agree with Thunderbird engineering how we should allow thunderbird to
   // override or extend the mapping table for their own built-in themes localization
   // in the longer term, see their appExtensionFields.ftl file here:
   // https://searchfox.org/comm-central/rev/72b8ba0761/mail/locales/en-US/browser/appExtensionFields.ftl
   const fluentId =
-    AppConstants.MOZ_APP_NAME === "thunderbird"
+    AppConstants.MOZ_APP_NAME === "thunderbird" && addonId !== DEFAULT_THEME_ID
       ? `extension-${themeIdPrefix(addonId)}-${prop}`
       : getL10nIdForThemeProp(addonId, prop);
 
@@ -167,12 +138,6 @@ export function getL10nThemeString(addonId, prop) {
     return null;
   }
 
-  // TODO(Bug 2052034): simplify along with moving new fluent strings out
-  // of locales-preview.
-  let l10n =
-    lazy.novaEnabled && PREVIEW_THEME_L10N_IDS.has(fluentId)
-      ? lazy.novaPreviewL10n
-      : lazy.l10n;
-  let [message] = l10n.formatMessagesSync([{ id: fluentId }]);
+  let [message] = lazy.l10n.formatMessagesSync([{ id: fluentId }]);
   return message?.value;
 }

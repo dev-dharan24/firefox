@@ -303,7 +303,7 @@ afterEvaluate {
 
 subprojects { project ->
     // Perform spotless lint in GeckoView projects only.
-    // Sync with spotless_projects in mobile/android/geckoview/gradle.configure.
+    // Sync with spotless_projects in mobile/android/gradle.configure.
     def projectName = project.getName()
     if (projectName.startsWith('geckoview')
             || projectName == 'annotations'

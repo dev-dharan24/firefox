@@ -179,7 +179,7 @@ add_task(async function () {
   // the "proxy" we just started. Even though our connection to the proxy is
   // secure, in a real situation the connection from the proxy to
   // http://example.com won't be secure, so we treat it as not secure.
-  // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+  // eslint-disable-next-line sdl/no-insecure-url
   await BrowserTestUtils.withNewTab("http://example.com/", async () => {
     let identityMode = window.document.getElementById("identity-box").className;
     is(
@@ -188,7 +188,7 @@ add_task(async function () {
       `identity should be '${NOT_SECURE_LABEL}'`
     );
 
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     await testPageInfoNotEncrypted("http://example.com");
   });
 });

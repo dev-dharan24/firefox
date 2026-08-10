@@ -145,7 +145,7 @@ void JitRuntime::generateBaselineInterpreterEntryTrampoline(
     static_assert(sizeof(BaselineInterpreterEntryFrameLayout) ==
                   sizeof(JitFrameLayout));
     constexpr size_t base =
-        BaselineInterpreterEntryFrameLayout::offsetOfModuleResumeSlots();
+        BaselineInterpreterEntryFrameLayout::offsetOfModuleResumeArgs();
     for (uint32_t slot = ResumeFrameArgs::NumSlots; slot > 0; slot--) {
       size_t offset = base + ResumeFrameArgs::offsetOfSlot(slot - 1);
       masm.pushValue(Address(FramePointer, int32_t(offset)));

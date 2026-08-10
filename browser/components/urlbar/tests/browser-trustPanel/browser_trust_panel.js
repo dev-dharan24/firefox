@@ -29,7 +29,7 @@ ChromeUtils.defineLazyGetter(this, "fxAccounts", () => {
 });
 
 const TRACKING_PAGE =
-  // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+  // eslint-disable-next-line sdl/no-insecure-url
   "http://tracking.example.org/browser/browser/base/content/test/protectionsUI/trackingPage.html";
 
 const TEST_BREACH = {
@@ -102,9 +102,14 @@ add_task(async function basic_test() {
     waitForLoad: true,
   });
 
-  await TestUtils.waitForCondition(() => urlbarIcon(window) != "none");
+  // The icon starts in the neutral "scanning" state and resolves to the trusted
+  // icon once the settle window elapses, so wait for that rather than the first
+  // non-empty icon.
+  await TestUtils.waitForCondition(
+    () => urlbarIcon(window) == ETP_ACTIVE_ICON,
+    "Showing trusted icon"
+  );
 
-  Assert.equal(urlbarIcon(window), ETP_ACTIVE_ICON, "Showing trusted icon");
   Assert.equal(
     window.document
       .getElementById("trust-icon-container")
@@ -119,14 +124,16 @@ add_task(async function basic_test() {
   );
 
   await toggleETP(tab);
-  Assert.equal(
-    urlbarIcon(window),
-    ETP_DISABLED_ICON,
+  await TestUtils.waitForCondition(
+    () => urlbarIcon(window) == ETP_DISABLED_ICON,
     "Showing ETP disabled icon"
   );
 
   await toggleETP(tab);
-  Assert.equal(urlbarIcon(window), ETP_ACTIVE_ICON, "Showing trusted icon");
+  await TestUtils.waitForCondition(
+    () => urlbarIcon(window) == ETP_ACTIVE_ICON,
+    "Showing trusted icon"
+  );
 
   await BrowserTestUtils.removeTab(tab);
 });
@@ -134,7 +141,7 @@ add_task(async function basic_test() {
 add_task(async function test_notsecure_label() {
   const tab = await BrowserTestUtils.openNewForegroundTab({
     gBrowser,
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     opening: "http://example.com",
     waitForLoad: true,
   });
@@ -172,7 +179,7 @@ add_task(async function test_blob_secure() {
 add_task(async function test_notsecure_label_without_tracking() {
   const tab = await BrowserTestUtils.openNewForegroundTab({
     gBrowser,
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     opening: "http://example.com",
     waitForLoad: true,
   });
@@ -1223,7 +1230,7 @@ add_task(
 add_task(async function insecure_and_etp_disabled_test() {
   const tab = await BrowserTestUtils.openNewForegroundTab({
     gBrowser,
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     opening: "http://example.com",
     waitForLoad: true,
   });

@@ -273,11 +273,17 @@ enum MaybeConstruct { NO_CONSTRUCT = false, CONSTRUCT = true };
 // (InterpreterFrame::RESUMING_GENERATOR for the C++ interpreter and
 // FrameDescriptor::IsResumingGenerator for the JITs). This flag is cleared by
 // JSOp::AfterYield and these slots must no longer be accessed after that point.
+//
+// The resumer stores the generator's resume index into ResumeIndexSlot and
+// then marks the generator running. Marking it running is the point where the
+// resume is committed, so it must be the last thing the resumer does before
+// control enters the callee's resume prologue.
 struct ResumeFrameArgs {
   enum Slot : uint32_t {
     ResumeValueSlot = 0,
     GeneratorSlot,
     ResumeKindSlot,
+    ResumeIndexSlot,
     NumSlots
   };
 
@@ -295,12 +301,16 @@ struct ResumeFrameArgs {
   static constexpr size_t offsetOfResumeKind() {
     return offsetOfSlot(ResumeKindSlot);
   }
+  static constexpr size_t offsetOfResumeIndex() {
+    return offsetOfSlot(ResumeIndexSlot);
+  }
 
   static void init(Value* slots, Value resumeValue, Value generator,
-                   GeneratorResumeKind resumeKind) {
+                   GeneratorResumeKind resumeKind, uint32_t resumeIndex) {
     slots[ResumeValueSlot] = resumeValue;
     slots[GeneratorSlot] = generator;
     slots[ResumeKindSlot] = Int32Value(int32_t(resumeKind));
+    slots[ResumeIndexSlot] = Int32Value(int32_t(resumeIndex));
   }
 };
 

@@ -78,16 +78,10 @@ with Files(".prettierignore*"):
 with Files(".prettierrc.js"):
     BUG_COMPONENT = ("Developer Infrastructure", "Lint and Formatting")
 
-with Files("..rstcheck.cfg"):
-    BUG_COMPONENT = ("Developer Infrastructure", "Lint and Formatting")
-
 with Files(".stylelintignore"):
     BUG_COMPONENT = ("Developer Infrastructure", "Lint and Formatting")
 
 with Files(".stylelintrc.js"):
-    BUG_COMPONENT = ("Developer Infrastructure", "Lint and Formatting")
-
-with Files(".rstcheck.cfg"):
     BUG_COMPONENT = ("Developer Infrastructure", "Lint and Formatting")
 
 with Files(".yamllint"):

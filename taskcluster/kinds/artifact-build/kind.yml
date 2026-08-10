@@ -45,6 +45,7 @@ task-defaults:
     fetches:
         toolchain:
             - terser
+            - newtab-node-modules
 
 tasks:
     linux64-artifact/opt:

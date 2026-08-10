@@ -134,6 +134,7 @@ pub struct BoxShadowCacheKey {
     pub shape_bottom_left: u32,
     pub shape_bottom_right: u32,
     pub device_pixel_scale: Au,
+    pub spread_amount: u32,
 }
 
 impl<'a> SceneBuilder<'a> {
@@ -236,7 +237,7 @@ impl<'a> SceneBuilder<'a> {
 pub fn prepare_box_shadow(
     shadow_data: &BoxShadowData,
     common_data: &PrimTemplateCommonData,
-    unsnapped_prim_rect: &LayoutRect,
+    unsnapped_pattern_rect: &LayoutRect,
     clip_chain: &ClipChainInstance,
     quad_transform: &mut QuadTransformState,
     frame_context: &FrameBuildingContext,
@@ -260,7 +261,7 @@ pub fn prepare_box_shadow(
     // re-inflate.
     //
     // The element rect's relation to the per-instance
-    // `unsnapped_prim_rect` differs by clip_mode (set up in
+    // `unsnapped_pattern_rect` differs by clip_mode (set up in
     // `box_shadow::add_box_shadow`):
     //   - Outset: prim rect = element.translate.inflate(spread)
     //                                  .inflate(blur_offset);
@@ -268,11 +269,11 @@ pub fn prepare_box_shadow(
     //   - Inset:  prim rect = element directly.
     let blur_offset = (BLUR_SAMPLE_SCALE * blur_radius).ceil();
     let unsnapped_element_rect = match shadow_data.clip_mode {
-        BoxShadowClipMode::Outset => unsnapped_prim_rect
+        BoxShadowClipMode::Outset => unsnapped_pattern_rect
             .inflate(-blur_offset, -blur_offset)
             .inflate(-shadow_data.spread_amount, -shadow_data.spread_amount)
             .translate(-shadow_data.box_offset),
-        BoxShadowClipMode::Inset => *unsnapped_prim_rect,
+        BoxShadowClipMode::Inset => *unsnapped_pattern_rect,
     };
     let element_rect = {
         // Snap into the prim's surface raster space, matching how the
@@ -304,14 +305,21 @@ pub fn prepare_box_shadow(
 
     let blur_region = (BLUR_SAMPLE_SCALE * blur_radius).ceil();
 
-    let max_corner_width = shadow_radius.top_left.width
+    let mut max_corner_width = shadow_radius.top_left.width
         .max(shadow_radius.bottom_left.width)
         .max(shadow_radius.top_right.width)
         .max(shadow_radius.bottom_right.width);
-    let max_corner_height = shadow_radius.top_left.height
+    let mut max_corner_height = shadow_radius.top_left.height
         .max(shadow_radius.bottom_left.height)
         .max(shadow_radius.top_right.height)
         .max(shadow_radius.bottom_right.height);
+
+    if shadow_data.clip_mode == BoxShadowClipMode::Inset && !shadow_radius.shapes_all_round() {
+        // Add one extra pixel to avoid stretching the antialiasing tail
+        // in extreme cases (e.g corner-shape: notch with a blur radius of 1px).
+        max_corner_width -= shadow_data.spread_amount - 1.0;
+        max_corner_height -= shadow_data.spread_amount - 1.0;
+    }
 
     let used_corner_width = max_corner_width.max(blur_region);
     let used_corner_height = max_corner_height.max(blur_region);
@@ -394,6 +402,14 @@ pub fn prepare_box_shadow(
         content_scale.0,
     );
 
+    // We only need the spread amount (-inset) in the cache key when using other
+    // corner shapes than 'round'
+    let cache_key_spread_amount = if !shadow_radius.shapes_all_round() {
+        shadow_data.spread_amount.to_bits()
+    } else {
+        0
+    };
+
     let bs_cache_key = BoxShadowCacheKey {
         blur_radius_dp: Au::from_f32_px(blur_std_dev),
         clip_mode: shadow_data.clip_mode,
@@ -422,6 +438,7 @@ pub fn prepare_box_shadow(
         shape_bottom_right: shadow_radius.shape_bottom_right.to_bits(),
         shape_bottom_left: shadow_radius.shape_bottom_left.to_bits(),
         device_pixel_scale: Au::from_f32_px(content_scale.0),
+        spread_amount: cache_key_spread_amount,
     };
 
     // The shadow shape is offset by blur_region within the alloc task (local pixels).
@@ -432,6 +449,8 @@ pub fn prepare_box_shadow(
         src_rect_size,
     );
     let device_pixel_scale_for_task = DevicePixelScale::new(content_scale.0);
+
+    let shadow_inset = LayoutSideOffsets::new_all_same(-shadow_data.spread_amount);
 
     let task_id = frame_state.resource_cache.request_render_task(
         Some(RenderTaskCacheKey {
@@ -450,7 +469,7 @@ pub fn prepare_box_shadow(
                 RenderTaskKind::new_rounded_rect_mask(
                     minimal_shadow_rect,
                     shadow_radius,
-                    LayoutSideOffsets::zero(),
+                    shadow_inset,
                     ClipMode::Clip,
                     device_pixel_scale_for_task,
                 ),
@@ -501,8 +520,11 @@ pub fn prepare_box_shadow(
     quad::prepare_quad(
         &pattern,
         &QuadDescriptor {
-            local_rect: prim_rect,
-            local_clip_rect: clip_chain.local_clip_rect,
+            pattern_rect: prim_rect,
+            // `prim_rect` is re-derived here by snapping the element rect and
+            // re-inflating, so it differs from the prim rect the clip chain was
+            // built with; `clip_chain.local_coverage_rect` does not apply.
+            bounds: clip_chain.local_clip_rect.intersection_unchecked(&prim_rect),
             aligned_aa_edges: common_data.aligned_aa_edges,
             transformed_aa_edges: common_data.transformed_aa_edges,
         },

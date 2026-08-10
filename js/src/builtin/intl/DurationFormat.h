@@ -29,36 +29,21 @@ class DurationFormatObject : public NativeObject {
   static const JSClass class_;
   static const JSClass& protoClass_;
 
-  static constexpr auto LOCALE_SLOT =
-      TypedSlot<ValueType::Object, ValueType::String, ValueType::Undefined>(0);
-  static constexpr auto NUMBERING_SYSTEM =
-      TypedSlot<ValueType::String, ValueType::Undefined>(1);
-  static constexpr auto NUMBER_FORMAT_YEARS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(2);
-  static constexpr auto NUMBER_FORMAT_MONTHS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(3);
-  static constexpr auto NUMBER_FORMAT_WEEKS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(4);
-  static constexpr auto NUMBER_FORMAT_DAYS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(5);
-  static constexpr auto NUMBER_FORMAT_HOURS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(6);
-  static constexpr auto NUMBER_FORMAT_MINUTES_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(7);
-  static constexpr auto NUMBER_FORMAT_SECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(8);
-  static constexpr auto NUMBER_FORMAT_MILLISECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(9);
-  static constexpr auto NUMBER_FORMAT_MICROSECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(10);
-  static constexpr auto NUMBER_FORMAT_NANOSECONDS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(11);
-  static constexpr auto LIST_FORMAT_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(12);
-  static constexpr auto OPTIONS_SLOT =
-      TypedSlot<ValueType::Double, ValueType::Undefined>(13);
-  static constexpr auto TIME_SEPARATOR_SLOT =
-      TypedSlot<ValueType::String, ValueType::Undefined>(14);
+  JS_DEFINE_TYPED_SLOT(0, LOCALE_SLOT, Object, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(1, NUMBERING_SYSTEM, String, Undefined);
+  JS_DEFINE_TYPED_SLOT(2, NUMBER_FORMAT_YEARS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(3, NUMBER_FORMAT_MONTHS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(4, NUMBER_FORMAT_WEEKS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(5, NUMBER_FORMAT_DAYS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(6, NUMBER_FORMAT_HOURS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(7, NUMBER_FORMAT_MINUTES_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(8, NUMBER_FORMAT_SECONDS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(9, NUMBER_FORMAT_MILLISECONDS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(10, NUMBER_FORMAT_MICROSECONDS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(11, NUMBER_FORMAT_NANOSECONDS_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(12, LIST_FORMAT_SLOT, Private, Undefined);
+  JS_DEFINE_TYPED_SLOT(13, OPTIONS_SLOT, Double, Undefined);
+  JS_DEFINE_TYPED_SLOT(14, TIME_SEPARATOR_SLOT, String, Undefined);
   static constexpr uint32_t SLOT_COUNT = 15;
 
  private:
@@ -71,7 +56,7 @@ class DurationFormatObject : public NativeObject {
     static_assert(uint32_t(temporal::TemporalUnit::Nanosecond) ==
                   NUMBER_FORMAT_NANOSECONDS_SLOT.index());
 
-    return TypedSlot<ValueType::Double, ValueType::Undefined>(uint32_t(unit));
+    return TypedSlot<ValueType::Private, ValueType::Undefined>(uint32_t(unit));
   }
 
  public:

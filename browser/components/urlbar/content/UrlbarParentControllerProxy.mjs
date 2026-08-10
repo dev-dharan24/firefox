@@ -2,12 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const lazy = {};
-
-ChromeUtils.defineESModuleGetters(lazy, {
-  UrlbarQueryContext: "chrome://browser/content/urlbar/UrlbarQueryContext.mjs",
-  UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
-});
+import { UrlbarQueryContext } from "chrome://browser/content/urlbar/UrlbarQueryContext.mjs";
+import { UrlbarResult } from "chrome://browser/content/urlbar/UrlbarResult.mjs";
 
 /**
  * @import {UrlbarChild} from "../../../actors/UrlbarChild.sys.mjs"
@@ -147,6 +143,52 @@ export class UrlbarParentControllerProxy {
   }
 
   /**
+   * Ships an autofill deletion to the parent recorder. The counterpart to the
+   * controller's `recordAutofillDeletion()`.
+   */
+  recordAutofillDeletion() {
+    this.#actor.sendAsyncMessage("RecordAutofillDeletion", {
+      instanceId: this.#instanceId,
+    });
+  }
+
+  /** @type {UrlbarParentController["dismissAutofill"]} */
+  dismissAutofill(url, action) {
+    return this.#actor.sendQuery("DismissAutofill", {
+      instanceId: this.#instanceId,
+      url,
+      action,
+    });
+  }
+
+  /**
+   * Ships an accepted autofill to the parent, which clears its backspace
+   * bookkeeping. The counterpart to the controller's
+   * `clearAutofillBackspaceEntryForUrl()`.
+   *
+   * @param {string} url The accepted autofill result's URL.
+   */
+  clearAutofillBackspaceEntryForUrl(url) {
+    this.#actor.sendAsyncMessage("ClearAutofillBackspaceEntryForUrl", {
+      instanceId: this.#instanceId,
+      url,
+    });
+  }
+
+  /**
+   * Ships an autofill re-integration to the parent. The counterpart to the
+   * controller's `handleAutofillReintegration()`.
+   *
+   * @param {string} url The URL being re-integrated.
+   */
+  handleAutofillReintegration(url) {
+    this.#actor.sendAsyncMessage("HandleAutofillReintegration", {
+      instanceId: this.#instanceId,
+      url,
+    });
+  }
+
+  /**
    * Ships a search-form visit to the parent recorder, which resolves the engine
    * by name. The counterpart to the controller's `recordSearchForm()`.
    *
@@ -163,8 +205,7 @@ export class UrlbarParentControllerProxy {
    * Ships a search to the parent recorder, which resolves the engine by name
    * and the browser by id. The counterpart to the controller's `recordSearch()`.
    *
-   * @param {object} options
-   *   `{engineName, searchSource, browserId, details}`.
+   * @param {Parameters<UrlbarParentController["recordSearch"]>[0]} options
    */
   recordSearch(options) {
     this.#actor.sendAsyncMessage("RecordSearch", {
@@ -227,7 +268,7 @@ export class UrlbarParentControllerProxy {
         queryContext: queryContext.toWire(),
       })
       .then(
-        wire => lazy.UrlbarQueryContext.fromWire(wire),
+        wire => UrlbarQueryContext.fromWire(wire),
         error => {
           if (error?.name == "AbortError") {
             // The actor was destroyed before the query finished (the window or
@@ -253,7 +294,7 @@ export class UrlbarParentControllerProxy {
       instanceId: this.#instanceId,
       queryContext: queryContext.toWire(),
     });
-    return wire ? lazy.UrlbarResult.fromWire(wire) : null;
+    return wire ? UrlbarResult.fromWire(wire) : null;
   }
 
   /**
@@ -269,7 +310,7 @@ export class UrlbarParentControllerProxy {
       details,
     });
     return outcome.heuristicResult
-      ? { heuristicResult: lazy.UrlbarResult.fromWire(outcome.heuristicResult) }
+      ? { heuristicResult: UrlbarResult.fromWire(outcome.heuristicResult) }
       : outcome;
   }
 
@@ -437,23 +478,25 @@ export class UrlbarParentControllerProxy {
   }
 
   /** @type {UrlbarParentController["openSERP"]} */
-  openSERP(engineId, searchTerms, where, inBackground) {
+  openSERP(engineId, searchTerms, where, inBackground, browserId) {
     this.#actor.sendAsyncMessage("OpenSERP", {
       instanceId: this.#instanceId,
       engineId,
       searchTerms,
       where,
       inBackground,
+      browserId,
     });
   }
 
   /** @type {UrlbarParentController["openSearchForm"]} */
-  openSearchForm(engineId, where, inBackground) {
+  openSearchForm(engineId, where, inBackground, browserId) {
     this.#actor.sendAsyncMessage("OpenSearchForm", {
       instanceId: this.#instanceId,
       engineId,
       where,
       inBackground,
+      browserId,
     });
   }
 }

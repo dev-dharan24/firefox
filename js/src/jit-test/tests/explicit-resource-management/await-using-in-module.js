@@ -15,7 +15,7 @@ const m = parseModule(`
   }
 `);
 
-moduleLink(m);
+moduleLoadAndLink(m);
 moduleEvaluate(m);
 drainJobQueue();
 assertArrayEq(globalThis.disposed, [2, 1]);

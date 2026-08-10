@@ -2925,6 +2925,12 @@
   operands:
     input: BoxedValue
 
+- name: IsSuspendedGeneratorAndBranch
+  successors: [ifTrue, ifFalse]
+  operands:
+    object: WordSized
+  num_temps: 1
+
 - name: HasClass
   result_type: WordSized
   operands:

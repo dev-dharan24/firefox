@@ -3250,7 +3250,7 @@ void MacroAssembler::comment(const char* msg) { Assembler::comment(msg); }
 // ===============================================================
 // WebAssembly
 
-FaultingCodeOffset MacroAssembler::wasmTrapInstruction() {
+FaultingCodeRange MacroAssembler::wasmTrapInstruction() {
   FaultingCodeOffset fco = FaultingCodeOffset(currentOffset());
   as_break(WASM_TRAP);  // TODO: as_teq(zero, zero, WASM_TRAP)
   return fco;

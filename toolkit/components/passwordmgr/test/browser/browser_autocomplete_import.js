@@ -190,8 +190,12 @@ add_task(async function import_suggestion_migrate() {
       );
       Assert.ok(importableItem, "Got importable suggestion richlistitem");
 
+      // Wait for the layout to stabilize by waiting for possible reflow;
+      // otherwise, the synthesized mouse event might not be dispatched
+      // correctly.
+      await new Promise(requestAnimationFrame);
       await TestUtils.waitForCondition(
-        () => !importableItem.collapsed,
+        () => !importableItem.collapsed && !EventUtils.isHidden(importableItem),
         "Wait for importable suggestion to show"
       );
 
@@ -208,17 +212,25 @@ add_task(async function import_suggestion_migrate() {
       const callCount = await migratePromise;
       Assert.equal(callCount, 1, "Direct migrate used once");
 
-      const importedItem = await TestUtils.waitForCondition(
-        () => popup.querySelector(`[originaltype="loginWithOrigin"]`),
-        "Wait for imported login to show"
-      );
+      let importedItem;
+      await new Promise(requestAnimationFrame);
+      await TestUtils.waitForCondition(() => {
+        importedItem = popup.querySelector(`[originaltype="loginWithOrigin"]`);
+        return importedItem && !EventUtils.isHidden(importedItem);
+      }, "Wait for imported login to show");
       EventUtils.synthesizeMouseAtCenter(importedItem, {});
 
-      const username = await SpecialPowers.spawn(
-        browser,
-        [],
-        () => content.document.getElementById("form-basic-username").value
-      );
+      // Filling happens in the content process, so the value doesn't land
+      // synchronously with the click.
+      let username;
+      await TestUtils.waitForCondition(async () => {
+        username = await SpecialPowers.spawn(
+          browser,
+          [],
+          () => content.document.getElementById("form-basic-username").value
+        );
+        return username == "import";
+      }, "Wait for the username from the import to be filled in");
       Assert.equal(username, "import", "username from import filled in");
 
       LoginTestUtils.clearData();

@@ -8,6 +8,8 @@ const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
   assert: "chrome://remote/content/shared/webdriver/Assert.sys.mjs",
+  BrowsingContextListener:
+    "chrome://remote/content/shared/listeners/BrowsingContextListener.sys.mjs",
   ContextDescriptorType:
     "chrome://remote/content/shared/messagehandler/MessageHandler.sys.mjs",
   error: "chrome://remote/content/shared/webdriver/Errors.sys.mjs",
@@ -23,6 +25,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "chrome://remote/content/shared/UserContextManager.sys.mjs",
 });
 class SessionModule extends RootBiDiModule {
+  #contextListener;
   #knownSubscriptionIds;
   #subscriptions;
 
@@ -50,9 +53,17 @@ class SessionModule extends RootBiDiModule {
     this.#knownSubscriptionIds = new Set();
     // List of subscription objects type Subscription.
     this.#subscriptions = [];
+
+    // Listen for internal context destructions independent of client subscriptions
+    this.#contextListener = new lazy.BrowsingContextListener();
+    this.#contextListener.on("discarded", this.#onContextDiscarded);
+    this.#contextListener.startListening();
   }
 
   destroy() {
+    this.#contextListener.off("discarded", this.#onContextDiscarded);
+    this.#contextListener.destroy();
+
     this.#knownSubscriptionIds = null;
     this.#subscriptions = null;
   }
@@ -806,6 +817,50 @@ class SessionModule extends RootBiDiModule {
   #onMessageHandlerEvent = (name, event) => {
     this.messageHandler.emitProtocolEvent(name, event);
   };
+
+  #onContextDiscarded = (eventName, data = {}) => {
+    const { browsingContext, why } = data;
+
+    // If the context is replaced due to a cross-group navigation, the underlying navigable (tab) is not actually destroyed.
+    if (why === "replace") {
+      return;
+    }
+
+    // We only clean up when a top-level context (tab/window) is permanently destroyed.
+    if (browsingContext && !browsingContext.parent) {
+      const navigableId =
+        lazy.NavigableManager.getIdForBrowsingContext(browsingContext);
+      if (navigableId !== null) {
+        this.#removeDestroyedNavigable(navigableId);
+      }
+    }
+  };
+
+  /**
+   * Cleans up subscriptions when a navigable is destroyed.
+   *
+   * @see https://w3c.github.io/webdriver-bidi/#event-browsingContext-contextDestroyed
+   *
+   * @param {string} navigableId
+   *     The id of the destroyed navigable.
+   */
+  #removeDestroyedNavigable(navigableId) {
+    const newSubscriptions = [];
+
+    for (const subscription of this.#subscriptions) {
+      if (subscription.topLevelTraversableIds.has(navigableId)) {
+        subscription.topLevelTraversableIds.delete(navigableId);
+
+        if (subscription.topLevelTraversableIds.size === 0) {
+          continue;
+        }
+      }
+
+      newSubscriptions.push(subscription);
+    }
+
+    this.#subscriptions = newSubscriptions;
+  }
 
   #unsubscribeByEventNames(events) {
     const listeners = [];

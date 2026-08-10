@@ -75,9 +75,10 @@ add_task(async function test_support_separator_properties() {
   let separatorColor;
 
   if (novaEnabled) {
+    // only the top border will be shown if the window is maximized.
     separatorColor = window.getComputedStyle(
       document.querySelector("#tabbrowser-tabbox .browserContainer")
-    ).borderColor;
+    ).borderTopColor;
   } else {
     separatorColor = Services.prefs.getBoolPref("sidebar.revamp", false)
       ? window.getComputedStyle(

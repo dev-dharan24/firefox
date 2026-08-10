@@ -1507,11 +1507,11 @@ ArenaPurgeResult arena_t::PurgeLoop(PurgeCondition aCond, const char* aCaller,
 #endif
 
   uint64_t reuseGraceNS = (uint64_t)aReuseGraceMS * 1000 * 1000;
-  uint64_t now = aReuseGraceMS ? 0 : GetTimestampNS();
+  uint64_t now;
   ArenaPurgeResult pr;
   do {
     pr = Purge(aCond, purge_stats, aKeepGoing);
-    now = aReuseGraceMS ? 0 : GetTimestampNS();
+    now = aReuseGraceMS ? GetTimestampNS() : 0;
   } while (
       pr == NotDone &&
       (!aReuseGraceMS || (now - mLastSignificantReuseNS >= reuseGraceNS)) &&

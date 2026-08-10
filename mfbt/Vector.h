@@ -559,6 +559,22 @@ class MOZ_NON_PARAM MOZ_GSL_OWNER Vector final : private AllocPolicy {
 
   size_t capacity() const { return mTail.mCapacity; }
 
+#ifdef DEBUG
+  /**
+   * True unless mBegin is stale relative to this vector's own address.
+   * usingInlineStorage() reports whether mBegin points at this vector's own
+   * embedded storage; that self-reference goes stale if a struct embedding this
+   * vector is relocated via a raw byte copy that skips the struct's move
+   * constructor, e.g. by nsTArray's default (memmove) element-relocation
+   * strategy. (To fix that particular case, use
+   * MOZ_DECLARE_RELOCATE_USING_MOVE_CONSTRUCTOR on the element type so nsTArray
+   * uses its move constructor instead.)
+   */
+  bool isStorageConsistent() const {
+    return usingInlineStorage() == (mTail.mCapacity == kInlineCapacity);
+  }
+#endif
+
   T* begin() {
     MOZ_ASSERT(!mEntered);
     return mBegin;

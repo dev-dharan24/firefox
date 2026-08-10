@@ -1200,7 +1200,7 @@ already_AddRefed<DOMRect> Element::GetBoundingClientRect() {
   RefPtr<DOMRect> rect = new DOMRect(ToSupports(OwnerDoc()));
 
   nsIFrame* frame = GetPrimaryFrame(FlushType::Layout);
-  if (!frame) {
+  if (!frame || frame->HasAnyStateBits(NS_FRAME_IS_NONDISPLAY)) {
     // display:none, perhaps? Return the empty rect
     return rect.forget();
   }
@@ -1213,7 +1213,7 @@ already_AddRefed<DOMRectList> Element::GetClientRects() {
   RefPtr<DOMRectList> rectList = new DOMRectList(this);
 
   nsIFrame* frame = GetPrimaryFrame(FlushType::Layout);
-  if (!frame) {
+  if (!frame || frame->HasAnyStateBits(NS_FRAME_IS_NONDISPLAY)) {
     // display:none, perhaps? Return an empty list
     return rectList.forget();
   }
@@ -2925,8 +2925,8 @@ nsresult Element::BindToTree(BindContext& aContext, nsINode& aParent) {
   MOZ_ASSERT(!IsInComposedDoc(), "Already have a document.  Unbind first!");
   // Note that as we recurse into the kids, they'll have a non-null parent.  So
   // only assert if our parent is _changing_ while we have a parent.
-  MOZ_ASSERT(!GetParentNode() || &aParent == GetParentNode(),
-             "Already have a parent.  Unbind first!");
+  MOZ_DIAGNOSTIC_ASSERT(!GetParentNode() || &aParent == GetParentNode(),
+                        "Already have a different parent.  Unbind first!");
 
   const bool hadParent = !!GetParentNode();
 
@@ -4250,6 +4250,72 @@ bool Element::GetAttr(int32_t aNameSpaceID, const nsAtom* aName,
   }
   val->ToString(aResult);
   return true;
+}
+
+void Element::GetURIAttr(nsAtom* aAttr, nsAtom* aBaseAttr,
+                         nsAString& aResult) const {
+  nsCOMPtr<nsIURI> uri;
+  const nsAttrValue* attr = GetURIAttr(aAttr, aBaseAttr, getter_AddRefs(uri));
+  if (!attr) {
+    aResult.Truncate();
+    return;
+  }
+  if (!uri) {
+    // Just return the attr value
+    attr->ToString(aResult);
+    return;
+  }
+  nsAutoCString spec;
+  uri->GetSpec(spec);
+  CopyUTF8toUTF16(spec, aResult);
+}
+
+void Element::GetURIAttr(nsAtom* aAttr, nsAtom* aBaseAttr,
+                         nsACString& aResult) const {
+  nsCOMPtr<nsIURI> uri;
+  const nsAttrValue* attr = GetURIAttr(aAttr, aBaseAttr, getter_AddRefs(uri));
+  if (!attr) {
+    aResult.Truncate();
+    return;
+  }
+  if (!uri) {
+    // Just return the attr value
+    nsAutoString value;
+    attr->ToString(value);
+    CopyUTF16toUTF8(value, aResult);
+    return;
+  }
+  uri->GetSpec(aResult);
+}
+
+const nsAttrValue* Element::GetURIAttr(nsAtom* aAttr, nsAtom* aBaseAttr,
+                                       nsIURI** aURI) const {
+  *aURI = nullptr;
+
+  const nsAttrValue* attr = mAttrs.GetAttr(aAttr);
+  if (!attr) {
+    return nullptr;
+  }
+
+  nsCOMPtr<nsIURI> baseURI = GetBaseURI();
+  if (aBaseAttr) {
+    nsAutoString baseAttrValue;
+    if (GetAttr(aBaseAttr, baseAttrValue)) {
+      nsCOMPtr<nsIURI> baseAttrURI;
+      nsresult rv = nsContentUtils::NewURIWithDocumentCharset(
+          getter_AddRefs(baseAttrURI), baseAttrValue, OwnerDoc(), baseURI);
+      if (NS_FAILED(rv)) {
+        return attr;
+      }
+      baseURI.swap(baseAttrURI);
+    }
+  }
+
+  // Don't care about return value.  If it fails, we still want to
+  // return true, and *aURI will be null.
+  nsContentUtils::NewURIWithDocumentCharset(
+      aURI, nsAttrValueOrString(attr).String(), OwnerDoc(), baseURI);
+  return attr;
 }
 
 int32_t Element::FindAttrValueIn(int32_t aNameSpaceID, const nsAtom* aName,

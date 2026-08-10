@@ -385,6 +385,8 @@ button {
     background-repeat: no-repeat;
   }
 
+  /* Small subtree */
+  /* stylelint-disable-next-line stylelint-plugin-mozilla/no-has-selector */
   &[type~="icon"]:not(.labelled),
   &:not(.labelled):has(img) {
     width: var(--button-size-icon);

@@ -474,9 +474,13 @@ public class GeckoSession {
           "GeckoViewHistory",
           this,
           new String[] {
-            "GeckoView:OnVisited", "GeckoView:GetVisited", "GeckoView:StateUpdated",
+            "GeckoView:OnVisited",
+            "GeckoView:GetVisited",
+            "GeckoView:GetHostVisitedSince",
+            "GeckoView:StateUpdated",
           }) {
         @Override
+        @OptIn(markerClass = ExperimentalGeckoViewApi.class)
         public void handleMessage(
             final HistoryDelegate delegate,
             final String event,
@@ -511,6 +515,22 @@ public class GeckoSession {
             result.accept(
                 visited -> callback.sendSuccess(visited),
                 exception -> callback.sendError("Failed to fetch visited statuses for URIs"));
+          } else if ("GeckoView:GetHostVisitedSince".equals(event)) {
+            final GeckoResult<Boolean> result =
+                delegate.hasVisitedHostSince(
+                    GeckoSession.this,
+                    message.getString("host"),
+                    message.getLong("after"),
+                    message.getLong("before"));
+
+            if (result == null) {
+              callback.sendSuccess(null);
+              return;
+            }
+
+            result.accept(
+                visited -> callback.sendSuccess(visited.booleanValue()),
+                exception -> callback.sendError("Failed to determine host visited status"));
           } else if ("GeckoView:StateUpdated".equals(event)) {
 
             final GeckoBundle update = message.getBundle("data");
@@ -569,8 +589,6 @@ public class GeckoSession {
             "GeckoView:FirstContentfulPaint",
             "GeckoView:PaintStatusReset",
             "GeckoView:PreviewImage",
-            "GeckoView:CookieBannerEvent:Detected",
-            "GeckoView:CookieBannerEvent:Handled",
             "GeckoView:SavePdf",
             "GeckoView:GetNimbusFeature",
           }) {
@@ -636,10 +654,6 @@ public class GeckoSession {
             delegate.onPaintStatusReset(GeckoSession.this);
           } else if ("GeckoView:PreviewImage".equals(event)) {
             delegate.onPreviewImage(GeckoSession.this, message.getString("previewImageUrl"));
-          } else if ("GeckoView:CookieBannerEvent:Detected".equals(event)) {
-            delegate.onCookieBannerDetected(GeckoSession.this);
-          } else if ("GeckoView:CookieBannerEvent:Handled".equals(event)) {
-            delegate.onCookieBannerHandled(GeckoSession.this);
           } else if ("GeckoView:SavePdf".equals(event)) {
             final GeckoResult<WebResponse> result =
                 SessionPdfFileSaver.createResponse(
@@ -2749,18 +2763,6 @@ public class GeckoSession {
   }
 
   /**
-   * Checks whether we have a rule for this session. Uses the browsing context or any of its
-   * children, calls nsICookieBannerService.hasRuleForBrowsingContextTree
-   *
-   * @return {@link GeckoResult} with boolean
-   */
-  @HandlerThread
-  public @NonNull GeckoResult<Boolean> hasCookieBannerRuleForBrowsingContextTree() {
-    ThreadUtils.assertOnHandlerThread();
-    return mEventDispatcher.queryBoolean("GeckoView:HasCookieBannerRuleForBrowsingContextTree");
-  }
-
-  /**
    * Get the SessionPdfFileSaver instance for this session, to save a pdf document.
    *
    * @return SessionPdfFileSaver instance.
@@ -4279,27 +4281,6 @@ public class GeckoSession {
      */
     @UiThread
     default void onHideDynamicToolbar(@NonNull final GeckoSession geckoSession) {}
-
-    /**
-     * This method is called when a cookie banner was detected.
-     *
-     * <p>Note: this method is called only if the cookie banner setting is such that allows to
-     * handle the banner. For example, if cookiebanners.service.mode=1 (Reject only) but a cookie
-     * banner can only be accepted on the website - the detection in that case won't be reported.
-     * The exception is MODE_DETECT_ONLY mode, when only the detection event is emitted.
-     *
-     * @param session GeckoSession that initiated the callback.
-     */
-    @AnyThread
-    default void onCookieBannerDetected(@NonNull final GeckoSession session) {}
-
-    /**
-     * This method is called when a cookie banner was handled.
-     *
-     * @param session GeckoSession that initiated the callback.
-     */
-    @AnyThread
-    default void onCookieBannerHandled(@NonNull final GeckoSession session) {}
   }
 
   /** Interface for handling text selection actions and providing custom selection action items. */
@@ -7557,7 +7538,7 @@ public class GeckoSession {
      * @param permissions List of permissions to request; possible values are,
      *     android.Manifest.permission.ACCESS_COARSE_LOCATION
      *     android.Manifest.permission.ACCESS_FINE_LOCATION android.Manifest.permission.CAMERA
-     *     android.Manifest.permission.RECORD_AUDIO
+     *     android.Manifest.permission.RECORD_AUDIO android.Manifest.permission.ACCESS_LOCAL_NETWORK
      * @param callback Callback interface.
      */
     @UiThread
@@ -8423,6 +8404,29 @@ public class GeckoSession {
     @UiThread
     default @Nullable GeckoResult<boolean[]> getVisited(
         @NonNull final GeckoSession session, @NonNull final String[] urls) {
+      return null;
+    }
+
+    /**
+     * Returns whether a host was visited within a time window. This is used to derive per-day site
+     * usage telemetry without exposing individual visits.
+     *
+     * @param session The session requesting the visited status.
+     * @param host The host (an eTLD+1) to check for.
+     * @param afterEpochMillis The inclusive lower bound of the window, in milliseconds since the
+     *     Unix epoch.
+     * @param beforeEpochMillis The exclusive upper bound of the window, in milliseconds since the
+     *     Unix epoch.
+     * @return A {@link GeckoResult} completed with {@code true} if the host was visited at least
+     *     once within {@code [afterEpochMillis, beforeEpochMillis)}, otherwise {@code false}.
+     */
+    @ExperimentalGeckoViewApi
+    @UiThread
+    default @Nullable GeckoResult<Boolean> hasVisitedHostSince(
+        @NonNull final GeckoSession session,
+        @NonNull final String host,
+        final long afterEpochMillis,
+        final long beforeEpochMillis) {
       return null;
     }
 

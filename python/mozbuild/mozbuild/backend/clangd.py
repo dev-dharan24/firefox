@@ -108,6 +108,7 @@ def find_vscode_or_vscodium_cmd(ide):
         else:
             cmd_and_path = [
                 {"path": "/usr/local/bin/codium", "cmd": ["/usr/local/bin/codium"]},
+                {"path": "/snap/bin/codium", "cmd": ["/snap/bin/codium"]},
                 {"path": "/usr/bin/codium", "cmd": ["/usr/bin/codium"]},
             ]
 

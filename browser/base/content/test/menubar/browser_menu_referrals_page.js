@@ -2,6 +2,11 @@
    http://creativecommons.org/publicdomain/zero/1.0/ */
 "use strict";
 
+registerCleanupFunction(() => {
+  Services.prefs.unlockPref("browser.referrals.code");
+  Services.prefs.clearUserPref("browser.referrals.code");
+});
+
 add_task(async function test_applicationMenu_referralsPage() {
   // Referrals item should exist when the pref is true
   Services.prefs.setBoolPref("browser.referrals.enabled", true);

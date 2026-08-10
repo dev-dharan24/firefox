@@ -1054,10 +1054,10 @@ void DrawTargetRecording::EnsurePatternDependenciesStored(
   }
 }
 
-void DrawTargetRecording::AccessibleId(uint64_t aBrowsingContextId,
+void DrawTargetRecording::AccessibleId(uint64_t aInnerWindowId,
                                        uint64_t aAccId) {
   MarkChanged();
-  RecordEventSelf(RecordedAccessibleId(aBrowsingContextId, aAccId));
+  RecordEventSelf(RecordedAccessibleId(aInnerWindowId, aAccId));
 }
 
 }  // namespace gfx

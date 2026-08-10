@@ -17,20 +17,24 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.findNavController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mozilla.components.browser.state.state.CustomTabSessionState
 import mozilla.components.browser.state.state.SessionState
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.state.selectedOrDefaultSearchEngine
 import mozilla.components.browser.thumbnails.BrowserThumbnails
 import mozilla.components.concept.engine.HitResult
 import mozilla.components.concept.engine.permission.SitePermissions
+import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.feature.app.links.AppLinksUseCases
 import mozilla.components.feature.contextmenu.ContextMenuCandidate
+import mozilla.components.feature.contextmenu.ContextMenuCandidate.Companion.createOpenInExternalAppCandidate
 import mozilla.components.feature.readerview.ReaderViewFeature
 import mozilla.components.feature.tab.collections.TabCollection
 import mozilla.components.feature.tabs.WindowFeature
@@ -52,6 +56,7 @@ import org.mozilla.fenix.components.accounts.FenixFxAEntryPoint
 import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.components.appstate.AppAction.SnackbarAction
 import org.mozilla.fenix.components.metrics.installSourcePackage
+import org.mozilla.fenix.components.share.isSystemShareSheetSupported
 import org.mozilla.fenix.components.toolbar.gestures.ToolbarHorizontalGesturesHandler
 import org.mozilla.fenix.components.toolbar.gestures.ToolbarVerticalGesturesHandler
 import org.mozilla.fenix.compose.snackbar.Snackbar
@@ -59,6 +64,7 @@ import org.mozilla.fenix.compose.snackbar.SnackbarState
 import org.mozilla.fenix.e2e.SystemInsetsPaddedFragment
 import org.mozilla.fenix.ext.application
 import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.getRectWithScreenLocation
 import org.mozilla.fenix.ext.isGoogleSearchEngine
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.navigateSafe
@@ -76,6 +82,7 @@ import org.mozilla.fenix.shortcut.PwaOnboardingObserver
 import org.mozilla.fenix.summarization.SummarizationNavigator
 import org.mozilla.fenix.termsofuse.store.Surface
 import org.mozilla.fenix.utils.Settings
+import mozilla.components.feature.contextmenu.R as contextMenuR
 import org.mozilla.fenix.ipprotection.store.Surface as IPProtectionSurface
 
 /**
@@ -201,8 +208,8 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
                     activity = requireActivity(),
                     contentLayout = binding.browserLayout,
                     tabPreview = binding.tabPreview,
-                    toolbarLayout = browserToolbar.layout,
-                    navBarLayout = browserNavigationBar?.layout,
+                    toolbarLayoutRect = { browserToolbar.layout.getRectWithScreenLocation() },
+                    navBarLayoutRect = { browserNavigationBar?.layout?.getRectWithScreenLocation() },
                     store = components.core.store,
                     selectTabUseCase = components.useCases.tabsUseCases.selectTab,
                     onSwipeStarted = {
@@ -423,7 +430,6 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
 
     override fun navToQuickSettingsSheet(tab: SessionState, sitePermissions: SitePermissions?) {
         val useCase = requireComponents.useCases.trackingProtectionUseCases
-        FxNimbus.features.cookieBanners.recordExposure()
         useCase.containsException(tab.id) { hasTrackingProtectionException ->
             lifecycleScope.launch {
                 withContext(Dispatchers.Main) {
@@ -492,19 +498,65 @@ class BrowserFragment : BaseBrowserFragment(), UserInteractionHandler, SystemIns
             { true },
         )
 
-        return ContextMenuCandidate.defaultCandidates(
-            context = context,
-            tabsUseCases = context.components.useCases.tabsUseCases,
-            contextMenuUseCases = context.components.useCases.contextMenuUseCases,
-            snackBarParentView = view,
-            snackbarDelegate = ContextMenuSnackbarDelegate(),
-            downloadsLocation = {
-                DownloadLocationManager(
-                    requireComponents.settings,
-                    requireContext().contentResolver,
-                ).defaultLocation
-            },
-        ) + ContextMenuCandidate.createOpenInExternalAppCandidate(
+        return if (requireComponents.settings.nativeShareSheetEnabled && isSystemShareSheetSupported) {
+            NativeShareSheetContextMenuCandidate.defaultCandidates(
+                context = context,
+                tabsUseCases = context.components.useCases.tabsUseCases,
+                contextMenuUseCases = context.components.useCases.contextMenuUseCases,
+                shareUseCases = context.components.useCases.shareUseCases,
+                getShareItems = {
+                    listOf(
+                        ShareData(
+                            title = context.getString(contextMenuR.string.mozac_feature_contextmenu_share_link),
+                            text = it,
+                            url = it,
+                        ),
+                    )
+                },
+                snackBarParentView = view,
+                snackbarDelegate = ContextMenuSnackbarDelegate(),
+                downloadsLocation = {
+                    DownloadLocationManager(
+                        requireComponents.settings,
+                        requireContext().contentResolver,
+                    ).defaultLocation
+                },
+                navigateToShareFragment = { currentTab, hitTabUrl ->
+                    val shareData = arrayOf(ShareData(title = hitTabUrl, url = hitTabUrl))
+                    val popUpToId = if (currentTab is CustomTabSessionState) {
+                        R.id.externalAppBrowserFragment
+                    } else {
+                        R.id.browserFragment
+                    }
+
+                    findNavController().nav(
+                        id = R.id.browserFragment,
+                        directions = BrowserFragmentDirections.actionGlobalShareFragment(
+                            sessionId = currentTab.id,
+                            data = shareData,
+                            showPage = true,
+                        ),
+                        navOptions = NavOptions.Builder()
+                            .setPopUpTo(popUpToId, false)
+                            .build(),
+                    )
+                },
+            )
+        } else {
+            ContextMenuCandidate.defaultCandidates(
+                context = context,
+                tabsUseCases = context.components.useCases.tabsUseCases,
+                contextMenuUseCases = context.components.useCases.contextMenuUseCases,
+                snackBarParentView = view,
+                snackbarDelegate = ContextMenuSnackbarDelegate(),
+                downloadsLocation = {
+                    DownloadLocationManager(
+                        requireComponents.settings,
+                        requireContext().contentResolver,
+                    ).defaultLocation
+                },
+            )
+        } + createOpenInExternalAppCandidate(
             requireContext(),
             contextMenuCandidateAppLinksUseCases,
         ) + createOpenWithGoogleLensCandidate(context)

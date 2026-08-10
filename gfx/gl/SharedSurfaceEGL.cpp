@@ -99,7 +99,7 @@ void SharedSurface_EGLImage::ProducerReleaseImpl() {
       mSync = nullptr;
     }
 
-    mSync = egl->fCreateSync(LOCAL_EGL_SYNC_FENCE, nullptr);
+    mSync = egl->fCreateSyncKHR(LOCAL_EGL_SYNC_FENCE, nullptr);
     if (mSync) {
       gl->fFlush();
       return;

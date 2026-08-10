@@ -430,6 +430,7 @@ static bool HandleInterrupt(JSContext* cx, bool invokeCallback,
     // code (e.g. TypedArrayJoinKernel) assumes is stable.
     if (cx->realm()->isDebuggee() && !fuzzingSafe) {
       ScriptFrameIter iter(cx);
+      MOZ_ASSERT_IF(!iter.done(), !iter.isResumingGenerator());
       if (!iter.done() && cx->compartment() == iter.compartment() &&
           DebugAPI::stepModeEnabled(iter.script())) {
         if (!DebugAPI::onSingleStep(cx)) {

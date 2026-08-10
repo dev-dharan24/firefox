@@ -498,7 +498,19 @@ export const tokensTable = {
       value: {
         light: "rgba(0, 0, 0, 0.05)",
         dark: "var(--color-black-alpha-30)",
+        nativeTheme:
+          "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
         prefersContrast: "Field",
+        platform: {
+          default:
+            "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
+          browserTheme: {
+            light: "rgba(0, 0, 0, 0.05)",
+            dark: "var(--color-black-alpha-30)",
+            default:
+              "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
+          },
+        },
         default: "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
       },
       name: "--toolbar-field-background-color",
@@ -1243,7 +1255,12 @@ export const tokensTable = {
     {
       value: {
         default: "var(--border-color-transparent)",
+        nativeTheme: "var(--border-color-transparent)",
         prefersContrast: "var(--input-border-color)",
+        platform: {
+          default: "var(--border-color-transparent)",
+          browserTheme: { default: "var(--border-color-transparent)" },
+        },
       },
       name: "--toolbar-field-border-color",
     },
@@ -4733,7 +4750,12 @@ export const variableLookupTable = {
   "toolbar-padding-inline": "8px",
   "toolbar-field-border-color": {
     default: "var(--border-color-transparent)",
+    nativeTheme: "var(--border-color-transparent)",
     prefersContrast: "var(--input-border-color)",
+    platform: {
+      default: "var(--border-color-transparent)",
+      browserTheme: { default: "var(--border-color-transparent)" },
+    },
   },
   "toolbar-field-border-color-focus": {
     default: "color-mix(in srgb, var(--focus-outline-color) 50%, transparent)",
@@ -4742,7 +4764,16 @@ export const variableLookupTable = {
   "toolbar-field-background-color": {
     light: "rgba(0, 0, 0, 0.05)",
     dark: "var(--color-black-alpha-30)",
+    nativeTheme: "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
     prefersContrast: "Field",
+    platform: {
+      default: "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
+      browserTheme: {
+        light: "rgba(0, 0, 0, 0.05)",
+        dark: "var(--color-black-alpha-30)",
+        default: "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
+      },
+    },
     default: "light-dark(rgba(0, 0, 0, 0.05), var(--color-black-alpha-30))",
   },
   "toolbar-field-background-color-focus": {

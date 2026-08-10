@@ -188,6 +188,7 @@ suites:
             jetstream2: ""
             jetstream3: ""
             matrix-react-bench: ""
+            media-capabilities: ""
             motionmark-1-3: ""
             motionmark-htmlsuite-1-3: ""
             speedometer2: ""

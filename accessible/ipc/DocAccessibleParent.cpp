@@ -1573,7 +1573,9 @@ NS_IMPL_RELEASE_INHERITED(DocAccessibleParent, RemoteAccessible)
 #ifdef MOZ_ENABLE_SKIA_PDF
 mozilla::ipc::IPCResult DocAccessibleParent::RecvPrinting() {
   if (dom::CanonicalBrowsingContext* bc = GetBrowsingContext()) {
-    PdfStructTreeBuilder::Init(bc);
+    if (dom::WindowContext* wc = bc->GetCurrentWindowContext()) {
+      PdfStructTreeBuilder::Init(wc);
+    }
   }
   return IPC_OK();
 }

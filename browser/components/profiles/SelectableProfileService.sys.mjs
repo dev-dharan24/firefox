@@ -348,6 +348,7 @@ class SelectableProfileServiceClass extends EventEmitter {
     "browser.crashReports.unsubmittedCheck.autoSubmit2",
     "browser.discovery.enabled",
     "browser.shell.checkDefaultBrowser",
+    "browser.shell.customIcon.id",
     "browser.backup.enabled_on.profiles",
     DAU_GROUPID_PREF_NAME,
     "datareporting.healthreport.uploadEnabled",
@@ -380,6 +381,7 @@ class SelectableProfileServiceClass extends EventEmitter {
 
     this.themeObserver = this.themeObserver.bind(this);
     this.matchMediaObserver = this.matchMediaObserver.bind(this);
+    this.lookAndFeelChanged = this.lookAndFeelChanged.bind(this);
     this.prefObserver = (subject, topic, prefName) =>
       this.flushSharedPrefToDatabase(prefName);
 
@@ -655,7 +657,10 @@ class SelectableProfileServiceClass extends EventEmitter {
     let prefersDarkQuery = window?.matchMedia("(prefers-color-scheme: dark)");
     prefersDarkQuery?.addEventListener("change", this.matchMediaObserver);
 
+    Services.obs.addObserver(this.lookAndFeelChanged, "look-and-feel-changed");
+
     Services.obs.addObserver(this, "pds-datastore-changed");
+    Services.obs.addObserver(this, "taskbar-buttons-refreshed");
 
     this.#initialized = true;
 
@@ -698,6 +703,11 @@ class SelectableProfileServiceClass extends EventEmitter {
       "lightweight-theme-styling-update"
     );
 
+    Services.obs.removeObserver(
+      this.lookAndFeelChanged,
+      "look-and-feel-changed"
+    );
+
     this.#currentProfile = null;
     this.#badge = null;
     this.#connection = null;
@@ -707,6 +717,7 @@ class SelectableProfileServiceClass extends EventEmitter {
     lazy.EveryWindow.unregisterCallback(this.#everyWindowCallbackId);
 
     Services.obs.removeObserver(this, "pds-datastore-changed");
+    Services.obs.removeObserver(this, "taskbar-buttons-refreshed");
 
     this.#initialized = false;
   }
@@ -759,6 +770,17 @@ class SelectableProfileServiceClass extends EventEmitter {
       }
       case "lightweight-theme-styling-update": {
         this.themeObserver(subject, topic);
+        break;
+      }
+      case "taskbar-buttons-refreshed": {
+        // WinTaskbar::RefreshTaskbarButtons cycles DeleteTab/AddTab on each button,
+        // which creates fresh taskbar buttons with no overlay state, wiping the profile
+        // badge. Re-apply it.
+        if (this.#badge && "nsIWinTaskbar" in Ci) {
+          for (let win of lazy.EveryWindow.readyWindows) {
+            this.#setOverlayIcon({ win });
+          }
+        }
         break;
       }
     }
@@ -1030,21 +1052,26 @@ class SelectableProfileServiceClass extends EventEmitter {
   }
 
   /**
-   * The observer function that watches for theme changes and updates the
-   * current profile of a theme change.
+   * Extract theme colors from theme data, handling Nova themes differently.
    *
-   * @param {object} aSubject The theme data
-   * @param {string} aTopic Should be "lightweight-theme-styling-update"
+   * @param {object} theme The theme object
+   * @returns {{ themeFg: string, themeBg: string }}
    */
-  themeObserver(aSubject, aTopic) {
-    if (aTopic !== "lightweight-theme-styling-update") {
-      return;
-    }
+  extractThemeColors(theme) {
+    let themeFg =
+      theme.icon_attention_color || theme.toolbar_text || theme.textcolor;
+    let themeBg = theme.accentcolor || theme.toolbarColor;
 
-    let data = aSubject.wrappedJSObject;
+    return { themeFg, themeBg };
+  }
 
-    if (!data.theme) {
-      // During startup the theme might be null so just return
+  /**
+   * Updates the current profile's theme colors based on theme data.
+   *
+   * @param {object} data The theme data object containing theme and darkTheme
+   */
+  updateProfileThemeColors(data) {
+    if (!data?.theme) {
       return;
     }
 
@@ -1053,9 +1080,7 @@ class SelectableProfileServiceClass extends EventEmitter {
 
     let theme = isDark && !!data.darkTheme ? data.darkTheme : data.theme;
 
-    let themeFg =
-      theme.icon_attention_color || theme.toolbar_text || theme.textcolor;
-    let themeBg = theme.accentcolor || theme.toolbarColor;
+    let { themeFg, themeBg } = this.extractThemeColors(theme);
 
     if (theme.id === DEFAULT_THEME_ID || !themeFg || !themeBg) {
       window.addEventListener(
@@ -1083,6 +1108,22 @@ class SelectableProfileServiceClass extends EventEmitter {
   }
 
   /**
+   * The observer function that watches for theme changes and updates the
+   * current profile of a theme change.
+   *
+   * @param {object} aSubject The theme data
+   * @param {string} aTopic Should be "lightweight-theme-styling-update"
+   */
+  themeObserver(aSubject, aTopic) {
+    if (aTopic !== "lightweight-theme-styling-update") {
+      return;
+    }
+
+    let data = aSubject.wrappedJSObject;
+    this.updateProfileThemeColors(data);
+  }
+
+  /**
    * The observer function that watches for OS theme changes and updates the
    * current profile of a theme change.
    */
@@ -1100,6 +1141,16 @@ class SelectableProfileServiceClass extends EventEmitter {
       themeFg,
       themeBg,
     };
+  }
+
+  /**
+   * The observer function that watches for look-and-feel changes (including
+   * pref-driven appearance changes from theme-picker) and updates the current
+   * profile colors.
+   */
+  lookAndFeelChanged() {
+    let data = lazy.LightweightThemeManager.themeData;
+    this.updateProfileThemeColors(data);
   }
 
   async flushAllSharedPrefsToDatabase() {
@@ -1273,6 +1324,16 @@ class SelectableProfileServiceClass extends EventEmitter {
 
       Services.prefs.addObserver(name, this.prefObserver);
       this.#observedPrefs.add(name);
+    }
+
+    // Add shared prefs not already in the db to the db
+    const permanentSharedPrefsSet = new Set(
+      SelectableProfileServiceClass.permanentSharedPrefs
+    );
+    for (let prefName of permanentSharedPrefsSet.difference(
+      this.#observedPrefs
+    )) {
+      await this.flushSharedPrefToDatabase(prefName);
     }
   }
 

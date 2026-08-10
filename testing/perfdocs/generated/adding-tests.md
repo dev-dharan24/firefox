@@ -536,6 +536,7 @@ PERF_SUITES = [
     {"name": "Base Content Explicit", "node": "explicit/"},
 ]
 
+
 class TestMemoryUsage(AwsyTestCase):
     """Loads about:memory and reports content-process memory usage."""
 

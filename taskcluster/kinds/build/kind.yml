@@ -40,6 +40,7 @@ task-defaults:
     fetches:
         toolchain:
             - terser
+            - newtab-node-modules
     run:
         mozconfig-variant:
             by-release-type:

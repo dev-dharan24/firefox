@@ -356,6 +356,12 @@ bool Animation::SetTimelineNoUpdate(AnimationTimeline* aTimeline,
                                   ? 0.0
                                   : previousCurrentTime.Value().ToSeconds() /
                                         endTime.ToSeconds());
+  } else if (mTimeline && mTimeline->IsUnresolvedTimeline()) {
+    // If we're switching out of an unresolved timeline into the document
+    // timeline, we want to make sure that we trigger the animation.
+    // This doesn't (& shouldn't) have any impact going into a finite timeline,
+    // as the unresolved timeline does not have a resolved current time.
+    previousProgress.SetValue(0.0);
   }
 
   // We compute the active time for the old timeline because we will use it to
@@ -1304,7 +1310,7 @@ bool Animation::TryTriggerNow() {
   // Note(dshin): Don't try to trigger inactive timelines, since they won't
   // tick in any meaningful way. This has implications on fulfilling the ready
   // promise - See https://github.com/w3c/csswg-drafts/issues/9256
-  if (mTimeline->IsInactiveTimeline()) {
+  if (mTimeline->IsUnresolvedTimeline()) {
     return false;
   }
 
@@ -1638,6 +1644,9 @@ void Animation::ComposeStyle(
   if (!mEffect) {
     return;
   }
+  if (mTimeline && mTimeline->IsUnresolvedTimeline()) {
+    return;
+  }
 
   // In order to prevent flicker, there are a few cases where we want to use
   // a different time for rendering that would otherwise be returned by
@@ -1737,8 +1746,8 @@ void Animation::PlayNoUpdate(ErrorResult& aRv, LimitBehavior aLimitBehavior) {
   bool hasPendingReadyPromise = false;
   const bool hasFiniteTimeline = HasFiniteTimeline();
   const Nullable<TimeDuration> prevCurrentTime = GetCurrentTimeAsDuration();
-  const bool enableSeek =
-      (aLimitBehavior == LimitBehavior::AutoRewind) && !hasFiniteTimeline;
+  const bool autoRewindIsTrue = aLimitBehavior == LimitBehavior::AutoRewind;
+  const bool enableSeek = autoRewindIsTrue && !hasFiniteTimeline;
 
   // 6. Perform the steps corresponding to the first matching condition from the
   // following, if any:
@@ -1779,10 +1788,12 @@ void Animation::PlayNoUpdate(ErrorResult& aRv, LimitBehavior aLimitBehavior) {
     mHoldTime = TimeDuration();
   }
 
-  // 7. If has finite timeline and previous current time is unresolved:
-  if (hasFiniteTimeline && prevCurrentTime.IsNull()) {
+  // 7. If has finite timeline and auto-rewind is true:
+  if (hasFiniteTimeline && autoRewindIsTrue) {
     // Set the flag auto align start time to true.
     mAutoAlignStartTime = true;
+    // Set the animation’s hold time to previous current time.
+    mHoldTime = prevCurrentTime;
   }
 
   // Note: This is a special case mentioned in web-animations-1, but not in
@@ -1793,15 +1804,6 @@ void Animation::PlayNoUpdate(ErrorResult& aRv, LimitBehavior aLimitBehavior) {
   // browsers, especially for a null timeline with the false auto-rewind flag.
   // [1] https://github.com/w3c/csswg-drafts/issues/7145
   if (!hasFiniteTimeline && prevCurrentTime.IsNull() && mHoldTime.IsNull()) {
-    mHoldTime = TimeDuration();
-  }
-
-  const bool hasInactiveTimeline = mTimeline && mTimeline->IsInactiveTimeline();
-  if (hasInactiveTimeline && mHoldTime.IsNull()) {
-    // Note(dshin): If we're inactive state and trying to play, hold at zero.
-    // This isn't part of the spec (Spec discusses inactive timelines very
-    // little), but this falls out of inactive timeline behing a finite timeline
-    // (See the class definition for why).
     mHoldTime = TimeDuration();
   }
 
@@ -2413,6 +2415,9 @@ void Animation::AutoAlignStartTime() {
   mStartTime.SetValue(TimeDuration::FromMilliseconds(
       (effectivePlaybackRate >= 0.0 ? startOffset : endOffset) *
       PROGRESS_TIMELINE_DURATION_MILLISEC));
+
+  // Apply any pending playback rate on animation.
+  ApplyPendingPlaybackRate();
 
   // Clear hold time.
   mHoldTime.SetNull();

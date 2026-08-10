@@ -238,7 +238,7 @@ nsresult GetResult(JSContext* aCx, const JS::Handle<JS::Value>* aValue,
 
 nsresult GetResult(JSContext* aCx, const uint64_t* aValue,
                    JS::MutableHandle<JS::Value> aResult) {
-  aResult.set(JS::NumberValue(*aValue));
+  aResult.setNumber(*aValue);
   return NS_OK;
 }
 

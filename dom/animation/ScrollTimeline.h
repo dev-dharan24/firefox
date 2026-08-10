@@ -364,15 +364,16 @@ class ScrollTimeline : public AnimationTimeline,
   Maybe<CurrentTimeData> mCachedCurrentTime;
 };
 
-// In both engines, inactive timelines seem to be a specialization of a scroll
-// timeline. Deriving from AnimationTimeline adds a lot of special handling,
-// unfortunately. Note that inactive timelines can be constructed through
-// JS, like `new ScrollTimeline({source: null})`, but this timeline handles
-// timelines referenced by name in particular.
-// TODO(dshin): Should this be given for JS-constructed inactive timelines as
-// well?
-// TODO(dshin): May be worth discussing this within spec.
-class InactiveTimeline final : public ScrollTimeline {
+// A name-referenced timeline that is referring to a not-yet-existing timeline.
+// Was formerly considered inactive timeline, but is now a separate concept:
+// See https://github.com/w3c/csswg-drafts/issues/9256#issuecomment-4556112966.
+// Feels that it should be derived from `AnimationTimeline`, but that adds a lot
+// of special handling, and only finite (i.e. Scroll and view) timelines are
+// referred to by name. Also, derived from scroll timeline in WebKit & Blink.
+// Note that inactive timelines can be constructed through JS, like `new
+// ScrollTimeline({source: null})`, but that doesn't refer to the timeline
+// by name.
+class UnresolvedTimeline final : public ScrollTimeline {
  public:
   Nullable<TimeDuration> GetCurrentTimeAsDuration() const override {
     // Inactive timeline, by definition.
@@ -382,7 +383,7 @@ class InactiveTimeline final : public ScrollTimeline {
   TimeStamp ToTimeStamp(const TimeDuration& aTimelineTime) const override {
     return {};
   }
-  bool IsInactiveTimeline() const override { return true; }
+  bool IsUnresolvedTimeline() const override { return true; }
 
   JSObject* WrapObject(JSContext*, JS::Handle<JSObject*>) override {
     // OM should return null for timeline, so this should be ok.
@@ -395,11 +396,11 @@ class InactiveTimeline final : public ScrollTimeline {
   }
 
   NS_DECL_ISUPPORTS_INHERITED
-  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(InactiveTimeline, ScrollTimeline)
+  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(UnresolvedTimeline, ScrollTimeline)
 
  private:
-  explicit InactiveTimeline(Document* aDocument);
-  ~InactiveTimeline() override = default;
+  explicit UnresolvedTimeline(Document* aDocument);
+  ~UnresolvedTimeline() override = default;
 
   // ctor is private because only dynamic allocation is permitted, so this is
   // fine.

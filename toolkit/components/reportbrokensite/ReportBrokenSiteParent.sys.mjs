@@ -705,8 +705,7 @@ export class ReportBrokenSiteParent extends JSWindowActorParent {
     const image = await wgp.drawSnapshot(
       undefined, // rect
       scale * zoom,
-      "white",
-      undefined // resetScrollPosition
+      "white"
     );
 
     const canvas = new OffscreenCanvas(image.width, image.height);

@@ -218,7 +218,7 @@ ConfigureVideoEncoderSettings(const VideoCodecConfig& aConfig,
           webrtc::ParseH264ProfileLevelId(profileLevelId.c_str());
       MOZ_DIAGNOSTIC_ASSERT(parsedProfileLevelId);
       if (parsedProfileLevelId) {
-        aParameters[kH264FmtpProfileLevelId] = profileLevelId;
+        aParameters[kH264FmtpProfileLevelId] = std::move(profileLevelId);
       }
     }
     aParameters[std::string(kH264FmtpSpropParameterSets)] =

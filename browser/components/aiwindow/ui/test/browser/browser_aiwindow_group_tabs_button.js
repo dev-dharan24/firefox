@@ -3,12 +3,18 @@
 
 "use strict";
 
+const { AutoTabGrouping } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/ui/modules/AutoTabGrouping.sys.mjs"
+);
 const { AutoTabGroupingSuggestions } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/ui/modules/AutoTabGroupingSuggestions.sys.mjs"
 );
 const { SmartTabGroupingManager } = ChromeUtils.importESModule(
   "moz-src:///browser/components/tabbrowser/SmartTabGrouping.sys.mjs"
 );
+
+// TODO: Break test into smaller pieces for ATG v1
+requestLongerTimeout(2);
 
 function fakeTwoGroupManager() {
   return {
@@ -55,15 +61,23 @@ async function openGroupingWindowWithTabs() {
   return win;
 }
 
-// Open the panel and wait for the two clustered suggestion rows to render.
-async function openPanelWithSuggestions(win) {
+async function openPanel(win) {
   AIWindowUI.toggleGroupTabsPanel(win);
   const panel = await TestUtils.waitForCondition(() =>
     win.document.getElementById("smartwindow-group-tabs-panel")
   );
   await TestUtils.waitForCondition(
-    () =>
-      panel.querySelectorAll(".swgt-row:not(.swgt-create-all)").length === 2,
+    () => panel.state === "open",
+    "Panel finished opening"
+  );
+  return panel;
+}
+
+// Open the panel and wait for the two clustered suggestion rows to render.
+async function openPanelWithSuggestions(win) {
+  const panel = await openPanel(win);
+  await TestUtils.waitForCondition(
+    () => panel.querySelectorAll(".swgt-suggestion").length === 2,
     "Two suggested group rows render once clustering finishes"
   );
   return panel;
@@ -251,12 +265,17 @@ describe("Auto Tab Grouping toolbar button", () => {
       );
 
       await TestUtils.waitForCondition(
-        () => !win.document.getElementById("smartwindow-group-tabs-panel"),
-        "Panel closes after creating groups"
+        () => !panel.querySelectorAll(".swgt-suggestion").length,
+        "The created suggestions leave the list"
       );
-      await TestUtils.waitForCondition(
-        () => button.getAttribute("aria-expanded") === "false",
-        "Button is no longer expanded once the panel closes"
+      Assert.ok(
+        win.document.getElementById("smartwindow-group-tabs-panel"),
+        "Panel stays open after creating groups"
+      );
+      Assert.equal(
+        button.getAttribute("aria-expanded"),
+        "true",
+        "Button is still marked expanded"
       );
     });
 
@@ -309,9 +328,51 @@ describe("Auto Tab Grouping toolbar button", () => {
       Assert.equal(created[0].extra.mean_tabs, "2", "Created mean size");
     });
 
+    it("creates one group at a time and keeps the panel open", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+
+      const groupsBefore = win.gBrowser.tabGroups.length;
+      panel.querySelector(".swgt-suggestion").click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabGroups.length === groupsBefore + 1,
+        "Clicking one suggestion created one group"
+      );
+
+      const remaining = await TestUtils.waitForCondition(() => {
+        const rows = panel.querySelectorAll(".swgt-suggestion");
+        return rows.length === 1 ? rows[0] : null;
+      }, "The other suggestion is still offered");
+      Assert.ok(
+        win.document.getElementById("smartwindow-group-tabs-panel"),
+        "Panel stays open so the next group can be created"
+      );
+      Assert.equal(
+        panel.querySelectorAll(".swgt-recent-row").length,
+        1,
+        "The created group is listed under 'Just created'"
+      );
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement === remaining,
+        "Focus moves to the suggestion that took its place"
+      );
+
+      remaining.click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabGroups.length === groupsBefore + 2,
+        "The second suggestion created the second group without reopening"
+      );
+      const created = Glean.smartWindow.autoTabGroupCreated.testGetValue();
+      Assert.equal(created?.length, 2, "Two 'created' events recorded");
+      Assert.ok(
+        created.every(e => e.extra.type === "individual"),
+        "Both are recorded as individual creations"
+      );
+    });
+
     it("lists created groups under 'Just created' and ungroups them all", async () => {
       win = await openGroupingWindowWithTabs();
-      let panel = await openPanelWithSuggestions(win);
+      const panel = await openPanelWithSuggestions(win);
 
       const groupsBefore = win.gBrowser.tabGroups.length;
       const tabsBefore = win.gBrowser.tabs.length;
@@ -321,15 +382,6 @@ describe("Auto Tab Grouping toolbar button", () => {
         "Both groups created"
       );
       await TestUtils.waitForCondition(
-        () => !win.document.getElementById("smartwindow-group-tabs-panel")
-      );
-
-      // Reopening lists the created groups under "Just created".
-      AIWindowUI.toggleGroupTabsPanel(win);
-      panel = await TestUtils.waitForCondition(() =>
-        win.document.getElementById("smartwindow-group-tabs-panel")
-      );
-      await TestUtils.waitForCondition(
         () => panel.querySelectorAll(".swgt-recent-row").length === 2,
         "Both created groups are listed under 'Just created'"
       );
@@ -337,8 +389,22 @@ describe("Auto Tab Grouping toolbar button", () => {
         panel.querySelector(".swgt-ungroup"),
         "'Ungroup' footer is shown"
       );
+      Assert.equal(
+        panel
+          .querySelector(".swgt-note .swgt-message")
+          .getAttribute("data-l10n-id"),
+        "smartwindow-group-tabs-all-sorted",
+        "Having created groups, the panel credits the work even with tabs left ungrouped"
+      );
 
-      panel.querySelector(".swgt-ungroup").click();
+      const ungroup = panel.querySelector(".swgt-ungroup");
+      ungroup.focus();
+      Assert.equal(
+        win.document.activeElement,
+        ungroup,
+        "The 'Ungroup' row can take focus"
+      );
+      ungroup.click();
       await TestUtils.waitForCondition(
         () => win.gBrowser.tabGroups.length === groupsBefore,
         "Ungroup reverses every created group"
@@ -354,6 +420,468 @@ describe("Auto Tab Grouping toolbar button", () => {
       await TestUtils.waitForCondition(
         () => !panel.querySelectorAll(".swgt-recent-row").length,
         "The 'Just created' list is cleared"
+      );
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement === panel.querySelector(".swgt-card"),
+        "Focus lands on the card once the 'Ungroup' row it was on is gone"
+      );
+    });
+
+    it("only lists groups created while the panel was open", async () => {
+      win = await openGroupingWindowWithTabs();
+      let panel = await openPanelWithSuggestions(win);
+
+      panel.querySelector(".swgt-create-all").click();
+      await TestUtils.waitForCondition(
+        () => panel.querySelectorAll(".swgt-recent-row").length === 2,
+        "Both created groups are listed under 'Just created'"
+      );
+
+      await closePanel(win);
+      panel = await openPanel(win);
+      const card = panel.querySelector(".swgt-card");
+      await card.updateComplete;
+
+      Assert.ok(
+        card.querySelector(".swgt-header"),
+        "The reopened card rendered"
+      );
+      Assert.deepEqual(card.recent, [], "The 'Just created' list starts empty");
+      Assert.ok(
+        !card.querySelector(
+          '[data-l10n-id="smartwindow-group-tabs-just-created-heading"]'
+        ),
+        "The 'Just created' heading is gone"
+      );
+      Assert.ok(
+        !card.querySelector(".swgt-recent-row"),
+        "None of the groups made last time are listed"
+      );
+      Assert.ok(
+        !card.querySelector(".swgt-ungroup"),
+        "The 'Ungroup' row is gone with them"
+      );
+      Assert.equal(
+        win.gBrowser.tabGroups.length,
+        2,
+        "The groups themselves are left alone"
+      );
+    });
+  });
+
+  describe("when there is nothing left to suggest", () => {
+    it("credits work done this time and forgets it the next", async () => {
+      win = await openGroupingWindowWithTabs();
+      let panel = await openPanelWithSuggestions(win);
+      const noteId = () =>
+        panel
+          .querySelector(".swgt-note .swgt-message")
+          ?.getAttribute("data-l10n-id");
+
+      panel.querySelector(".swgt-create-all").click();
+      await TestUtils.waitForCondition(
+        () => panel.querySelectorAll(".swgt-recent-row").length === 2,
+        "Both created groups are listed under 'Just created'"
+      );
+      Assert.equal(
+        noteId(),
+        "smartwindow-group-tabs-all-sorted",
+        "Groups created this time earn the 'nice work' note"
+      );
+
+      await closePanel(win);
+      panel = await openPanel(win);
+      await TestUtils.waitForCondition(
+        () => noteId() === "smartwindow-group-tabs-empty",
+        "Reopened with nothing created, the panel just says it has no suggestions"
+      );
+    });
+  });
+
+  describe("closing duplicate tabs", () => {
+    it("hides the row when there is nothing to close", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+
+      Assert.ok(
+        !panel.querySelector(".swgt-close-duplicates"),
+        "No 'Close Duplicate Tabs' row while every tab is unique"
+      );
+    });
+
+    it("closes the duplicates and leaves one of each tab", async () => {
+      await SpecialPowers.pushPrefEnv({
+        set: [
+          ["browser.smartwindow.autoTabGrouping.enabled", true],
+          // Skip the one-time "we'll close duplicate tabs" confirmation.
+          ["browser.tabs.haveShownCloseAllDuplicateTabsWarning", true],
+        ],
+      });
+      win = await openAIWindow();
+      await navigateToContent(win);
+      await addWebTabs(win);
+      await addWebTabs(win, ["a", "b"]);
+      const tabsBefore = win.gBrowser.tabs.length;
+
+      const panel = await openPanelWithSuggestions(win);
+      const row = await TestUtils.waitForCondition(
+        () => panel.querySelector(".swgt-close-duplicates"),
+        "The 'Close Duplicate Tabs' row appears once duplicates exist"
+      );
+
+      const duplicates = win.gBrowser.getAllDuplicateTabsToClose().length;
+      Assert.equal(duplicates, 2, "The two added tabs are the duplicates");
+      Assert.equal(
+        JSON.parse(row.getAttribute("data-l10n-args")).tabCount,
+        duplicates,
+        "The row is told how many tabs activating it closes"
+      );
+      const accService = Cc["@mozilla.org/accessibilityService;1"].getService(
+        Ci.nsIAccessibilityService
+      );
+      await TestUtils.waitForCondition(
+        () => accService.getAccessibleFor(row)?.name?.includes(`${duplicates}`),
+        "The row's label reports that count"
+      );
+
+      row.click();
+      await TestUtils.waitForCondition(
+        () => win.gBrowser.tabs.length === tabsBefore - 2,
+        "Both duplicate tabs are closed"
+      );
+      const urls = win.gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec);
+      Assert.equal(
+        new Set(urls).size,
+        urls.length,
+        "Every remaining tab is at a distinct URL"
+      );
+    });
+  });
+
+  describe("previewing a suggested group", () => {
+    // Open the flyout for the first suggestion and return its tab rows. The
+    // opening popup takes focus off the row, so put it back once it settles.
+    async function openFlyout(panel) {
+      const row = panel.querySelector(".swgt-suggestion");
+      row.focus();
+      await TestUtils.waitForCondition(
+        () =>
+          panel._flyoutPanel?.state === "open" &&
+          panel._flyoutPanel.querySelectorAll(".swgt-flyout-tab").length,
+        "The flyout is open and lists the group's tabs"
+      );
+      row.focus();
+      return {
+        row,
+        tabRows: [...panel._flyoutPanel.querySelectorAll(".swgt-flyout-tab")],
+      };
+    }
+
+    it("hides the flyout once the pointer leaves it", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const { row } = await openFlyout(panel);
+
+      row.blur();
+      panel._flyoutPanel.dispatchEvent(new win.MouseEvent("mouseleave"));
+      Assert.notEqual(
+        panel._hideTimer,
+        0,
+        "Leaving the flyout schedules a hide"
+      );
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "The flyout hides itself once the pointer has left"
+      );
+
+      panel.querySelector(".swgt-create-all").focus();
+      row.focus();
+      await TestUtils.waitForCondition(
+        () => panel._activeRow === row && panel._flyoutPanel.state !== "closed",
+        "Focusing the row again reopens the flyout the pointer dismissed"
+      );
+    });
+
+    it("hides the flyout when another panel row is hovered", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const { row } = await openFlyout(panel);
+
+      row.blur();
+      row.dispatchEvent(new win.MouseEvent("mouseleave"));
+      panel
+        .querySelector(".swgt-create-all")
+        .dispatchEvent(new win.MouseEvent("mouseover", { bubbles: true }));
+
+      Assert.ok(
+        !row.classList.contains("is-active"),
+        "The suggestion drops its highlight the moment the pointer moves on"
+      );
+      Assert.equal(
+        panel._activeRow,
+        null,
+        "The suggestion row is no longer marked active"
+      );
+      Assert.equal(panel._hideTimer, 0, "No delayed hide is left pending");
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "Moving onto 'Create Groups' closes the suggestion's flyout"
+      );
+
+      panel.querySelector(".swgt-create-all").focus();
+      row.focus();
+      await TestUtils.waitForCondition(
+        () => panel._activeRow === row && panel._flyoutPanel.state !== "closed",
+        "Keyboard focus on that suggestion still opens its flyout afterwards"
+      );
+    });
+
+    it("keeps the flyout the keyboard opened when the pointer drifts away", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const { tabRows } = await openFlyout(panel);
+      const rows = [...panel.querySelectorAll(".swgt-suggestion")];
+      const suggestion = AutoTabGrouping._getState(win).suggestions[0];
+
+      EventUtils.synthesizeKey("KEY_ArrowRight", {}, win);
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement === tabRows[0],
+        "Focus moved into the flyout"
+      );
+
+      rows[1].dispatchEvent(new win.MouseEvent("mouseenter"));
+      rows[1].dispatchEvent(new win.MouseEvent("mouseleave"));
+
+      Assert.equal(
+        panel._flyoutPanel._flyoutEl.suggestion,
+        suggestion,
+        "The flyout still lists the group the keyboard drilled into"
+      );
+      Assert.equal(
+        panel._hideTimer,
+        0,
+        "Pointing away does not schedule a hide while the flyout holds focus"
+      );
+    });
+
+    it("lists the group's tabs and switches to the one clicked", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const { tabRows } = await openFlyout(panel);
+
+      Assert.equal(
+        panel._flyoutPanel.getAttribute("flip"),
+        "slide",
+        "The flyout slides rather than flipping when it meets a screen edge"
+      );
+
+      const suggestion = AutoTabGrouping._getState(win).suggestions[0];
+      Assert.equal(
+        tabRows.length,
+        suggestion.tabs.length,
+        "One row per tab in the suggested group"
+      );
+
+      tabRows[1].click();
+      await TestUtils.waitForCondition(
+        () => !win.document.getElementById("smartwindow-group-tabs-panel"),
+        "Selecting a tab closes the panel"
+      );
+      Assert.equal(
+        win.gBrowser.selectedTab,
+        suggestion.tabs[1],
+        "The clicked tab is selected"
+      );
+      Assert.equal(
+        win.gBrowser.tabGroups.length,
+        0,
+        "Previewing a group's tabs does not create the group"
+      );
+    });
+
+    it("moves focus into the flyout and back out again", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const { row, tabRows } = await openFlyout(panel);
+
+      EventUtils.synthesizeKey("KEY_ArrowRight", {}, win);
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement === tabRows[0],
+        "The forward arrow moves focus to the first tab"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowDown", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        tabRows[1],
+        "ArrowDown moves to the next tab"
+      );
+
+      let escapeEvent;
+      win.addEventListener(
+        "keydown",
+        e => {
+          escapeEvent = e;
+        },
+        { once: true }
+      );
+      EventUtils.synthesizeKey("KEY_Escape", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        row,
+        "Escape steps back out to the suggestion row"
+      );
+      Assert.ok(
+        escapeEvent.defaultPrevented,
+        "Escape is consumed instead of reaching the window's own Escape key"
+      );
+      Assert.ok(
+        win.document.getElementById("smartwindow-group-tabs-panel"),
+        "Escape inside the flyout leaves the panel open"
+      );
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "Escape closes the flyout it backed out of"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowLeft", {}, win);
+      await TestUtils.waitForCondition(
+        () => win.document.activeElement?.matches(".swgt-flyout-tab"),
+        "Either arrow re-enters the flyout, whichever side it opens on"
+      );
+
+      EventUtils.synthesizeKey("KEY_Escape", {}, win);
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "The flyout is closed again"
+      );
+      EventUtils.synthesizeKey("KEY_Escape", {}, win);
+      await TestUtils.waitForCondition(
+        () => !win.document.getElementById("smartwindow-group-tabs-panel"),
+        "A second Escape, with no flyout left to close, closes the panel"
+      );
+    });
+
+    it("closes only the flyout when Escape is pressed while pointing at it", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      await openFlyout(panel);
+
+      // Focus stays on the card: hovering a row opens the flyout without
+      // moving focus, which is the case that used to close both panels.
+      Assert.ok(
+        !panel._flyoutPanel.contains(win.document.activeElement),
+        "Focus is outside the flyout"
+      );
+
+      EventUtils.synthesizeKey("KEY_Escape", {}, win);
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "Escape closes the pointer-opened flyout"
+      );
+      Assert.ok(
+        win.document.getElementById("smartwindow-group-tabs-panel"),
+        "The panel itself stays open"
+      );
+    });
+
+    it("drops a focus request when the flyout hides before it opens", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const rows = [...panel.querySelectorAll(".swgt-suggestion")];
+      const suggestions = AutoTabGrouping._getState(win).suggestions;
+
+      AutoTabGrouping._showFlyoutById(win, panel, suggestions[0].id, rows[0]);
+      AutoTabGrouping._focusFlyout(panel);
+      AutoTabGrouping._hideFlyout(panel);
+
+      rows[1].focus();
+      await BrowserTestUtils.waitForEvent(panel._flyoutPanel, "popupshown");
+      Assert.equal(
+        win.document.activeElement,
+        rows[1],
+        "Reopening the flyout on hover does not steal focus into it"
+      );
+    });
+  });
+
+  describe("moving through the panel's rows with the keyboard", () => {
+    let flyoutStub;
+
+    beforeEach(() => {
+      // Focusing a row opens its flyout, and the opening popup takes focus off
+      // the row; the flyout's own navigation is covered above.
+      flyoutStub = sinon.stub(AutoTabGrouping, "_showFlyoutById");
+    });
+
+    afterEach(() => {
+      flyoutStub.restore();
+    });
+
+    it("wraps around with the arrow keys and jumps with Home and End", async () => {
+      win = await openGroupingWindowWithTabs();
+      const panel = await openPanelWithSuggestions(win);
+      const card = panel.querySelector(".swgt-card");
+      const rows = [...panel.querySelectorAll(".swgt-row")];
+      Assert.equal(rows.length, 3, "'Create all' plus the two suggestions");
+      if (win.document.activeElement !== card) {
+        await BrowserTestUtils.waitForEvent(card, "focus");
+      }
+
+      EventUtils.synthesizeKey("KEY_ArrowDown", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[0],
+        "ArrowDown enters the list at the first row"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowDown", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[1],
+        "ArrowDown moves to the next row"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowUp", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[0],
+        "ArrowUp moves back to the previous row"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowUp", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows.at(-1),
+        "ArrowUp from the first row wraps to the last"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowDown", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[0],
+        "ArrowDown from the last row wraps to the first"
+      );
+
+      EventUtils.synthesizeKey("KEY_End", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows.at(-1),
+        "End jumps to the last row"
+      );
+
+      EventUtils.synthesizeKey("KEY_Home", {}, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[0],
+        "Home jumps back to the first row"
+      );
+
+      EventUtils.synthesizeKey("KEY_ArrowDown", { accelKey: true }, win);
+      Assert.equal(
+        win.document.activeElement,
+        rows[0],
+        "A modified arrow is left alone"
       );
     });
   });
@@ -383,8 +911,7 @@ describe("Auto Tab Grouping toolbar button", () => {
       await BrowserTestUtils.waitForMutationCondition(
         card,
         { childList: true, subtree: true },
-        () =>
-          card.querySelectorAll(".swgt-row:not(.swgt-create-all)").length === 2
+        () => card.querySelectorAll(".swgt-suggestion").length === 2
       );
 
       Assert.equal(card.getAttribute("role"), "dialog", "Card is a dialog");
@@ -409,9 +936,7 @@ describe("Auto Tab Grouping toolbar button", () => {
         "smartwindow-group-tabs-create-all",
         "'Create all' label is localized via Fluent"
       );
-      const suggestionRow = panel.querySelector(
-        ".swgt-row:not(.swgt-create-all)"
-      );
+      const suggestionRow = panel.querySelector(".swgt-suggestion");
       Assert.equal(
         suggestionRow.getAttribute("data-l10n-id"),
         "smartwindow-group-tabs-suggestion",
@@ -425,24 +950,40 @@ describe("Auto Tab Grouping toolbar button", () => {
         return acc && acc.name && acc.name.trim();
       }, "Suggestion row exposes a non-empty accessible name");
 
+      const favicons = suggestionRow.querySelector(".swgt-favicons");
       Assert.equal(
-        suggestionRow.querySelector(".swgt-tiles").getAttribute("aria-hidden"),
+        favicons.getAttribute("aria-hidden"),
         "true",
-        "Color tiles are hidden from assistive technology"
+        "Tab favicons are hidden from assistive technology"
+      );
+      const images = [...favicons.querySelectorAll("img.swgt-favicon")];
+      Assert.greater(images.length, 0, "Suggestion row shows tab favicons");
+      Assert.ok(
+        images.every(img => img.src.startsWith("page-icon:")),
+        "Each favicon loads through page-icon:"
       );
 
       suggestionRow.focus();
-      const flyoutHeader = await BrowserTestUtils.waitForMutationCondition(
+      const flyoutList = await BrowserTestUtils.waitForMutationCondition(
         popupSet,
         { childList: true, subtree: true },
-        () => panel._flyoutPanel?.querySelector(".swgt-flyout-header")
+        () => panel._flyoutPanel?.querySelector(".swgt-flyout-list")
       );
       Assert.equal(
-        flyoutHeader
-          .querySelector(".swgt-flyout-title span:not(.swgt-dot)")
-          .getAttribute("data-l10n-id"),
-        "smartwindow-group-tabs-flyout-create",
-        "Flyout title is localized via Fluent"
+        flyoutList.getAttribute("data-l10n-id"),
+        "smartwindow-group-tabs-flyout-list",
+        "Flyout's accessible name is localized via Fluent"
+      );
+      Assert.equal(
+        suggestionRow.getAttribute("aria-expanded"),
+        "true",
+        "Focused suggestion row reports its flyout as expanded"
+      );
+
+      EventUtils.synthesizeKey("KEY_Escape", {}, win);
+      await TestUtils.waitForCondition(
+        () => panel._flyoutPanel.state === "closed",
+        "The first Escape closes the open flyout"
       );
 
       const focusReturned = BrowserTestUtils.waitForEvent(button, "focus");
@@ -450,7 +991,7 @@ describe("Auto Tab Grouping toolbar button", () => {
       await focusReturned;
       Assert.ok(
         !win.document.getElementById("smartwindow-group-tabs-panel"),
-        "Escape closes the panel"
+        "A second Escape closes the panel"
       );
       Assert.equal(
         win.document.activeElement,
@@ -535,7 +1076,9 @@ describe("Auto Tab Grouping toolbar button", () => {
         win.document.getElementById("smartwindow-group-tabs-panel")
       );
       await TestUtils.waitForCondition(
-        () => panel.querySelector(".swgt-message"),
+        () =>
+          panel.querySelector(".swgt-loading")?.getAttribute("data-l10n-id") ===
+          "smartwindow-group-tabs-loading",
         "Panel shows the loading state while clustering is pending"
       );
 
@@ -553,9 +1096,7 @@ describe("Auto Tab Grouping toolbar button", () => {
       releaseClusters();
 
       await TestUtils.waitForCondition(
-        () =>
-          panel.querySelectorAll(".swgt-row:not(.swgt-create-all)").length ===
-          2,
+        () => panel.querySelectorAll(".swgt-suggestion").length === 2,
         "Reopened panel renders suggestions once clustering settles"
       );
     });

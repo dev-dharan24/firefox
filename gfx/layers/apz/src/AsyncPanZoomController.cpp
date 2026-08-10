@@ -598,7 +598,7 @@ AsyncPanZoomController::AutoRecordCompositorScrollUpdate final {
     CompositorScrollUpdate::Metrics newMetrics =
         mApzc->GetCurrentMetricsForCompositorScrollUpdate(mProofOfApzcLock);
     if (newMetrics != mPreviousMetrics) {
-      mApzc->mUpdatesSinceLastSample.push_back({newMetrics, mSource});
+      mApzc->mUpdatesSinceLastSample.EmplaceBack(newMetrics, mSource);
     }
   }
 
@@ -6273,11 +6273,11 @@ bool CompositorScrollUpdate::operator==(
   return mMetrics == aOther.mMetrics && mSource == aOther.mSource;
 }
 
-std::vector<CompositorScrollUpdate>
+nsTArray<CompositorScrollUpdate>
 AsyncPanZoomController::GetCompositorScrollUpdates() {
   RecursiveMutexAutoLock lock(mRecursiveMutex);
   MOZ_ASSERT(Metrics().IsRootContent());
-  return mSampledState[0].Updates();
+  return mSampledState[0].Updates().Clone();
 }
 
 CompositorScrollUpdate::Metrics

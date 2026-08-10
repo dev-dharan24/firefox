@@ -504,8 +504,10 @@ export class MemoriesManager {
    * Public API wrapper around MemoryStore.getRelevantMemories
    *
    * @param {string} message                  User message to find relevant memories for
-   * @param {number} topK                     Number of top relevant memories to return (default: 5)
-   * @param {number} similarityThreshold      Minimum similarity score (0-1) to include (default: 0.22)
+   * @param {number} topK                     Number of top relevant memories to return
+   *                                          (default: {@link DEFAULT_RELEVANT_MEMORIES_TOP_K})
+   * @param {number} similarityThreshold      Minimum similarity score (0-1) to include
+   *                                          (default: {@link DEFAULT_RELEVANT_MEMORIES_SIMILARITY_THRESHOLD})
    * @returns {Promise<Array<object>>}        List of relevant memories sorted by similarity
    */
   static async getRelevantMemories(

@@ -97,12 +97,14 @@ import org.mozilla.fenix.GleanMetrics.StartOnHome
 import org.mozilla.fenix.addons.ExtensionsProcessDisabledBackgroundController
 import org.mozilla.fenix.addons.ExtensionsProcessDisabledForegroundController
 import org.mozilla.fenix.bindings.ExternalAppLinkStatusBinding
+import org.mozilla.fenix.bindings.HomepageTabBinding
 import org.mozilla.fenix.bindings.SummarizeToolbarHighlightBinding
 import org.mozilla.fenix.bookmarks.DesktopFolders
 import org.mozilla.fenix.browser.BrowserFragment
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
 import org.mozilla.fenix.browser.browsingmode.DefaultBrowsingModeManager
+import org.mozilla.fenix.components.DefaultHomepageAsANewTabPreferenceRepository
 import org.mozilla.fenix.components.DefaultShortcutManagerCompatWrapper
 import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.components.appstate.AppAction.ShareAction
@@ -286,6 +288,15 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
         AboutHomeBinding(
             browserStore = components.core.store,
             navController = navHost.navController,
+        )
+    }
+
+    private val homepageTabBinding by lazy {
+        HomepageTabBinding(
+            browserStore = components.core.store,
+            browsingModeManager = browsingModeManager,
+            fenixBrowserUseCases = components.useCases.fenixBrowserUseCases,
+            repository = DefaultHomepageAsANewTabPreferenceRepository(components.settings),
         )
     }
 
@@ -615,6 +626,7 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
         )
 
         addAboutHomeBinding(lifecycle)
+        addHomepageTabBinding(lifecycle)
 
         if (!isCustomTabIntent(intent)) {
             lifecycle.addObserver(webExtensionPromptFeature)
@@ -641,7 +653,10 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
                 activity = this,
                 appStore = components.appStore,
                 settings = components.settings,
-                tabStripStatusBarView = TabStripStatusBarView(rootView = window.decorView as ViewGroup),
+                tabStripStatusBarView = TabStripStatusBarView(
+                    rootView = window.decorView as ViewGroup,
+                    lifecycle = lifecycle,
+                ),
             ),
             true,
         )
@@ -1005,18 +1020,7 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
         DefaultGleanDebugToolsStorage.persistDebugViewTagIfRequested(intent, components.settings)
 
         if (intent.action == SEND_TO_DEVICES_ACTION) {
-            val url = intent.getStringExtra(SendToDevicesDialogFragment.EXTRA_URL) ?: return
-            val title = intent.getStringExtra(SendToDevicesDialogFragment.EXTRA_TITLE)
-            val isPrivate = intent.getStringExtra(SendToDevicesDialogFragment.EXTRA_PRIVACY) ==
-                SendToDevicesDialogFragment.PRIVACY_PRIVATE
-
-            if (supportFragmentManager.findFragmentByTag(SendToDevicesDialogFragment.TAG) == null) {
-                SendToDevicesDialogFragment.newInstance(url, title, isPrivate).showNow(
-                    supportFragmentManager,
-                    SendToDevicesDialogFragment.TAG,
-                )
-            }
-
+            handleSendToDevicesActionIntent(intent)
             return
         }
 
@@ -1053,6 +1057,21 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
                 ) + externalSourceIntentProcessors
             intentProcessors.forEach { it.process(intent, navHost.navController, this.intent, components.settings) }
             browsingModeManager.updateMode(intent)
+        }
+    }
+
+    private fun handleSendToDevicesActionIntent(intent: Intent) {
+        val urls = intent.getStringArrayListExtra(SendToDevicesDialogFragment.EXTRA_URLS)
+        if (urls.isNullOrEmpty()) return
+        val titles = intent.getStringArrayListExtra(SendToDevicesDialogFragment.EXTRA_TITLES).orEmpty()
+        val isPrivate = intent.getStringExtra(SendToDevicesDialogFragment.EXTRA_PRIVACY) ==
+            SendToDevicesDialogFragment.PRIVACY_PRIVATE
+
+        if (supportFragmentManager.findFragmentByTag(SendToDevicesDialogFragment.TAG) == null) {
+            SendToDevicesDialogFragment.newInstance(urls, titles, isPrivate).showNow(
+                supportFragmentManager,
+                SendToDevicesDialogFragment.TAG,
+            )
         }
     }
 
@@ -1458,6 +1477,11 @@ open class HomeActivity : LocaleAwareAppCompatActivity(), NavHostActivity, Crash
     @VisibleForTesting
     internal open fun addAboutHomeBinding(lifecycle: Lifecycle) {
         lifecycle.addObserver(aboutHomeBinding)
+    }
+
+    @VisibleForTesting
+    internal open fun addHomepageTabBinding(lifecycle: Lifecycle) {
+        lifecycle.addObserver(homepageTabBinding)
     }
 
     final override fun attachBaseContext(base: Context) {

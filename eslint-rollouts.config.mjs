@@ -4,7 +4,7 @@
 
 import eslintPluginImport from "eslint-plugin-import";
 import mozilla from "eslint-plugin-mozilla";
-import sdl from "@microsoft/eslint-plugin-sdl";
+import sdl from "eslint-plugin-sdl";
 
 /**
  * This is the current list of rollouts for ESLint rules in mozilla-central. The
@@ -275,7 +275,6 @@ export default [
       "toolkit/components/asyncshutdown/**",
       "toolkit/components/cleardata/**",
       "toolkit/components/contentprefs/ContentPrefService2.sys.mjs",
-      "toolkit/components/cookiebanners/**",
       "toolkit/components/crashes/CrashManager.in.sys.mjs",
       "toolkit/components/crashmonitor/CrashMonitor.sys.mjs",
       "toolkit/components/credentialmanagement/IdentityCredentialPromptService.sys.mjs",
@@ -407,7 +406,6 @@ export default [
       "toolkit/components/cleardata/**",
       "toolkit/components/contentprefs/ContentPrefService*.sys.mjs",
       "toolkit/components/contentrelevancy/ContentRelevancyManager.sys.mjs",
-      "toolkit/components/cookiebanners/**",
       "toolkit/components/crashes/**",
       "toolkit/components/crashmonitor/CrashMonitor.sys.mjs",
       "toolkit/components/credentialmanagement/IdentityCredentialPromptService.sys.mjs",
@@ -476,18 +474,6 @@ export default [
     ],
     ignores: ["devtools/shared/css/parsing-utils.js", "devtools/startup/**"],
     rules: mozilla.turnOff(mozilla.configs["flat/require-jsdoc"].rules),
-  },
-  {
-    // TODO: Bug 1997306. Fix these instances after the jsdoc 60.8.0 upgrade.
-    name: "rollout-jsdoc-valid-types-updates",
-    files: [
-      "browser/components/uitour/UITour-lib.js",
-      "toolkit/components/ipprotection/IPPNetworkErrorObserver.sys.mjs",
-      "toolkit/components/ipprotection/IPProtectionService.sys.mjs",
-    ],
-    rules: {
-      "jsdoc/valid-types": "off",
-    },
   },
   {
     name: "rollout-layout",
@@ -1610,7 +1596,6 @@ export default [
       "toolkit/components/cleardata/tests/browser/browser_image_cache.js",
       "toolkit/components/cleardata/tests/browser/browser_quota.js",
       "toolkit/components/cleardata/tests/browser/browser_sessionStorage.js",
-      "toolkit/components/cookiebanners/test/browser/browser_cookiebannerservice.js",
       "toolkit/components/extensions/test/browser/browser_ext_downloads_filters.js",
       "toolkit/components/extensions/test/browser/browser_ext_themes_autocomplete_popup.js",
       "toolkit/components/extensions/test/browser/browser_ext_thumbnails_bg_extension.js",
@@ -1763,9 +1748,9 @@ export default [
       "uriloader/exthandler/tests/mochitest/head.js",
       "xpfe/appshell/test/test_windowlessBrowser.xhtml",
     ],
-    plugins: { "@microsoft/sdl": sdl },
+    plugins: { sdl },
     rules: {
-      "@microsoft/sdl/no-insecure-url": "off",
+      "sdl/no-insecure-url": "off",
     },
   },
   {

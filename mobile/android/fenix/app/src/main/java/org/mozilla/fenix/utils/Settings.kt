@@ -18,10 +18,8 @@ import androidx.annotation.VisibleForTesting.Companion.PRIVATE
 import androidx.core.content.edit
 import androidx.lifecycle.LifecycleOwner
 import androidx.preference.PreferenceManager
-import mozilla.components.browser.engine.gecko.cookiebanners.ReportSiteDomainsRepository.Companion.REPORT_SITE_DOMAINS_REPOSITORY_NAME
 import mozilla.components.concept.engine.Engine
 import mozilla.components.concept.engine.Engine.HttpsOnlyMode
-import mozilla.components.concept.engine.EngineSession.CookieBannerHandlingMode
 import mozilla.components.feature.sitepermissions.SitePermissionsRules
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.Action
 import mozilla.components.feature.sitepermissions.SitePermissionsRules.AutoplayAction
@@ -60,7 +58,6 @@ import org.mozilla.fenix.ext.getPreferenceKey
 import org.mozilla.fenix.ext.pixelSizeFor
 import org.mozilla.fenix.home.pocket.ContentRecommendationsFeatureHelper
 import org.mozilla.fenix.home.topsites.TopSitesConfigConstants.TOP_SITES_MAX_COUNT
-import org.mozilla.fenix.nimbus.CookieBannersSection
 import org.mozilla.fenix.nimbus.DefaultBrowserPrompt
 import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.nimbus.HomeScreenSection
@@ -122,8 +119,9 @@ class Settings(
 
         /**
          * The minimum number a search groups should contain.
+         *
+         * Mutable so that tests can lower the threshold.
          */
-        @VisibleForTesting
         internal var searchGroupMinimumSites: Int = 2
 
         private fun Action.toInt() = when (this) {
@@ -1242,29 +1240,6 @@ class Settings(
         false,
     )
 
-    var shouldUseCookieBannerPrivateMode by booleanPreference(
-        appContext.getPreferenceKey(R.string.pref_key_cookie_banner_private_mode),
-        default = { shouldUseCookieBannerPrivateModeDefaultValue },
-    )
-
-    val shouldUseCookieBannerPrivateModeDefaultValue: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_SETTING_VALUE_PBM] == 1
-
-    val shouldUseCookieBanner: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_SETTING_VALUE] == 1
-
-    val shouldShowCookieBannerUI: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_UI] == 1
-
-    val shouldEnableCookieBannerDetectOnly: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_SETTING_DETECT_ONLY] == 1
-
-    val shouldEnableCookieBannerGlobalRules: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_SETTING_GLOBAL_RULES] == 1
-
-    val shouldEnableCookieBannerGlobalRulesSubFrame: Boolean
-        get() = cookieBannersSection[CookieBannersSection.FEATURE_SETTING_GLOBAL_RULES_SUB_FRAMES] == 1
-
     /**
      * Declared as a function for performance purposes. This could be declared as a variable using
      * booleanPreference like other members of this class. However, doing so will make it so it will
@@ -1956,7 +1931,7 @@ class Settings(
     }
 
     /**
-     * Indicates if the [REPORT_SITE_DOMAINS_REPOSITORY_NAME] DataStore has been deleted.
+     * Indicates if the `report_site_domains_preferences` DataStore has been deleted.
      */
     private var hasDeletedReportSiteDomainsDataStore by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_deleted_report_site_domains_datastore),
@@ -1964,12 +1939,12 @@ class Settings(
     )
 
     /**
-     * Deletes the [REPORT_SITE_DOMAINS_REPOSITORY_NAME] DataStore left behind on existing
+     * Deletes the `report_site_domains_preferences` DataStore left behind on existing
      * application after the legacy cookie banner feature was removed.
      */
     fun deleteReportSiteDomainsDataStoreIfNeeded() {
         if (!hasDeletedReportSiteDomainsDataStore) {
-            File(appContext.filesDir, "datastore/$REPORT_SITE_DOMAINS_REPOSITORY_NAME.preferences_pb").delete()
+            File(appContext.filesDir, "datastore/report_site_domains_preferences.preferences_pb").delete()
             hasDeletedReportSiteDomainsDataStore = true
         }
     }
@@ -2232,10 +2207,6 @@ class Settings(
         return featureGate.isAddressFeatureEnabled()
     }
 
-    private val cookieBannersSection: Map<CookieBannersSection, Int>
-        get() =
-            FxNimbus.features.cookieBanners.value().sectionsEnabled
-
     var signedInFxaAccount by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_fxa_signed_in),
         default = false,
@@ -2414,30 +2385,6 @@ class Settings(
         }
     }
 
-    /**
-     * Get the current mode for cookie banner handling
-     */
-    fun getCookieBannerHandling(): CookieBannerHandlingMode {
-        return when (shouldUseCookieBanner) {
-            true -> CookieBannerHandlingMode.REJECT_ALL
-            false -> {
-                CookieBannerHandlingMode.DISABLED
-            }
-        }
-    }
-
-    /**
-     * Get the current mode for cookie banner handling
-     */
-    fun getCookieBannerHandlingPrivateMode(): CookieBannerHandlingMode {
-        return when (shouldUseCookieBannerPrivateMode) {
-            true -> CookieBannerHandlingMode.REJECT_ALL
-            false -> {
-                CookieBannerHandlingMode.DISABLED
-            }
-        }
-    }
-
     var setAsDefaultGrowthSent by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_growth_set_as_default),
         default = false,
@@ -2572,6 +2519,22 @@ class Settings(
     var enableMerinoClient by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_merino_client),
         default = { FxNimbus.features.merinoClient.value().enabled },
+    )
+
+    /**
+     * Indicates if the Homepage Weather Widget is enabled.
+     */
+    var enableHomepageWeatherWidget by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_enable_homepage_weather_widget),
+        default = { FxNimbus.features.homepageWeatherWidget.value().enabled },
+    )
+
+    /**
+     * Indicates if the Homepage Weather Widget should be visible on the homepage.
+     */
+    var showHomepageWeatherWidget by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_show_homepage_weather_widget),
+        default = true,
     )
 
     /**
@@ -2753,6 +2716,12 @@ class Settings(
      */
     var isIPProtectionEnabled by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_ip_protection),
+        default = false,
+    )
+
+    /** Forces GPI (Google Play Integrity) authentication for IPProtection, set through Secret Settings. */
+    var ipProtectionUseGpi by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_ip_protection_use_gpi),
         default = false,
     )
 
@@ -3242,6 +3211,15 @@ class Settings(
     )
 
     /**
+     * Whether the user has acknowledged the Google Lens first-run bottom sheet by tapping
+     * "Try it now". Set only on that action, so declining re-shows the sheet on the next tap.
+     */
+    var hasAcceptedGoogleLensFirstRun by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_has_accepted_google_lens_first_run),
+        default = false,
+    )
+
+    /**
      * Whether the voice search entry point is shown in the display-mode browser toolbar.
      */
     var showVoiceSearchInDisplayToolbar by booleanPreference(
@@ -3314,6 +3292,14 @@ class Settings(
     var uninstallSurveyFeatureFlagEnabled by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_uninstall_survey),
         default = { FxNimbus.features.uninstallSurvey.value().enabled },
+    )
+
+    /**
+     * Indicates if the OLED theme is enabled.
+     */
+    var enableOledTheme by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_enable_oled_theme),
+        default = { FxNimbus.features.oledTheme.value().enabled },
     )
 
     /**

@@ -134,6 +134,8 @@ skip-if = [
 
 ["browser_vertical_tabs_cui_reset.js"]
 
+["browser_vertical_tabs_fitts.js"]
+
 ["browser_vertical_tabs_stacking_context.js"]
 
 ["browser_view_sidebar_menu.js"]

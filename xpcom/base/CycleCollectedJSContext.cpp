@@ -990,6 +990,10 @@ void RunJSMicroTask(JSContext* aCx, CycleCollectedJSContext* aCCJS,
       asyncStackSetter.emplace(aCx, allocStack, reason);
     }
 
+    // Inform the profiler about the flow for this microtask.
+    mozilla::Maybe<AutoProfilerTerminatingFlowMarkerFlowOnly> terminatingMarker;
+    MaybeGetFlowMarker(aMicroTask, terminatingMarker);
+
     {
       mozilla::Maybe<AutoHandlingUserInputStatePusher> userInputStateSwitcher;
       // A new scope is used to make sure the UserInputState is reset before
@@ -998,11 +1002,6 @@ void RunJSMicroTask(JSContext* aCx, CycleCollectedJSContext* aCCJS,
         bool propagate = ShouldPropagateUserInputEventHandlingState(aMicroTask);
         userInputStateSwitcher.emplace(propagate);
       }
-
-      // Inform the profiler about the flow for this microtask.
-      mozilla::Maybe<AutoProfilerTerminatingFlowMarkerFlowOnly>
-          terminatingMarker;
-      MaybeGetFlowMarker(aMicroTask, terminatingMarker);
 
       if (incumbentGlobal) {
         // https://wicg.github.io/scheduling-apis/#sec-patches-html-hostcalljobcallback
@@ -1347,20 +1346,25 @@ NS_IMETHODIMP CycleCollectedJSContext::NotifyUnhandledRejections::Run() {
 
     // Notify observers only if still unhandled (matches old
     // FlushUncaughtRejectionsInternal behavior for observer consumers
-    // like PromiseTestUtils).
+    // like PromiseTestUtils). An observer returning true takes ownership of
+    // the rejection and suppresses the console report, as on the
+    // FlushUncaughtRejectionsInternal and Cancel() paths.
+    bool suppressReporting = false;
     if (!JS::GetPromiseIsHandled(promiseObj)) {
       auto& observers = cccx->mUncaughtRejectionObservers;
       for (size_t j = 0; j < observers.Length(); ++j) {
         RefPtr<UncaughtRejectionObserver> obs =
             static_cast<UncaughtRejectionObserver*>(observers[j].get());
-        obs->OnLeftUncaught(promiseObj, IgnoreErrors());
+        if (obs->OnLeftUncaught(promiseObj, IgnoreErrors())) {
+          suppressReporting = true;
+        }
       }
     }
 
     // Report to console regardless of handled state — this matches the
     // pre-existing behavior where FlushRejections reported before handling
     // could occur. Only preventDefault() suppresses the console report.
-    if (!defaultPrevented) {
+    if (!defaultPrevented && !suppressReporting) {
       JSAutoRealm ar(cccx->Context(), promiseObj);
       Promise::ReportRejectedPromise(cccx->Context(), promiseObj);
     }

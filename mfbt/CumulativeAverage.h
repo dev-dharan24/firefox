@@ -8,6 +8,7 @@
 #define mozilla_CumulativeAverage_h
 
 #include <stdint.h>
+
 #include <limits>
 #include <type_traits>
 

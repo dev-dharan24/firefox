@@ -653,6 +653,11 @@ bool Debugger::getFrame(JSContext* cx, const FrameIter& iter,
   AbstractFramePtr referent = iter.abstractFramePtr();
   MOZ_ASSERT_IF(referent.hasScript(), !referent.script()->selfHosted());
 
+  // A generator's resume is finished at JSOp::AfterYield. Before that, the
+  // frame's pc is still the script start and its locals and expression stack
+  // haven't been restored.
+  MOZ_ASSERT(!iter.isResumingGenerator());
+
   FrameMap::AddPtr p = frames.lookupForAdd(referent);
   if (!p) {
     Rooted<AbstractGeneratorObject*> genObj(cx);
@@ -2610,6 +2615,7 @@ static bool ContStackChainHasAddress(wasm::ContStack* resumeBase,
 /* static */
 void DebugAPI::onLeaveWasmCont(JSContext* cx, wasm::ContStack* resumeBase) {
   JS::GCContext* gcx = cx->gcContext();
+  size_t terminatedFrames = 0;
   JSRuntime* rt = cx->runtime();
   for (Debugger* dbg = rt->debuggerList().getFirst(); dbg;
        dbg = dbg->getNext()) {
@@ -2629,7 +2635,30 @@ void DebugAPI::onLeaveWasmCont(JSContext* cx, wasm::ContStack* resumeBase) {
         continue;
       }
       Debugger::terminateDebuggerFrame(gcx, dbg, frameObj, fp, &iter, nullptr);
+      terminatedFrames++;
     }
+  }
+
+  // Also purge the liveEnvs/missingEnvs entries holding frame pointers into
+  // the stacks being freed: a discarded continuation never unwinds, so
+  // DebugEnvironments::onPopWasm never runs for its DebugFrames.
+  //
+  // onDiscardWasmCont cannot reuse onPopWasm's lookup into missingEnvs:
+  // we run from ContObject::finalize, and that lookup needs three barriered
+  // reads of possibly-dying cells: Instance::object(), the
+  // WeakHeapPtr<WasmFunctionScope*> in the instance's function scope map, and
+  // the WeakHeapPtr<DebugEnvironmentProxy*> value of the entry. It scans both
+  // maps by raw frame address instead.
+  //
+  // Such entries are only created through DebuggerFrame, so a frame with one
+  // was in dbg->frames and got terminated above. Unless the dying-instance
+  // pass in DebugAPI::sweepAll terminated it first, in which case traceWeak
+  // dropped the entry too (an entry keeps its WasmInstanceObject alive through
+  // WasmInstanceScope). Nothing terminated means nothing to purge.
+  if (terminatedFrames > 0) {
+    DebugEnvironments::onDiscardWasmCont(rt, [&](uintptr_t addr) {
+      return ContStackChainHasAddress(resumeBase, addr);
+    });
   }
 }
 #endif  // ENABLE_WASM_JSPI
@@ -2651,6 +2680,11 @@ void DebugAPI::slowPathOnNewWasmInstance(
 /* static */
 bool DebugAPI::onTrap(JSContext* cx) {
   FrameIter iter(cx);
+
+  // Callers must suppress breakpoints while the frame is in the
+  // generator-resume prologue.
+  MOZ_ASSERT(!iter.isResumingGenerator());
+
   JS::AutoSaveExceptionState savedExc(cx);
   Rooted<GlobalObject*> global(cx);
   BreakpointSite* site;
@@ -2758,6 +2792,10 @@ bool DebugAPI::onTrap(JSContext* cx) {
 /* static */
 bool DebugAPI::onSingleStep(JSContext* cx) {
   FrameIter iter(cx);
+
+  // Callers must suppress stepping while the frame is in the generator-resume
+  // prologue.
+  MOZ_ASSERT(!iter.isResumingGenerator());
 
   // We may be stepping over a JSOp::Exception, that pushes the context's
   // pending exception for a 'catch' clause to handle. Don't let the onStep

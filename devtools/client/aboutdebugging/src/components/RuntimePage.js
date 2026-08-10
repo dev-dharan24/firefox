@@ -101,6 +101,7 @@ class RuntimePage extends PureComponent {
       tabs: PropTypes.arrayOf(PropTypes.object).isRequired,
       temporaryExtensions: PropTypes.arrayOf(PropTypes.object).isRequired,
       temporaryInstallError: PropTypes.object,
+      temporaryInstallErrorCount: PropTypes.number,
     };
   }
 
@@ -175,10 +176,12 @@ class RuntimePage extends PureComponent {
       return null;
     }
 
-    const { dispatch, temporaryInstallError } = this.props;
+    const { dispatch, temporaryInstallError, temporaryInstallErrorCount } =
+      this.props;
     return TemporaryExtensionInstallSection({
       dispatch,
       temporaryInstallError,
+      temporaryInstallErrorCount,
     });
   }
 
@@ -298,6 +301,7 @@ const mapStateToProps = state => {
     tabs: state.debugTargets.tabs,
     temporaryExtensions: state.debugTargets.temporaryExtensions,
     temporaryInstallError: state.ui.temporaryInstallError,
+    temporaryInstallErrorCount: state.ui.temporaryInstallErrorCount,
   };
 };
 

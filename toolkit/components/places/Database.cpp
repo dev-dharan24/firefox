@@ -28,7 +28,6 @@
 #include "ScopedNSSTypes.h"
 #include "Helpers.h"
 #include "nsFaviconService.h"
-#include "ConcurrentConnection.h"
 
 #include "nsAppDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
@@ -630,15 +629,10 @@ nsresult Database::EnsureConnection() {
     rv = storage->OpenUnsharedDatabase(databaseFile,
                                        mozIStorageService::CONNECTION_DEFAULT,
                                        getter_AddRefs(mMainConn));
-    if (rv == NS_ERROR_STORAGE_IOERR) {
-      // A ConcurrentConnection may be racing with us: on some filesystems
-      // (e.g. network shares) concurrent WAL-mode opens can return
-      // SQLITE_IOERR instead of SQLITE_BUSY, which busy_timeout cannot handle.
-      // Interrupt any ongoing CC operation and retry once. If CC had an open
-      // connection and was holding a WAL reader lock, the interrupt releases
-      // it. After our retry succeeds, CC will reopen via the
-      // TOPIC_PLACES_INIT_COMPLETE observer once Places finishes initializing.
-      ConcurrentConnection::MaybeInterrupt();
+    if (rv == NS_ERROR_STORAGE_IOERR || rv == NS_ERROR_FILE_IS_LOCKED ||
+        rv == NS_ERROR_STORAGE_BUSY) {
+      // Transient lock or I/O error (e.g. network filesystem, AV software):
+      // retry once before giving up.
       rv = storage->OpenUnsharedDatabase(databaseFile,
                                          mozIStorageService::CONNECTION_DEFAULT,
                                          getter_AddRefs(mMainConn));

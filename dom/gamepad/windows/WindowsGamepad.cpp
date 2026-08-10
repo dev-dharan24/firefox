@@ -149,7 +149,7 @@ class Gamepad {
   }
 
  private:
-  Gamepad() {}
+  Gamepad() = default;
 };
 
 // Drop this in favor of decltype when we require a new enough SDK.
@@ -1174,7 +1174,7 @@ class StartWindowsGamepadServiceRunnable final : public Runnable {
   }
 
  private:
-  ~StartWindowsGamepadServiceRunnable() {}
+  ~StartWindowsGamepadServiceRunnable() = default;
 };
 
 class StopWindowsGamepadServiceRunnable final : public Runnable {
@@ -1198,7 +1198,7 @@ class StopWindowsGamepadServiceRunnable final : public Runnable {
   }
 
  private:
-  ~StopWindowsGamepadServiceRunnable() {}
+  ~StopWindowsGamepadServiceRunnable() = default;
 };
 
 }  // namespace

@@ -18,6 +18,13 @@ let gChatModuleRecords;
 let gSkillNames;
 
 add_setup(async function read_real_chat_records() {
+  // TODO: Bug 2053495 - Refactor tests upon pref removal. FEATURE_MAJOR_VERSIONS
+  // for chat depends on this pref (10 when off, 11 when on), which selects which
+  // params version buildChatSystemPrompt resolves.
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.smartwindow.mistralRelease", false]],
+  });
+
   const records = await getRemoteClient().get();
   gChatParams = records.find(
     record =>

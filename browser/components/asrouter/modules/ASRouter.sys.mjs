@@ -46,6 +46,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   PanelTestProvider: "resource:///modules/asrouter/PanelTestProvider.sys.mjs",
   RemoteL10n: "resource:///modules/asrouter/RemoteL10n.sys.mjs",
   RemoteSettings: "resource://services-settings/remote-settings.sys.mjs",
+  SidebarChatBotPromo:
+    "resource:///modules/asrouter/SidebarChatBotPromo.sys.mjs",
   SmartWindowNewTabPromo:
     "resource:///modules/asrouter/SmartWindowNewTabPromo.sys.mjs",
   SpecialMessageActions:
@@ -1631,6 +1633,9 @@ export class _ASRouter {
       // This pinning action is ONLY to be used in cases where an OS level
       // prompt will ask a user's consent to pin.
       "PIN_FIREFOX_TO_TASKBAR",
+      // This set default action is ONLY to be used in cases where an OS level
+      // prompt or settings panel will obtain a user's consent to set default.
+      "SET_DEFAULT_BROWSER",
     ];
     // The in-tree baseline allowlist can be extended off-train via Remote
     // Settings. If the collection is unavailable the getter returns nothing.
@@ -1789,6 +1794,9 @@ export class _ASRouter {
         break;
       case "menu_message":
         lazy.MenuMessage.showMenuMessage(browser, message, trigger, force);
+        break;
+      case "sidebar_chatbot_promo":
+        lazy.SidebarChatBotPromo.showPromo(browser, message, force);
         break;
       case "smart_window_newtab_promo":
         lazy.SmartWindowNewTabPromo.showPromo(browser, message, trigger, force);
@@ -2503,7 +2511,6 @@ export class _ASRouter {
     const PromoInfo = {
       VPN: { enabledPref: "browser.vpn_promo.enabled" },
       PIN: { enabledPref: "browser.promo.pin.enabled" },
-      COOKIE_BANNERS: { enabledPref: "browser.promo.cookiebanners.enabled" },
     };
     await this.loadMessagesFromAllProviders();
 

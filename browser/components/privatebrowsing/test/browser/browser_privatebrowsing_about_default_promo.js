@@ -5,7 +5,6 @@
 const PromoInfo = {
   VPN: { enabledPref: "browser.vpn_promo.enabled" },
   PIN: { enabledPref: "browser.promo.pin.enabled" },
-  COOKIE_BANNERS: { enabledPref: "browser.promo.cookiebanners.enabled" },
 };
 
 const sandbox = sinon.createSandbox();
@@ -19,21 +18,44 @@ async function resetState() {
   ]);
 }
 
+// There is no default pb_newtab promo any more: the only remaining one is the
+// pin promo, which is gated on doesAppNeedPrivatePin and so is not reliable
+// across platforms. Tasks that just need a promo to render enroll their own.
+function enrollPromoMessage() {
+  return setupMSExperimentWithMessage({
+    id: `PB_NEWTAB_PROMO_${Math.random()}`,
+    template: "pb_newtab",
+    content: {
+      hideDefault: true,
+      promoEnabled: true,
+      promoLinkText: "fluent:about-private-browsing-prominent-cta",
+      promoLinkType: "link",
+      promoButton: {
+        action: {
+          data: { args: "https://example.com/", where: "tabshifted" },
+          type: "OPEN_URL",
+        },
+      },
+    },
+    // Priority ensures this message is picked over the ones in
+    // OnboardingMessageProvider.
+    priority: 5,
+    targeting: "true",
+  });
+}
+
 add_setup(async function () {
   registerCleanupFunction(resetState);
   await resetState();
   await SpecialPowers.pushPrefEnv({
-    set: [
-      ["browser.promo.pin.enabled", false],
-      ["browser.promo.cookiebanners.enabled", true],
-      ["cookiebanners.service.mode.privateBrowsing", 1],
-    ],
+    set: [["browser.promo.pin.enabled", false]],
   });
   await ASRouter.onPrefChange();
 });
 
 add_task(async function test_privatebrowsing_asrouter_messages_state() {
   await resetState();
+
   let pinPromoMessage = ASRouter.state.messages.find(
     m => m.id === "PB_NEWTAB_PIN_PROMO"
   );
@@ -41,12 +63,7 @@ add_task(async function test_privatebrowsing_asrouter_messages_state() {
 
   const initialMessages = JSON.parse(JSON.stringify(ASRouter.state.messages));
 
-  let { win, tab } = await openTabAndWaitForRender();
-
-  await SpecialPowers.spawn(tab, [getPromoSelectors()], async function (promo) {
-    const promoContainer = content.document.querySelector(promo.container);
-    ok(promoContainer, "Promo is shown");
-  });
+  let { win } = await openTabAndWaitForRender();
 
   Assert.equal(
     ASRouter.state.messages.filter(m => m.id === "PB_NEWTAB_PIN_PROMO").length,
@@ -72,51 +89,11 @@ add_task(async function test_privatebrowsing_asrouter_messages_state() {
   await BrowserTestUtils.closeWindow(win);
 });
 
-add_task(async function test_default_promo() {
-  await resetState();
-
-  const selectors = getPromoSelectors();
-
-  let { win: win1, tab: tab1 } = await openTabAndWaitForRender();
-
-  await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
-    // container which is present if promo is enabled and should show
-    const promoContainer = content.document.querySelector(promo.container);
-    ok(promoContainer, "Cookie banners promo is shown");
-    ok(
-      ContentTaskUtils.isVisible(promoContainer),
-      "Promo container is visible"
-    );
-  });
-  await assertPromoHeader(
-    tab1,
-    "about-private-browsing-cookie-banners-promo-heading",
-    "Correct default values are shown"
-  );
-
-  let { win: win2 } = await openTabAndWaitForRender();
-  let { win: win3 } = await openTabAndWaitForRender();
-
-  let { win: win4, tab: tab4 } = await openTabAndWaitForRender();
-
-  await SpecialPowers.spawn(tab4, [selectors], async function (promo) {
-    is(
-      content.document.querySelector(promo.container),
-      null,
-      "should no longer render the promo after 3 impressions"
-    );
-  });
-
-  await BrowserTestUtils.closeWindow(win1);
-  await BrowserTestUtils.closeWindow(win2);
-  await BrowserTestUtils.closeWindow(win3);
-  await BrowserTestUtils.closeWindow(win4);
-});
-
 // Verify that promos are correctly removed if blocked in another tab.
 // See handlePromoOnPreload() in aboutPrivateBrowsing.js
 add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   await resetState();
+  const doExperimentCleanup = await enrollPromoMessage();
 
   const selectors = getPromoSelectors();
 
@@ -132,8 +109,8 @@ add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   win.openTrustedLinkIn(win.BROWSER_NEW_TAB_URL, "tabshifted");
 
   // Block the promo in tab 1
+  await clickPromoDismissButton(tab1);
   await SpecialPowers.spawn(tab1, [selectors], async function (promo) {
-    content.document.querySelector(promo.dismissButton).click();
     await ContentTaskUtils.waitForCondition(() => {
       return !content.document.querySelector(promo.container);
     }, "The promo container is removed.");
@@ -158,12 +135,14 @@ add_task(async function test_remove_promo_from_prerendered_tab_if_blocked() {
   );
 
   await BrowserTestUtils.closeWindow(win);
+  await doExperimentCleanup();
 });
 
 // Test that some default content is rendered while waiting for ASRouter to
 // return a message.
 add_task(async function test_default_content_deferred_message_load() {
   await resetState();
+  const doExperimentCleanup = await enrollPromoMessage();
 
   let messageRequestedPromiseResolver;
   const messageRequestedPromise = new Promise(resolve => {
@@ -246,4 +225,5 @@ add_task(async function test_default_content_deferred_message_load() {
   });
 
   await BrowserTestUtils.closeWindow(win);
+  await doExperimentCleanup();
 });

@@ -4,8 +4,10 @@
 
 package mozilla.components.browser.engine.gecko
 
+import android.Manifest.permission.ACCESS_LOCAL_NETWORK
 import android.os.Build
 import android.view.WindowManager
+import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.annotation.OptIn
 import androidx.annotation.VisibleForTesting
 import androidx.core.net.toUri
@@ -503,37 +505,6 @@ class GeckoEngineSession(
                 loadUrl(overrideUrl, flags = LoadUrlFlags.select(LoadUrlFlags.LOAD_FLAGS_REPLACE_HISTORY))
             }
         }
-    }
-
-    /**
-     * See [EngineSession.hasCookieBannerRuleForSession]
-     */
-    override fun hasCookieBannerRuleForSession(
-        onResult: (Boolean) -> Unit,
-        onException: (Throwable) -> Unit,
-    ) {
-        geckoSession.hasCookieBannerRuleForBrowsingContextTree().then(
-            { response ->
-                if (response == null) {
-                    logger.error(
-                        "Invalid value: unable to get response from hasCookieBannerRuleForBrowsingContextTree.",
-                    )
-                    onException(
-                        java.lang.IllegalStateException(
-                            "Invalid value: unable to get response from hasCookieBannerRuleForBrowsingContextTree.",
-                        ),
-                    )
-                    return@then GeckoResult()
-                }
-                onResult(response)
-                GeckoResult<Boolean>()
-            },
-            { throwable ->
-                logger.error("Checking for cookie banner rule failed.", throwable)
-                onException(throwable)
-                GeckoResult()
-            },
-        )
     }
 
     /**
@@ -1070,10 +1041,6 @@ class GeckoEngineSession(
             notifyObservers {
                 onExcludedOnTrackingProtectionChange(isIgnoredForTrackingProtection())
             }
-            // Re-set the status of cookie banner handling when the user navigates to another site.
-            notifyObservers {
-                onCookieBannerChange(CookieBannerHandlingStatus.NO_DETECTED)
-            }
             // Reset the status of the translation state for the page
             notifyObservers { onTranslatePageChange() }
             notifyObservers { onLocationChange(url, hasUserGesture) }
@@ -1160,6 +1127,7 @@ class GeckoEngineSession(
             uri: String?,
             error: WebRequestError,
         ): GeckoResult<String> {
+            maybeRequestLocalNetworkPermissionAndRetry(uri, error.code)
             val response = settings.requestInterceptor?.onErrorRequest(
                 this@GeckoEngineSession,
                 geckoErrorToErrorType(error.code),
@@ -1301,6 +1269,22 @@ class GeckoEngineSession(
         }
     }
 
+    private fun queryHasVisitedHostSince(
+        host: String,
+        afterEpochMillis: Long,
+        beforeEpochMillis: Long,
+    ): GeckoResult<Boolean>? {
+        if (privateMode) {
+            return null
+        }
+
+        val delegate = settings.historyTrackingDelegate ?: return null
+
+        return scope.launchGeckoResult {
+            delegate.hasVisitedSince(host, afterEpochMillis, beforeEpochMillis)
+        }
+    }
+
     internal fun createHistoryDelegate() = object : GeckoSession.HistoryDelegate {
         @SuppressWarnings("ReturnCount")
         override fun onVisited(
@@ -1386,6 +1370,15 @@ class GeckoEngineSession(
             }
         }
 
+        @OptIn(ExperimentalGeckoViewApi::class)
+        override fun hasVisitedHostSince(
+            session: GeckoSession,
+            host: String,
+            afterEpochMillis: Long,
+            beforeEpochMillis: Long,
+        ): GeckoResult<Boolean>? =
+            queryHasVisitedHostSince(host, afterEpochMillis, beforeEpochMillis)
+
         override fun onHistoryStateChange(
             session: GeckoSession,
             historyList: GeckoSession.HistoryDelegate.HistoryList,
@@ -1405,14 +1398,6 @@ class GeckoEngineSession(
 
     @Suppress("NestedBlockDepth", "CognitiveComplexMethod")
     internal fun createContentDelegate() = object : GeckoSession.ContentDelegate {
-        override fun onCookieBannerDetected(session: GeckoSession) {
-            notifyObservers { onCookieBannerChange(CookieBannerHandlingStatus.DETECTED) }
-        }
-
-        override fun onCookieBannerHandled(session: GeckoSession) {
-            notifyObservers { onCookieBannerChange(CookieBannerHandlingStatus.HANDLED) }
-        }
-
         override fun onFirstComposite(session: GeckoSession) = Unit
 
         override fun onFirstContentfulPaint(session: GeckoSession) {
@@ -1639,6 +1624,32 @@ class GeckoEngineSession(
         return (this and mask) != 0
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.CINNAMON_BUN)
+    internal fun isAtLeastCinnamonBun(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN
+
+    @VisibleForTesting
+    internal fun maybeRequestLocalNetworkPermissionAndRetry(uri: String?, errorCode: Int) {
+        if (
+            uri == null ||
+            errorCode != WebRequestError.ERROR_LOCAL_NETWORK_ACCESS_DENIED ||
+            !isAtLeastCinnamonBun()
+        ) {
+            return
+        }
+
+        val request = GeckoPermissionRequest.App(
+            listOf(ACCESS_LOCAL_NETWORK),
+            mutableListOf(
+                object : GeckoSession.PermissionDelegate.Callback {
+                    override fun grant() { geckoSession.loadUri(uri) }
+                },
+            ),
+        )
+        notifyObservers { onAppPermissionRequest(request) }
+    }
+
     private fun createPermissionDelegate() = object : GeckoSession.PermissionDelegate {
         override fun onContentPermissionRequest(
             session: GeckoSession,
@@ -1799,6 +1810,7 @@ class GeckoEngineSession(
                 WebRequestError.ERROR_NET_INTERRUPT -> ErrorType.ERROR_NET_INTERRUPT
                 WebRequestError.ERROR_NET_TIMEOUT -> ErrorType.ERROR_NET_TIMEOUT
                 WebRequestError.ERROR_CONNECTION_REFUSED -> ErrorType.ERROR_CONNECTION_REFUSED
+                WebRequestError.ERROR_LOCAL_NETWORK_ACCESS_DENIED -> ErrorType.ERROR_LOCAL_NETWORK_ACCESS_DENIED
                 WebRequestError.ERROR_UNKNOWN_SOCKET_TYPE -> ErrorType.ERROR_UNKNOWN_SOCKET_TYPE
                 WebRequestError.ERROR_REDIRECT_LOOP -> ErrorType.ERROR_REDIRECT_LOOP
                 WebRequestError.ERROR_OFFLINE -> ErrorType.ERROR_OFFLINE

@@ -101,6 +101,9 @@ pref("browser.download.forbid_open_with", false);
 // for updateCharacterBounds() to be called before giving up and unsuppressing
 // IME notifications.
 pref("dom.editcontext.suppress_notifying_ime_timeout", 300);
+// Same as above, but for notifying the IME of focus, which is more important,
+// since it controls whether IME is active or not.
+pref("dom.editcontext.suppress_notifying_ime_timeout_focus", 100);
 
 // Enable indexedDB logging.
 pref("dom.indexedDB.logging.enabled", true);
@@ -546,16 +549,9 @@ pref("toolkit.telemetry.debugSlowSql", false);
 pref("toolkit.telemetry.unified", true);
 
 // DAP related preferences
-pref("toolkit.telemetry.dap_enabled", false);
 pref("toolkit.telemetry.dap.logLevel", "Warn");
-// Verification tasks
-pref("toolkit.telemetry.dap_task1_enabled", false);
-pref("toolkit.telemetry.dap_task1_taskid", "");
-// URL visit counting
-pref("toolkit.telemetry.dap_visit_counting_enabled", false);
 // Note: format of patterns is "<proto>://<host>/<path>"
 // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns
-pref("toolkit.telemetry.dap_visit_counting_experiment_list", "[]");
 // DAP protocol Leader endpoint. Operated by DivviUp/ISRG.
 // - HPKE key is base64url-encoded response of the /hpke_config path on server.
 pref("toolkit.telemetry.dap.leader.url", "https://dap-09-3.api.divviup.org");
@@ -3684,6 +3680,14 @@ pref("browser.ml.overridePipelineOptions", "{}");
 // How long the PageExtractor waits for a headless page load, in ms.
 pref("browser.ml.pageExtractor.headlessTimeoutMs", 15000);
 
+// Extract video metadata and the transcript from YouTube watch pages during
+// page extraction.
+pref("browser.pageextractor.youtube.enabled", false);
+
+// How long, in milliseconds, to wait for the YouTube transcript panel to render
+// after it is opened before giving up and returning metadata alone.
+pref("browser.pageextractor.youtube.timeoutMs", 3000);
+
 // When a user cancels this number of authentication dialogs coming from
 // a single web page in a row, all following authentication dialogs will
 // be blocked (automatically canceled) for that page. The counter resets
@@ -3900,6 +3904,13 @@ pref("services.common.log.logger.tokenserverclient", "Debug");
     pref("remote.experimental.enabled", false);
   #endif
 
+  // Allow Marionette and the Remote Agent to be started dynamically at runtime.
+  #if defined(NIGHTLY_BUILD)
+    pref("remote.experimental.dynamicstart.enabled", true);
+  #else
+    pref("remote.experimental.dynamicstart.enabled", false);
+  #endif
+
   // Defines the verbosity of the internal logger.
   //
   // Available levels are, in descending order of severity, "Trace", "Debug",
@@ -4090,40 +4101,6 @@ pref("extensions.formautofill.heuristics.autofillSameOriginWithTop", true);
 pref("toolkit.osKeyStore.loglevel", "Warn");
 
 pref("extensions.formautofill.supportRTL", false);
-
-// Controls the log level for CookieBannerListService.sys.mjs.
-pref("cookiebanners.listService.logLevel", "Error");
-
-// Controls the log level for Cookie Banner Auto Clicking.
-pref("cookiebanners.bannerClicking.logLevel", "Error");
-
-// Enables the cookie banner auto clicking. The cookie banner auto clicking
-// depends on the `cookiebanners.service.mode` pref.
-pref("cookiebanners.bannerClicking.enabled", true);
-
-// Whether or not banner auto clicking test mode is enabled.
-pref("cookiebanners.bannerClicking.testing", false);
-
-// The maximum time (ms) after load for detecting banner and button elements for
-// cookie banner auto clicking.
-pref("cookiebanners.bannerClicking.timeoutAfterLoad", 5000);
-
-// Maximum time (ms) after DOMContentLoaded for detecting banners. This is a
-// catchall for cases where a load even never occurs.
-pref("cookiebanners.bannerClicking.timeoutAfterDOMContentLoaded", 20000);
-
-// How often (milliseconds) to run the banner detection query selectors to detect
-// the banner element and/or buttons.
-pref("cookiebanners.bannerClicking.pollingInterval", 500);
-
-// Array of test rules for cookie banner handling as a JSON string. They will be
-// inserted in addition to regular rules and may override them when setting the
-// same domain. Every array item should be a valid CookieBannerRule. See
-// CookieBannerRule.schema.json.
-pref("cookiebanners.listService.testRules", "[]");
-
-// Still fetches rules from RemoteSettings, but discards them. Used in tests.
-pref("cookiebanners.listService.testSkipRemoteSettings", false);
 
 // The domains we will block from installing SitePermsAddons. Comma-separated
 // full domains: any subdomains of the domains listed will also be allowed.

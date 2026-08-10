@@ -153,6 +153,13 @@ add_task(async function basic() {
     await onLoad;
     Assert.ok(true, "Expected page is loaded");
 
+    // The click leaves the pointer over the row's position. Rows shift as the
+    // suggestion changes, so a later iteration's row can land under it and be
+    // genuinely hovered, which shows the bottom url this test expects hidden.
+    EventUtils.synthesizeMouseAtCenter(gBrowser.selectedTab, {
+      type: "mousemove",
+    });
+
     await PlacesUtils.history.clear();
   }
 });

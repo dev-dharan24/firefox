@@ -197,31 +197,31 @@ template <class Arch, bool aSwapRB, bool aInverted>
 static MOZ_ALWAYS_INLINE xsimd::batch<uint8_t, Arch> SwizzleCmykVector_SIMD(
     const xsimd::batch<uint8_t, Arch>& aSrc) {
   xsimd::batch<uint8_t, Arch> src;
-  // Invert if necessary.
-  if constexpr (aInverted) {
+  // Invert if necessary, as the math expects inverted CMYK.
+  if constexpr (!aInverted) {
     src = ~aSrc;
   } else {
     src = aSrc;
   }
-  // Isolate C and Y with mask.
+  // Isolate iC and iY with mask.
   auto px16 = xsimd::bitwise_cast<uint16_t>(src);
   const xsimd::batch<uint16_t, Arch> lowByte(0x00FF);
-  auto cy = px16 & lowByte;
-  // Isolate M and K by shifting down to bottom of word.
-  auto mk = px16 >> 8;
-  auto k16 = ExtractAlpha_SIMD<Arch>(src, mk);
-  // Multiply each channel by the alpha, add 1, divide by 255, all in place.
-  // This is equivalent to C * K / 255.
-  cy = cy * k16;
-  cy = (cy + (cy >> 8) + xsimd::batch<uint16_t, Arch>(1)) >> 8;
-  mk = mk * k16;
-  mk = (mk + (mk >> 8) + xsimd::batch<uint16_t, Arch>(1)) >> 8;
+  auto icy = px16 & lowByte;
+  // Isolate iM and iK by shifting down to bottom of word.
+  auto imk = px16 >> 8;
+  auto ik16 = ExtractAlpha_SIMD<Arch>(src, imk);
+  // Multiply each channel by the iK, add 1, divide by 255, all in place. This
+  // is equivalent to iC * iK / 255.
+  icy = icy * ik16;
+  icy = (icy + (icy >> 8) + xsimd::batch<uint16_t, Arch>(1)) >> 8;
+  imk = imk * ik16;
+  imk = (imk + (imk >> 8) + xsimd::batch<uint16_t, Arch>(1)) >> 8;
   // Swap R and B if necessary.
   if constexpr (aSwapRB) {
-    cy = SwapRB16_SIMD<Arch>(cy);
+    icy = SwapRB16_SIMD<Arch>(icy);
   }
   // Combine back to final pixel.
-  return OpaqueAlpha_SIMD<Arch>(xsimd::bitwise_cast<uint8_t>(cy | (mk << 8)));
+  return OpaqueAlpha_SIMD<Arch>(xsimd::bitwise_cast<uint8_t>(icy | (imk << 8)));
 }
 
 template <class Arch, bool aSwapRB, bool aInverted>

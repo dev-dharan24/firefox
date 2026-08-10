@@ -21,6 +21,21 @@ const REFERRAL_CODE_CHARSET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
  * Manages the Firefox Referral program's per-profile referral code.
  */
 class ReferralsClass {
+  maybeLockPref() {
+    if (Services.prefs.prefIsLocked(REFERRAL_CODE_PREF)) {
+      return;
+    }
+
+    // Lock the pref if it exists so that it can't be changed. Locking the pref
+    // will reset the value to the default. If the pref doesn't exist yet,
+    // locking the pref will cause the default pref value to be an empty string
+    // meaning a new code will be generated every time.
+    let code = Services.prefs.getStringPref(REFERRAL_CODE_PREF, "");
+    if (code.length) {
+      Services.prefs.lockPref(REFERRAL_CODE_PREF);
+    }
+  }
+
   get isEnabled() {
     return lazy.REFERRALS_ENABLED;
   }

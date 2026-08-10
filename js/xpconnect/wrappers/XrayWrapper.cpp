@@ -1883,7 +1883,7 @@ static bool RecreateLostWaivers(JSContext* cx, const PropertyDescriptor* orig,
     rewaived = &wrapped.value().toObject();
     rewaived = WrapperFactory::WaiveXray(cx, UncheckedUnwrap(rewaived));
     NS_ENSURE_TRUE(rewaived, false);
-    wrapped.value().set(ObjectValue(*rewaived));
+    wrapped.value().setObject(*rewaived);
   }
   if (getterWasWaived && !IsCrossCompartmentWrapper(wrapped.getter())) {
     // We can't end up with WindowProxy or Location as getters.

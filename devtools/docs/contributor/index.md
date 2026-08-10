@@ -1,5 +1,12 @@
 ```{toctree}
 :name: devtools-contributor-doc
+:hidden:
+:maxdepth: 1
+
+Getting started <README.md>
+Architecture overview <architecture-overview.md>
+Contributing <contributing.md>
+Bugs and issues <bugs-issues.md>
 ```
 
 # Firefox DevTools Contributor Docs
@@ -49,6 +56,8 @@ Responsive Design Mode <tools/responsive-design-mode.md>
 Console <tools/console-panel.md>
 Network </devtools/netmonitor/architecture.md>
 Storage <tools/storage.md>
+Inspector <tools/inspector.md>
+Responsive Design Mode devices <responsive/devices.md>
 ```
 
 ## Frontend

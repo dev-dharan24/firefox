@@ -229,6 +229,11 @@ class SecretSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFra
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
+        requirePreference<SwitchPreferenceCompat>(R.string.pref_key_enable_homepage_weather_widget).apply {
+            isChecked = settings.enableHomepageWeatherWidget
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreferenceCompat>(R.string.pref_key_enable_ads_client_for_stories).apply {
             isChecked = settings.enableAdsClientForStories
             onPreferenceChangeListener = SharedPreferenceUpdater()
@@ -364,6 +369,12 @@ class SecretSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFra
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
+        requirePreference<SwitchPreferenceCompat>(R.string.pref_key_ip_protection_use_gpi).apply {
+            isVisible = Config.channel.isNightlyOrDebug
+            isChecked = settings.ipProtectionUseGpi
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
         requirePreference<SwitchPreferenceCompat>(R.string.pref_key_enable_import_passwords).apply {
             isVisible = Config.channel.isDebug
             isChecked = settings.importPasswordsFeatureFlagEnabled
@@ -373,6 +384,11 @@ class SecretSettingsFragment : PreferenceFragmentCompat(), SystemInsetsPaddedFra
         requirePreference<SwitchPreferenceCompat>(R.string.pref_key_enable_uninstall_survey).apply {
             isVisible = true
             isChecked = context.components.settings.uninstallSurveyFeatureFlagEnabled
+            onPreferenceChangeListener = SharedPreferenceUpdater()
+        }
+
+        requirePreference<SwitchPreferenceCompat>(R.string.pref_key_enable_oled_theme).apply {
+            isChecked = settings.enableOledTheme
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 

@@ -19,7 +19,6 @@ if CONFIG["MOZ_BUILD_APP"] == "browser":
 if not CONFIG["MOZ_BUILD_APP"].startswith("mobile/"):
     FINAL_TARGET_FILES.defaults.settings.main += [
         "anti-tracking-url-decoration.json",
-        "cookie-banner-rules-list.json",
         "devtools-compatibility-browsers.json",
         "devtools-devices.json",
         "example.json",

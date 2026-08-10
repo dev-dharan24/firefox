@@ -109,7 +109,7 @@ function setupAddonRepoServer(themeId, themeName, xpi) {
         type: "statictheme",
         current_version: {
           version: "1.0",
-          // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+          // eslint-disable-next-line sdl/no-insecure-url
           files: [{ platform: "all", url: "http://example.com/theme.xpi" }],
         },
       },
@@ -118,7 +118,7 @@ function setupAddonRepoServer(themeId, themeName, xpi) {
 
   Services.prefs.setCharPref(
     "extensions.getAddons.get.url",
-    // eslint-disable-next-line @microsoft/sdl/no-insecure-url
+    // eslint-disable-next-line sdl/no-insecure-url
     "http://example.com/addons.json"
   );
 

@@ -1629,6 +1629,16 @@ void WebRenderCommandBuilder::DoGroupingForDisplayList(
     return;
   }
 
+  // Sizing the group's blob from its untransformed bounds is only bounded by
+  // the raster scale, and GetInheritedScale() reports a placeholder of 1.0 when
+  // the real scale is degenerate. Rasterizing at the placeholder would request
+  // a blob the size of the untransformed bounds, which can reach nscoord
+  // saturation. The content covers less than a pixel, so drop it (bug 1906769).
+  if (aSc.HasDegenerateRasterScale()) {
+    GP("Skipping group with degenerate raster scale\n");
+    return;
+  }
+
   GP("DoGroupingForDisplayList\n");
 
   mClipManager.BeginList(aSc);
@@ -2484,6 +2494,13 @@ WebRenderCommandBuilder::GenerateFallbackData(
     nsDisplayItem* aItem, wr::DisplayListBuilder& aBuilder,
     wr::IpcResourceUpdateQueue& aResources, const StackingContextHelper& aSc,
     nsDisplayListBuilder* aDisplayListBuilder, LayoutDeviceRect& aImageRect) {
+  // See the comment in DoGroupingForDisplayList: the placeholder scale reported
+  // for degenerate content would size the fallback buffer from bounds that can
+  // reach nscoord saturation (bug 1906769).
+  if (aSc.HasDegenerateRasterScale()) {
+    return nullptr;
+  }
+
   Maybe<gfx::DeviceColor> highlight;
   if (StaticPrefs::gfx_webrender_debug_highlight_painted_layers()) {
     highlight.emplace(gfx::DeviceColor(1.0, 0.0, 0.0, 0.5));
@@ -2565,6 +2582,7 @@ WebRenderCommandBuilder::GenerateFallbackData(
   }
 
   auto visibleSize = visibleRect.Size();
+
   // these rectangles can overflow from scaling so try to
   // catch that with IsEmpty() checks. See bug 1622126.
   if (visibleSize.IsEmpty() || dtRect.IsEmpty()) {
@@ -2728,6 +2746,13 @@ Maybe<wr::ImageMask> WebRenderCommandBuilder::BuildWrMaskImage(
     wr::IpcResourceUpdateQueue& aResources, const StackingContextHelper& aSc,
     nsDisplayListBuilder* aDisplayListBuilder,
     const LayoutDeviceRect& aBounds) {
+  // See the comment in DoGroupingForDisplayList: the placeholder scale reported
+  // for degenerate content would size the mask blob from bounds that can reach
+  // nscoord saturation (bug 1906769).
+  if (aSc.HasDegenerateRasterScale()) {
+    return Nothing();
+  }
+
   RefPtr<WebRenderMaskData> maskData =
       CreateOrRecycleWebRenderUserData<WebRenderMaskData>(aMaskItem);
 

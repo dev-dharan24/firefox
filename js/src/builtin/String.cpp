@@ -4305,7 +4305,7 @@ SharedShape* StringObject::assignInitialShape(JSContext* cx,
   MOZ_ASSERT(obj->empty());
 
   if (!NativeObject::addPropertyInReservedSlot(cx, obj, cx->names().length,
-                                               LENGTH_SLOT, {})) {
+                                               LENGTH_SLOT.index(), {})) {
     return nullptr;
   }
 

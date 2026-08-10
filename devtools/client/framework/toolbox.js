@@ -4972,7 +4972,7 @@ class Toolbox extends EventEmitter {
    * and emit a "webextension-registered" event to allow toolbox-options.js
    * to refresh the listed tools accordingly.
    *
-   * @see browser/components/extensions/ext-devtools.js
+   * @see browser/components/extensions/parent/ext-devtools.js
    */
   registerWebExtension(extensionUUID, { name, pref }) {
     // Ensure that an installed extension (active in the AddonManager) which
@@ -4988,7 +4988,7 @@ class Toolbox extends EventEmitter {
    * name), and emit a "webextension-unregistered" event to allow toolbox-options.js
    * to refresh the listed tools accordingly.
    *
-   * @see browser/components/extensions/ext-devtools.js
+   * @see browser/components/extensions/parent/ext-devtools.js
    */
   unregisterWebExtension(extensionUUID) {
     // Ensure that an extension that has been disabled/uninstalled from the AddonManager
@@ -5002,7 +5002,7 @@ class Toolbox extends EventEmitter {
    * as active for the toolbox and has its related devtools about:config preference set
    * to true.
    *
-   * @see browser/components/extensions/ext-devtools.js
+   * @see browser/components/extensions/parent/ext-devtools.js
    */
   isWebExtensionEnabled(extensionUUID) {
     const extInfo = this.#webExtensions.get(extensionUUID);
