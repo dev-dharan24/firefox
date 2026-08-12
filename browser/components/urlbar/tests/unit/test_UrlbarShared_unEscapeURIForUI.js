@@ -2,7 +2,7 @@
    http://creativecommons.org/publicdomain/zero/1.0/ */
 
 /**
- * Test for unEscapeURIForUI function in UrlbarUtils.
+ * Test for unEscapeURIForUI function in UrlbarShared.
  */
 
 "use strict";
@@ -30,7 +30,7 @@ add_task(function () {
   for (const { description, input, expected, testMessage } of TEST_DATA) {
     info(description);
 
-    const result = UrlbarUtils.unEscapeURIForUI(input);
+    const result = UrlbarShared.unEscapeURIForUI(input);
     Assert.equal(result, expected, testMessage);
   }
 });

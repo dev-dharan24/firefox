@@ -264,7 +264,7 @@ class DWriteFontFallbackRenderer final : public IDWriteTextRenderer {
     (void)hr;
   }
 
-  ~DWriteFontFallbackRenderer() {}
+  ~DWriteFontFallbackRenderer() = default;
 
   // If we don't have an mSystemFonts pointer, this renderer is unusable.
   bool IsValid() const { return mSystemFonts; }

@@ -61,7 +61,7 @@ static __inline void BuildKeyNameFromFontName(nsACString& aName) {
 ////////////////////////////////////////////////////////////////////////////////
 // gfxDWriteFontFamily
 
-gfxDWriteFontFamily::~gfxDWriteFontFamily() {}
+gfxDWriteFontFamily::~gfxDWriteFontFamily() = default;
 
 static bool GetNameAsUtf8(nsACString& aName, IDWriteLocalizedStrings* aStrings,
                           UINT32 aIndex) {
@@ -2670,7 +2670,7 @@ class BundledFontLoader : public IDWriteFontCollectionLoader {
   NS_INLINE_DECL_REFCOUNTING(BundledFontLoader)
 
  public:
-  BundledFontLoader() {}
+  BundledFontLoader() = default;
 
   IFACEMETHODIMP CreateEnumeratorFromKey(
       IDWriteFactory* aFactory, const void* aCollectionKey,

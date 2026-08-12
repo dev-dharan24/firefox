@@ -3702,8 +3702,8 @@ var gSync = {
     this.updateCTAButtonStrings(VpnPanelEl, {
       inUse: vpnInUse,
       titleId: "appmenuitem-vpn-title2",
-      inUseTitleId: "appmenuitem-vpn-title-signed-in",
-      descriptionId: "appmenuitem-vpn-description4",
+      inUseTitleId: "appmenuitem-vpn-title-signed-in1",
+      descriptionId: "appmenuitem-vpn-description5",
     });
 
     // Share Firefox checks

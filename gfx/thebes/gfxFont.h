@@ -1718,24 +1718,21 @@ class gfxFont {
   }
 
   struct Baselines {
-    std::atomic<gfxFloat> mAlphabetic;
-    std::atomic<gfxFloat> mHanging;
-    std::atomic<gfxFloat> mIdeographicUnder;
-    std::atomic<gfxFloat> mIdeographicOver;
-    std::atomic<gfxFloat> mIdeographicInkUnder;
-    std::atomic<gfxFloat> mIdeographicInkOver;
-    std::atomic<gfxFloat> mCentral;
-    std::atomic<gfxFloat> mMath;
+    std::atomic<gfxFloat> mAlphabetic{
+        std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mHanging{std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mIdeographicUnder{
+        std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mIdeographicOver{
+        std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mIdeographicInkUnder{
+        std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mIdeographicInkOver{
+        std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mCentral{std::numeric_limits<gfxFloat>::quiet_NaN()};
+    std::atomic<gfxFloat> mMath{std::numeric_limits<gfxFloat>::quiet_NaN()};
 
-    Baselines()
-        : mAlphabetic(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mHanging(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mIdeographicUnder(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mIdeographicOver(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mIdeographicInkUnder(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mIdeographicInkOver(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mCentral(std::numeric_limits<gfxFloat>::quiet_NaN()),
-          mMath(std::numeric_limits<gfxFloat>::quiet_NaN()) {}
+    Baselines() = default;
   };
 
   typedef std::atomic<gfxFloat> Baselines::* BaselinePtr;

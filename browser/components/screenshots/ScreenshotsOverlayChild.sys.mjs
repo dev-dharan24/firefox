@@ -1630,7 +1630,7 @@ export class ScreenshotsOverlay {
   updateScreenshotsOverlayContainer() {
     let { scrollWidth, scrollHeight, scrollMinX } =
       this.windowDimensions.dimensions;
-    this.screenshotsContainer.style = `left:${scrollMinX};width:${scrollWidth}px;height:${scrollHeight}px;`;
+    this.screenshotsContainer.style = `left:${scrollMinX}px;width:${scrollWidth}px;height:${scrollHeight}px;`;
   }
 
   showScreenshotsOverlayContainer() {

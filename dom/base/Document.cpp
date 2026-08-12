@@ -16603,14 +16603,15 @@ void Document::HidePopoversUntil(Element* aEndpoint, bool aFocusPreviousElement,
   HidePopoverStackUntil(aEndpoint, PopoverAttributeState::Hint,
                         aFocusPreviousElement, aFireEvents);
 
-  // 3. If endpointIsHint, then return.
-  if (endpointIsHint) {
-    return;
-  }
+  // 3. Let autoEndpoint be endpoint.
+  // 4. If endpointIsHint is true, then set autoEndpoint to document's hint
+  // stack parent.
+  RefPtr<Element> autoEndpoint =
+      endpointIsHint ? PopoverHintStackParent() : aEndpoint;
 
-  // 4. Run hide popover stack until given document, endpoint, Auto,
+  // 5. Run hide popover stack until given document, autoEndpoint, Auto,
   // focusPreviousElement, and fireEvents.
-  HidePopoverStackUntil(aEndpoint, PopoverAttributeState::Auto,
+  HidePopoverStackUntil(autoEndpoint, PopoverAttributeState::Auto,
                         aFocusPreviousElement, aFireEvents);
 }
 

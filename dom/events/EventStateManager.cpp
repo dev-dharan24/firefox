@@ -1620,26 +1620,8 @@ void EventStateManager::LightDismissOpenPopovers(WidgetEvent* aEvent,
     return;
   }
 
-  // 6.5. Let endpointIsHint be true if document's showing hint popover list
-  // contains ancestor; otherwise false.
-  bool endpointIsHint = targetDoc->PopoverListOf(PopoverAttributeState::Hint)
-                            .Contains(ancestor.get());
-
-  // 6.6. Run hide popover stack until given document, ancestor, Hint, false,
-  // and true.
-  targetDoc->HidePopoverStackUntil(ancestor, PopoverAttributeState::Hint, false,
-                                   true);
-
-  // 6.7. Let autoEndpoint be ancestor.
-  // 6.8. If endpointIsHint is true, then set autoEndpoint to document's hint
-  // stack parent.
-  RefPtr<Element> autoEndpoint =
-      endpointIsHint ? targetDoc->PopoverHintStackParent() : ancestor.get();
-
-  // 6.9. Run hide popover stack until given document, autoEndpoint, Auto,
-  // false, and true.
-  targetDoc->HidePopoverStackUntil(autoEndpoint, PopoverAttributeState::Auto,
-                                   false, true);
+  // 6.5. Run hide popovers until given document, ancestor, false, and true.
+  targetDoc->HidePopoversUntil(ancestor, false, true);
 }
 
 // https://html.spec.whatwg.org/multipage/interactive-elements.html#run-light-dismiss-activities

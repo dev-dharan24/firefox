@@ -243,6 +243,20 @@ TEST_SUITES = {
             "test-verify($|.*(-1|[^0-9])$)",
         ],
     },
+    "mochitest-browser-chrome-ml-models": {
+        "aliases": ("bc-ml", "browser-ml-models"),
+        "build_flavor": "browser-chrome",
+        "mach_command": "mochitest",
+        "kwargs": {
+            "flavor": "browser-chrome",
+            "subsuite": "ml-models",
+            "test_paths": None,
+        },
+        "task_regex": [
+            "mochitest-browser-chrome-ml-models($|.*(-1|[^0-9])$)",
+            "test-verify($|.*(-1|[^0-9])$)",
+        ],
+    },
     "mochitest-plain": {
         "aliases": (
             "mp",
@@ -505,6 +519,7 @@ _test_subsuites = {
     ("browser-chrome", "a11y"): "mochitest-browser-a11y",
     ("browser-chrome", "devtools"): "mochitest-devtools-chrome",
     ("browser-chrome", "media-bc"): "mochitest-browser-media",
+    ("browser-chrome", "ml-models"): "mochitest-browser-chrome-ml-models",
     ("browser-chrome", "remote"): "mochitest-remote",
     ("browser-chrome", "screenshots"): "mochitest-browser-screenshots",
     ("browser-chrome", "translations"): "mochitest-browser-translations",
@@ -524,6 +539,7 @@ _test_subsuites = {
     ("web-platform-tests", "print-reftest"): "web-platform-tests-print-reftest",
     ("web-platform-tests", "reftest"): "web-platform-tests-reftest",
     ("web-platform-tests", "wdspec"): "web-platform-tests-wdspec",
+    ("web-platform-tests", "aamtest"): "web-platform-tests-aam",
 }
 
 

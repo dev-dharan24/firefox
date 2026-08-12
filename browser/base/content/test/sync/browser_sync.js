@@ -1421,7 +1421,7 @@ add_task(async function test_ui_privacy_tools_all_in_use_signedin() {
     },
     {
       buttonId: "PanelUI-fxa-menu-vpn-button",
-      titleId: "appmenuitem-vpn-title-signed-in",
+      titleId: "appmenuitem-vpn-title-signed-in1",
     },
   ];
 

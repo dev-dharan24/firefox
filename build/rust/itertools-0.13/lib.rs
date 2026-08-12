@@ -2,6 +2,4 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-fn main() {
-    uniffi::generate_scaffolding("./src/fxa_client.udl").unwrap();
-}
+pub use itertools::*;
