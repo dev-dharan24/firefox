@@ -32,6 +32,12 @@
   margin-bottom: 0;
 }
 
+.title-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-small);
+}
+
 .monitor-card-title {
   flex: 1;
   min-width: 0;

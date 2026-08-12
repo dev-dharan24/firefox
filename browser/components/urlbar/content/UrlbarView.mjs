@@ -3262,6 +3262,10 @@ export class UrlbarView {
   }
 
   #startRemoveStaleRowsTimer() {
+    // A query that got superseded before it ended leaves its timer armed, and
+    // removing stale rows also accepts tentative exposures, so an outlived one
+    // would do both to the query starting here.
+    this.#cancelRemoveStaleRowsTimer();
     this.#removeStaleRowsTimer = this.window.setTimeout(() => {
       this.#removeStaleRowsTimer = null;
       this.#removeStaleRows();

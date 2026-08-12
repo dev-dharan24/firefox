@@ -441,6 +441,7 @@ export async function buildEngineForFeature(feature, opts = {}) {
   let model = mainConfig.model;
   const CHAT_MODEL_FALLBACK_FEATURES = new Set([
     MODEL_FEATURES.AGENT_MONITOR,
+    MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION,
     MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION_STARTER,
   ]);
   if (

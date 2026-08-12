@@ -13,6 +13,8 @@ import "chrome://global/content/elements/moz-input-url.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/monitors-display.mjs";
 // eslint-disable-next-line import/no-unassigned-import
+import "chrome://browser/content/aiwindow/components/monitor-icon.mjs";
+// eslint-disable-next-line import/no-unassigned-import
 import "chrome://global/content/elements/moz-select.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://global/content/elements/moz-textarea.mjs";
@@ -889,7 +891,11 @@ export class AITasks extends MozLitElement {
         : html`<div class="page-wrapper">
             <div class="page-container">
               <div class="header">
-                <h2 data-l10n-id="ai-tasks-page-title"></h2>
+                <div class="title-container">
+                  <monitor-icon></monitor-icon>
+                  <h2 data-l10n-id="ai-tasks-page-title"></h2>
+                </div>
+
                 <moz-button
                   class="add-task-button"
                   data-l10n-id="ai-tasks-add-alert-button"

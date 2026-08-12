@@ -213,6 +213,43 @@ export const UrlbarShared = {
     EXTENSION: 4,
   }),
 
+  // The tip types UrlbarProviderInterventions can show, i.e. the `type` in the
+  // payload of its results.
+  INTERVENTION_TIP_TYPE: Object.freeze({
+    NONE: "",
+    CLEAR: "intervention_clear",
+    REFRESH: "intervention_refresh",
+
+    // There's an update available, but the user's pref says we should ask them
+    // to download and apply it.
+    UPDATE_ASK: "intervention_update_ask",
+
+    // The updater is currently checking.  We don't actually show a tip for this,
+    // but we use it to tell whether we should wait for the check to complete in
+    // startQuery.  See startQuery for details.
+    UPDATE_CHECKING: "intervention_update_checking",
+
+    // The user's browser is up to date, but they triggered the update
+    // intervention. We show this special refresh intervention instead.
+    UPDATE_REFRESH: "intervention_update_refresh",
+
+    // There's an update and it's been downloaded and applied. The user needs to
+    // restart to finish.
+    UPDATE_RESTART: "intervention_update_restart",
+
+    // We can't update the browser or possibly even check for updates for some
+    // reason, so the user should download the latest version from the web.
+    UPDATE_WEB: "intervention_update_web",
+  }),
+
+  // The tip types UrlbarProviderSearchTips can show, i.e. the `type` in the
+  // payload of its results.
+  SEARCH_TIP_TYPE: Object.freeze({
+    NONE: "",
+    ONBOARD: "searchTip_onboard",
+    REDIRECT: "searchTip_redirect",
+  }),
+
   // Per-result exposure telemetry.
   EXPOSURE_TELEMETRY: {
     // Exposure telemetry will not be recorded for the result.
@@ -322,7 +359,7 @@ export const UrlbarShared = {
       {
         source: this.RESULT_SOURCE.TABS,
         restrict: this.RESTRICT_TOKENS.OPENPAGE,
-        icon: "chrome://browser/skin/tabs.svg",
+        icon: "chrome://browser/skin/open-tabs.svg",
         pref: "shortcuts.tabs",
         telemetryLabel: "tabs",
         uiLabel: "urlbar-searchmode-tabs3",
@@ -338,7 +375,7 @@ export const UrlbarShared = {
       {
         source: this.RESULT_SOURCE.ACTIONS,
         restrict: this.RESTRICT_TOKENS.ACTION,
-        icon: "chrome://browser/skin/quickactions.svg",
+        icon: "chrome://browser/skin/lightning-bolt.svg",
         pref: "shortcuts.actions",
         telemetryLabel: "actions",
         uiLabel: "urlbar-searchmode-actions3",

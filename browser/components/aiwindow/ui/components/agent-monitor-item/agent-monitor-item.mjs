@@ -14,6 +14,8 @@ import "chrome://global/content/elements/moz-textarea.mjs";
 import "chrome://global/content/elements/moz-select.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://global/content/elements/moz-button.mjs";
+// eslint-disable-next-line import/no-unassigned-import
+import "chrome://browser/content/aiwindow/components/monitor-icon.mjs";
 
 const SCHEDULE_TYPES = Object.freeze({
   DAILY: "daily",
@@ -695,10 +697,13 @@ export class AgentMonitorItem extends MozLitElement {
     const agent = this.agent ?? {};
     return html`
       <div class="monitor-card">
-        <h2
-          class="monitor-card-state-title"
-          data-l10n-id="ai-tasks-alert-modal-title"
-        ></h2>
+        <div class="title-container">
+          <monitor-icon size="small"></monitor-icon>
+          <h2
+            class="monitor-card-state-title"
+            data-l10n-id="ai-tasks-alert-modal-title"
+          ></h2>
+        </div>
         <div class="monitor-card-head">
           <div class="monitor-name-field">
             <moz-input-text

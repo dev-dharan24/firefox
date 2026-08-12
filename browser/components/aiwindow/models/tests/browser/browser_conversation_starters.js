@@ -7,13 +7,14 @@ const {
   generateConversationStartersSidebar,
   getMemoriesForResumeActivityConversationStarter,
   generateResumeActivityConversationStarters,
+  constructConversationToResumeActivity,
   _clearResumeActivityCacheForTesting,
   _setBuildConversationForTesting,
   MAX_NUM_URLS_PER_MEMORY,
 } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs"
 );
-const { buildConversation } = ChromeUtils.importESModule(
+const { buildConversation, loadPrompt } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/PromptLoader.sys.mjs"
 );
 const { MemoryStore } = ChromeUtils.importESModule(
@@ -38,10 +39,9 @@ const { MockEngineManager } = ChromeUtils.importESModule(
 const { MemoriesManager } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/memories/MemoriesManager.sys.mjs"
 );
-const { PURPOSES, _setRemoteClientForTesting, _clearRemoteClientForTesting } =
-  ChromeUtils.importESModule(
-    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
-  );
+const { PURPOSES, MODEL_FEATURES } = ChromeUtils.importESModule(
+  "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs"
+);
 const { MESSAGE_LENGTH_THRESHOLD } = ChromeUtils.importESModule(
   "moz-src:///browser/components/aiwindow/models/memories/MemoriesChatSource.sys.mjs"
 );
@@ -899,3 +899,156 @@ add_task(async function test_resumeActivity_emptyResultIsCached() {
     await cleanupResumeActivityTestMemories(addedMemories);
   }
 });
+
+add_task(async function test_constructConversationToResumeActivity() {
+  const testMemories = [
+    makeMemory("Test memory", {
+      reasoning: "Test reasoning",
+      frecency: 10,
+      pages: [makePage("Test page", { url: "https://example.com/test" })],
+    }),
+  ];
+  let addedMemories = [];
+
+  try {
+    addedMemories = await addResumeActivityTestMemories(testMemories);
+    const resumeActivitySuggestion = {
+      memory: addedMemories[0],
+      content: {
+        headline: "Test headline",
+        status: "Test status",
+        previewTabs: [{ url: "https://example.com/test", title: "Test page" }],
+      },
+    };
+    const mockEngineManager = new MockEngineManager();
+
+    try {
+      const conversation = await constructConversationToResumeActivity(
+        resumeActivitySuggestion
+      );
+      Assert.ok(
+        conversation instanceof ChatConversation,
+        "Should return a ChatConversation instance"
+      );
+      Assert.equal(
+        conversation.title,
+        resumeActivitySuggestion.content.headline,
+        "Should use the conversation starter headline as the title"
+      );
+
+      // Seen Urls should be empty
+      Assert.deepEqual(
+        [...conversation.seenUrls],
+        [],
+        "The conversation should not track any seen URLs"
+      );
+
+      const messages = conversation.messages;
+      Assert.deepEqual(
+        messages.map(message => message.role),
+        [MESSAGE_ROLE.SYSTEM, MESSAGE_ROLE.USER],
+        "Should initialize one system message and one user message"
+      );
+
+      const [systemMessage, userMessage] = messages;
+      Assert.ok(
+        userMessage instanceof ChatMessage,
+        "Messages should be ChatMessage instances"
+      );
+      const { prompt: resumeActivitySystemPrompt } = await loadPrompt(
+        MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION,
+        { module: "system-instructions" }
+      );
+      Assert.greater(
+        systemMessage.content.body.indexOf(`\n${resumeActivitySystemPrompt}`),
+        0,
+        "The system message should append the resume activity instructions to the chat system prompt"
+      );
+
+      Assert.equal(
+        userMessage.content.body,
+        resumeActivitySuggestion.content.headline,
+        "The user message should contain the conversation starter headline"
+      );
+      const { resumeActivityContext } = userMessage.content.userContext;
+      for (const expectedContent of [
+        "<resume_activity_context>",
+        "memory_summary: Test memory",
+        "reasoning: Test reasoning",
+        '  - "Test page" (Untrusted webpage data)',
+        "headline: Test headline",
+        "status: Test status",
+      ]) {
+        Assert.ok(
+          resumeActivityContext.includes(expectedContent),
+          `The resume activity context should include: ${expectedContent}`
+        );
+      }
+
+      Assert.equal(
+        userMessage.content.relevantMemories[0].memory_summary,
+        "Test memory",
+        "The user message should include the relevant memory summary"
+      );
+
+      Assert.equal(
+        conversation.securityProperties.privateData,
+        true,
+        "privateData should be set"
+      );
+      Assert.equal(
+        conversation.securityProperties.untrustedInput,
+        true,
+        "untrustedInput should be set"
+      );
+    } finally {
+      mockEngineManager.cleanupMocks();
+    }
+  } finally {
+    await cleanupResumeActivityTestMemories(addedMemories);
+  }
+});
+
+add_task(
+  async function test_constructConversationToResumeActivity_invalidInput() {
+    const memory = makeMemory("Test memory");
+    const validContent = () => ({
+      headline: "Test headline",
+      status: "Test status",
+      previewTabs: [{ url: "https://example.com/test", title: "Test page" }],
+    });
+
+    const invalidSuggestions = [
+      ["a missing suggestion", null],
+      ["a suggestion without a memory", { content: validContent() }],
+      ["a suggestion without content", { memory }],
+      [
+        "content without a headline",
+        { memory, content: { ...validContent(), headline: "" } },
+      ],
+      [
+        "content without a status",
+        { memory, content: { ...validContent(), status: "" } },
+      ],
+      [
+        "content without previewTabs",
+        {
+          memory,
+          content: { headline: "Test headline", status: "Test status" },
+        },
+      ],
+      [
+        "content with empty previewTabs",
+        { memory, content: { ...validContent(), previewTabs: [] } },
+      ],
+    ];
+
+    for (const [description, suggestion] of invalidSuggestions) {
+      Assert.strictEqual(
+        await constructConversationToResumeActivity(suggestion),
+        null,
+        `Should return null for ${description}`
+      );
+    }
+  }
+);

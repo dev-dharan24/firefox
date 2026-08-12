@@ -911,17 +911,6 @@
     "releaseChannelCollection": "opt-out",
     "description": "Record hits and misses to the startup cache, with categories."
   },
-  "SCRIPT_PRELOADER_REQUESTS": {
-    "record_in_processes": ["main", "content"],
-    "products": ["firefox", "fennec"],
-    "alert_emails": ["dothayer@mozilla.com", "plawless@mozilla.com"],
-    "expires_in_version": "never",
-    "kind": "categorical",
-    "labels": ["Hit", "HitChild", "Miss"],
-    "bug_numbers": [1364235, 1590385, 1623098, 1649954, 1689257, 1754639],
-    "releaseChannelCollection": "opt-out",
-    "description": "Record hits and misses to the script preloader, with categories."
-  },
   "SCRIPT_PRELOADER_WAIT_TIME": {
     "record_in_processes": ["main", "content"],
     "products": ["firefox", "fennec"],
@@ -5504,29 +5493,5 @@
     "alert_emails": ["amadan@mozilla.com", "emz@mozilla.com"],
     "bug_numbers": [1833105],
     "description": "The decrease in the length of the URL when strip on share is used, only if at least one parameter is stripped"
-  },
-  "SCREENWAKELOCK_HELD_DURATION_MS": {
-    "record_in_processes": ["content"],
-    "products": ["firefox"],
-    "alert_emails": ["vhilla@mozilla.com"],
-    "expires_in_version": "never",
-    "kind": "exponential",
-    "low": 240000,
-    "high": 28800000,
-    "n_buckets": 50,
-    "bug_numbers": [1589554],
-    "description": "How long a screen wake lock was held in ms"
-  },
-  "SCREENWAKELOCK_RELEASE_BATTERY_LEVEL_DISCHARGING": {
-    "record_in_processes": ["content"],
-    "products": ["firefox"],
-    "alert_emails": ["vhilla@mozilla.com"],
-    "expires_in_version": "never",
-    "kind": "linear",
-    "low": 1,
-    "high": 100,
-    "n_buckets": 50,
-    "bug_numbers": [1589554],
-    "description": "Battery level when discharging and the wake lock was released"
   }
 }

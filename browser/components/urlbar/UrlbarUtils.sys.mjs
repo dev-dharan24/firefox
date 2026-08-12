@@ -38,10 +38,6 @@ const lazy = XPCOMUtils.declareLazy({
   SearchSuggestionController:
     "moz-src:///toolkit/components/search/SearchSuggestionController.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
-  UrlbarProviderInterventions:
-    "moz-src:///browser/components/urlbar/UrlbarProviderInterventions.sys.mjs",
-  UrlbarProviderSearchTips:
-    "moz-src:///browser/components/urlbar/UrlbarProviderSearchTips.sys.mjs",
   UrlbarSearchUtils:
     "moz-src:///browser/components/urlbar/UrlbarSearchUtils.sys.mjs",
   UrlUtils: "resource://gre/modules/UrlUtils.sys.mjs",
@@ -1408,24 +1404,24 @@ export var UrlbarUtils = {
       case UrlbarShared.RESULT_TYPE.TIP:
         if (result.providerName === "UrlbarProviderInterventions") {
           switch (result.payload.type) {
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.CLEAR:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.CLEAR:
               return "intervention_clear";
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.REFRESH:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.REFRESH:
               return "intervention_refresh";
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.UPDATE_ASK:
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.UPDATE_CHECKING:
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.UPDATE_REFRESH:
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.UPDATE_RESTART:
-            case lazy.UrlbarProviderInterventions.TIP_TYPE.UPDATE_WEB:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.UPDATE_ASK:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.UPDATE_CHECKING:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.UPDATE_REFRESH:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.UPDATE_RESTART:
+            case UrlbarShared.INTERVENTION_TIP_TYPE.UPDATE_WEB:
               return "intervention_update";
             default:
               return "intervention_unknown";
           }
         }
         switch (result.payload.type) {
-          case lazy.UrlbarProviderSearchTips.TIP_TYPE.ONBOARD:
+          case UrlbarShared.SEARCH_TIP_TYPE.ONBOARD:
             return "tip_onboard";
-          case lazy.UrlbarProviderSearchTips.TIP_TYPE.REDIRECT:
+          case UrlbarShared.SEARCH_TIP_TYPE.REDIRECT:
             return "tip_redirect";
           case "dismissalAcknowledgment":
             return "tip_dismissal_acknowledgment";

@@ -229,7 +229,6 @@
 #include "nsINetworkLinkService.h"
 #include "nsIObserverService.h"
 #include "nsIParentChannel.h"
-#include "nsIPrivateAttributionService.h"
 #include "nsIScriptError.h"
 #include "nsIScriptSecurityManager.h"
 #include "nsIServiceWorkerManager.h"
@@ -1265,35 +1264,6 @@ mozilla::ipc::IPCResult ContentParent::RecvCreateGMPService() {
 
   mGMPCreated = true;
 
-  return IPC_OK();
-}
-
-IPCResult ContentParent::RecvAttributionEvent(
-    const nsACString& aHost, PrivateAttributionImpressionType aType,
-    uint32_t aIndex, const nsAString& aAd, const nsACString& aTargetHost) {
-  nsCOMPtr<nsIPrivateAttributionService> pa =
-      components::PrivateAttribution::Service();
-  if (NS_WARN_IF(!pa)) {
-    return IPC_OK();
-  }
-  pa->OnAttributionEvent(aHost, GetEnumString(aType), aIndex, aAd, aTargetHost);
-  return IPC_OK();
-}
-
-IPCResult ContentParent::RecvAttributionConversion(
-    const nsACString& aHost, const nsAString& aTask, uint32_t aHistogramSize,
-    const Maybe<uint32_t>& aLookbackDays,
-    const Maybe<PrivateAttributionImpressionType>& aImpressionType,
-    const nsTArray<nsString>& aAds, const nsTArray<nsCString>& aSourceHosts) {
-  nsCOMPtr<nsIPrivateAttributionService> pa =
-      components::PrivateAttribution::Service();
-  if (NS_WARN_IF(!pa)) {
-    return IPC_OK();
-  }
-  pa->OnAttributionConversion(
-      aHost, aTask, aHistogramSize, aLookbackDays.valueOr(0),
-      aImpressionType ? GetEnumString(*aImpressionType) : EmptyCString(), aAds,
-      aSourceHosts);
   return IPC_OK();
 }
 

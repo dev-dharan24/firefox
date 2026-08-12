@@ -101,6 +101,7 @@ export const MODEL_FEATURES = Object.freeze({
     "conversation-suggestions-assistant-limitations",
   CONVERSATION_SUGGESTIONS_MEMORIES: "conversation-suggestions-memories",
   RESUME_ACTIVITY_CONVERSATION_STARTER: "resume-activity-conversation-starter",
+  RESUME_ACTIVITY_CONVERSATION: "resume-activity-conversation",
   // memories generation features
   MEMORIES_INITIAL_GENERATION_SYSTEM: "memories-initial-generation-system",
   MEMORIES_INITIAL_GENERATION_USER: "memories-initial-generation-user",
@@ -170,6 +171,7 @@ export const FEATURE_MAJOR_VERSIONS = Object.freeze({
   [MODEL_FEATURES.CONVERSATION_SUGGESTIONS_ASSISTANT_LIMITATIONS]: 1,
   [MODEL_FEATURES.CONVERSATION_SUGGESTIONS_MEMORIES]: 1,
   [MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION_STARTER]: 1,
+  [MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION]: 1,
   // memories generation feature versions
   [MODEL_FEATURES.MEMORIES_INITIAL_GENERATION_SYSTEM]: 3,
   [MODEL_FEATURES.MEMORIES_INITIAL_GENERATION_USER]: 4,

@@ -43,6 +43,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/models/memories/MemoriesChatSource.sys.mjs",
   ROLE_LABEL:
     "moz-src:///browser/components/aiwindow/models/Conversation.sys.mjs",
+  ChatConversation:
+    "moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs",
+  SYSTEM_PROMPT_TYPE:
+    "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "console", () =>
@@ -584,16 +588,16 @@ export async function getMemoriesForResumeActivityConversationStarter(
 }
 
 /**
- * Attaches resolved Places URLs/titles to each memory, dropping unresolved
+ * Attaches resolved Places URLs/titles to a single memory, dropping unresolved
  * URLs and keeping the most recently visited up to maxUrlsPerMemory.
  *
- * @param {Array<object>} memories - Memories carrying history place hashes
+ * @param {object} memory - Memory carrying history place hashes
  * @param {Map<number, object>} urlsByHash - Places data keyed by URL hash
  * @param {number} maxUrlsPerMemory - Max URLs to keep per memory
- * @returns {Array<{memory: object, urls: Array<object>}>}
+ * @returns {{memory: object, urls: Array<object>}}
  */
-function attachUrlsToMemories(memories, urlsByHash, maxUrlsPerMemory) {
-  return memories.map(memory => ({
+function attachUrlsToMemory(memory, urlsByHash, maxUrlsPerMemory) {
+  return {
     memory,
     urls: lazy
       .getHistorySourceIdsFromMemory(memory)
@@ -601,7 +605,7 @@ function attachUrlsToMemories(memories, urlsByHash, maxUrlsPerMemory) {
       .filter(Boolean)
       .sort((a, b) => a.lastVisitDate - b.lastVisitDate)
       .slice(-maxUrlsPerMemory),
-  }));
+  };
 }
 
 /**
@@ -651,10 +655,10 @@ async function formatChatsForResumeActivityPrompt(memories) {
 
 /**
  * Builds the prompt text block describing a single memory and its associated
- * pages and chats. The `index` doubles as the id echoed back by the model.
+ * pages and chats. When provided, `index` doubles as the id echoed back by the model.
  *
  * @param {{memory: object, urls: Array<object>}} entry - Memory and its URLs
- * @param {number} index - Position of the memory, used as its stable id
+ * @param {number|undefined} index - Optional position of the memory, used as its stable id
  * @param {Map<string, object>} chatsById - Formatted chats keyed by conversation id
  * @returns {string} Prompt block for the memory
  */
@@ -678,9 +682,11 @@ function buildMemoryInputBlock({ memory, urls }, index, chatsById) {
               .join("\n")}`
     );
 
-  let block = `-------------------------
-id: ${index}
-memory_summary: ${memory.memory_summary}
+  const header = Number.isInteger(index)
+    ? `-------------------------\nid: ${index}\n`
+    : "";
+
+  let block = `${header}memory_summary: ${memory.memory_summary}
 frecency: ${memory.frecency ?? 0}
 reasoning: ${memory.reasoning ?? ""}
 pages:\n${pages}`;
@@ -741,10 +747,8 @@ async function generateUncachedResumeActivityConversationStarters() {
     const urlsByHash = await lazy.resolveUrlsForMemories(
       memoriesWithPlaceHashes
     );
-    const memoriesWithUrlsAndTitles = attachUrlsToMemories(
-      memoriesWithPlaceHashes,
-      urlsByHash,
-      MAX_NUM_URLS_PER_MEMORY
+    const memoriesWithUrlsAndTitles = memoriesWithPlaceHashes.map(memory =>
+      attachUrlsToMemory(memory, urlsByHash, MAX_NUM_URLS_PER_MEMORY)
     );
 
     // Load prompts and build the conversation for inference
@@ -815,7 +819,7 @@ async function generateUncachedResumeActivityConversationStarters() {
     });
     return result.filter(Boolean);
   } catch (e) {
-    lazy.console.warn("[ConversationSuggestions][resume-activity] failed:", e);
+    lazy.console.warn("[resume-activity] Conversation starters failed:", e);
     return [];
   }
 }
@@ -844,4 +848,113 @@ export async function generateResumeActivityConversationStarters() {
     _resumeActivityCache.set(watermark, { result });
   }
   return result;
+}
+
+/**
+ * Generates a conversation initialized with a resume activity suggestion.
+ *
+ * @param {object} resumeActivitySuggestion - Resume activity suggestion data
+ * @param {object} resumeActivitySuggestion.memory - The memory associated with the resume activity suggestion
+ * @param {object} resumeActivitySuggestion.content - Content of the suggestion
+ * @param {string} resumeActivitySuggestion.content.headline - Headline for the suggestion
+ * @param {string} resumeActivitySuggestion.content.status - Status for the suggestion
+ * @param {Array<object>} resumeActivitySuggestion.content.previewTabs - Array of preview tabs
+ * @param {string} resumeActivitySuggestion.content.previewTabs[].url - URL of a preview tab
+ * @param {string} resumeActivitySuggestion.content.previewTabs[].title - Title of a preview tab
+ * @returns {Promise<ChatConversation>} ChatConversation instance initialized with the resume activity context
+ */
+export async function constructConversationToResumeActivity(
+  resumeActivitySuggestion
+) {
+  if (
+    !resumeActivitySuggestion ||
+    !resumeActivitySuggestion.memory ||
+    !resumeActivitySuggestion.content
+  ) {
+    lazy.console.warn(
+      "[resume-activity] Missing required inputs for conversation."
+    );
+    return null;
+  }
+
+  // Check required content fields
+  const content = resumeActivitySuggestion.content;
+  if (
+    !content.headline ||
+    !content.status ||
+    !content.previewTabs ||
+    !Array.isArray(content.previewTabs) ||
+    content.previewTabs.length === 0
+  ) {
+    lazy.console.warn(
+      "[resume-activity] Missing fields in resume activity content fields."
+    );
+    return null;
+  }
+
+  const conversation = new lazy.ChatConversation({
+    title: resumeActivitySuggestion.content.headline,
+  });
+
+  const [
+    { prompt: chatSystemPrompt },
+    { prompt: resumeActivitySystemPrompt },
+    { prompt: resumeActivityUserPrompt },
+  ] = await Promise.all([
+    lazy.loadPrompt(lazy.MODEL_FEATURES.CHAT, {
+      model: conversation.engine?.model,
+    }),
+    lazy.loadPrompt(lazy.MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION, {
+      module: "system-instructions",
+    }),
+    lazy.loadPrompt(lazy.MODEL_FEATURES.RESUME_ACTIVITY_CONVERSATION, {
+      module: "user-data",
+    }),
+  ]);
+
+  conversation.setSystemMessage({
+    type: lazy.SYSTEM_PROMPT_TYPE.TEXT,
+    body: [chatSystemPrompt, resumeActivitySystemPrompt].join("\n"),
+  });
+
+  const memoryInput = buildMemoryInputBlock(
+    {
+      memory: resumeActivitySuggestion.memory,
+      urls: resumeActivitySuggestion.content.previewTabs,
+    },
+    undefined,
+    await formatChatsForResumeActivityPrompt(
+      Array.of(resumeActivitySuggestion.memory)
+    )
+  );
+
+  const resumeActivityData = lazy.renderPrompt(resumeActivityUserPrompt, {
+    memoryInput,
+    conversationStarter: `headline: ${resumeActivitySuggestion.content.headline}
+status: ${resumeActivitySuggestion.content.status}`,
+  });
+
+  const userMessage = conversation.addUserMessage(
+    resumeActivitySuggestion.content.headline,
+    null,
+    undefined,
+    {
+      resumeActivityContext: resumeActivityData,
+    }
+  );
+
+  userMessage.content.relevantMemories = [
+    {
+      id: resumeActivitySuggestion.memory.id,
+      memory_summary: resumeActivitySuggestion.memory.memory_summary,
+    },
+  ];
+
+  // SECURITY: the prompt mixes private user data (memory summaries, browsing
+  // history, past chats) with untrusted webpage titles. Flags set so unallowed
+  // tools will not be available for use in this conversation.
+  conversation.securityProperties.setPrivateData();
+  conversation.securityProperties.setUntrustedInput();
+  conversation.securityProperties.commit();
+  return conversation;
 }
