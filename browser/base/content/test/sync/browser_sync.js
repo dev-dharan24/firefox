@@ -2466,12 +2466,13 @@ add_task(
 );
 
 /**
- * Regression test for bug 2057197: in the FxA menu's per-device recent tabs
- * panel, closing a tab disables its row (a toolbarbutton that also serves as the
- * row container holding the close/undo buttons). The Undo button is nested
- * inside that row, so it must remain clickable even though the row is disabled -
- * otherwise the close can never be undone. This synthesizes real mouse events so
- * that pointer-events are honored (element.click() would bypass them).
+ * Regression test for bug 2057197 / bug 2058595: in the FxA menu's per-device
+ * recent tabs panel, each row is a toolbaritem holding the tab button and its
+ * sibling close/undo buttons. Closing a tab disables the tab button; because
+ * Undo is a sibling (not nested inside the disabled button), it stays reachable
+ * - both clickable and exposed via the accessibility API - so the close can be
+ * undone. This synthesizes real mouse events so that pointer-events are honored
+ * (element.click() would bypass them).
  */
 add_task(async function test_recent_tabs_close_then_undo() {
   const sandbox = sinon.createSandbox();
@@ -2545,7 +2546,8 @@ add_task(async function test_recent_tabs_close_then_undo() {
     document,
     "PanelUI-fxa-device-recent-tabs-list"
   );
-  let tabItem = tabsList.querySelector('toolbarbutton[itemtype="tab"]');
+  let tabItem = tabsList.querySelector("toolbaritem.all-tabs-item");
+  let tabButton = tabItem.querySelector(".all-tabs-button");
   let closeBtn = tabItem.querySelector(".all-tabs-close-button");
   let undoBtn = tabItem.querySelector(".remote-tabs-undo-button");
   ok(closeBtn, "Close button is present");
@@ -2555,7 +2557,10 @@ add_task(async function test_recent_tabs_close_then_undo() {
   EventUtils.synthesizeMouseAtCenter(closeBtn, {}, window);
 
   ok(enqueueStub.calledOnce, "Closing the tab queued a remote close");
-  is(tabItem.disabled, true, "Tab row is disabled after closing");
+  ok(
+    tabButton.disabled,
+    "Tab button is disabled after closing (Undo stays reachable as a sibling)"
+  );
   ok(closeBtn.hidden, "Close button is hidden after closing");
   ok(!undoBtn.hidden, "Undo button is shown after closing");
 
@@ -2565,7 +2570,7 @@ add_task(async function test_recent_tabs_close_then_undo() {
     removeStub.calledOnce,
     "Clicking Undo removed the pending remote close (bug 2057197)"
   );
-  is(tabItem.disabled, false, "Tab row is re-enabled after undo");
+  ok(!tabButton.disabled, "Tab button is re-enabled after undo");
   ok(undoBtn.hidden, "Undo button is hidden after undo");
   ok(!closeBtn.hidden, "Close button is shown again after undo");
 

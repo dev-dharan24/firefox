@@ -4143,6 +4143,21 @@ product.
               <li>Microsoft.UI.Input.dll</li>
               <li>Microsoft.UI.Windowing.Core.dll</li>
               <li>Microsoft.UI.Windowing.dll</li>
+#ifdef ONNX_RUNTIME
+              <li>onnxruntime.dll</li>
+#endif
+#endif
+
+#ifdef XP_MACOSX
+#ifdef ONNX_RUNTIME
+              <li>libonnxruntime.dylib</li>
+#endif
+#endif
+
+#ifdef XP_LINUX
+#ifdef ONNX_RUNTIME
+              <li>libonnxruntime.so</li>
+#endif
 #endif
             </ul>
             See the individual LICENSE files or headers for copyright owners.</p>

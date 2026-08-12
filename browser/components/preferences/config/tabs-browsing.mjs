@@ -277,6 +277,8 @@ Preferences.addSetting({
 Preferences.addSetting({
   id: "tabGroupDragToCreate",
   pref: "browser.tabs.dragDrop.createGroup.enabled",
+  deps: ["tabGroups"],
+  visible: ({ tabGroups }) => !!tabGroups.value,
 });
 if (lazy.AppConstants.platform === "win") {
   /**

@@ -194,7 +194,7 @@ class RequestingAccessKeyEventData {
   RequestingAccessKeyEventData() = delete;
 
   static void OnBrowserParentCreated() {
-    MOZ_ASSERT(sBrowserParentCount <= INT32_MAX);
+    MOZ_ASSERT(sBrowserParentCount < INT32_MAX);
     sBrowserParentCount++;
   }
   static void OnBrowserParentDestroyed() {

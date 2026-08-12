@@ -117,9 +117,6 @@ skip-if = [
 
 ["browser_ext_webNavigation_bookmark_transitions.js"]
 support-files = ["!/browser/components/places/tests/browser/head.js"]
-skip-if = [
-  "os == 'linux' && os_version == '24.04' && arch == 'x86_64' && opt && a11y_checks && swgl && nova", # Bug 2057928
-]
 
 ["browser_ext_webNavigation_containerIsolation.js"]
 https_first_disabled = true

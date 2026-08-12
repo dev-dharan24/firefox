@@ -682,7 +682,7 @@ export class AITasks extends MozLitElement {
               <moz-input-text
                 class="form-input"
                 data-l10n-id="ai-tasks-alert-name"
-                data-l10n-attrs="placeholder,label"
+                data-l10n-attrs="label"
                 @input=${e => this.handleMonitorNameInput(e)}
                 .value=${this.monitorName}
                 maxlength="100"
@@ -693,7 +693,7 @@ export class AITasks extends MozLitElement {
               <moz-textarea
                 class="form-textarea"
                 data-l10n-id="ai-tasks-alert-alert"
-                data-l10n-attrs="placeholder,label"
+                data-l10n-attrs="placeholder,label,description"
                 @input=${e => this.handleAlertInput(e)}
                 .value=${this.alertDescription}
               ></moz-textarea>
@@ -705,7 +705,7 @@ export class AITasks extends MozLitElement {
                   <moz-input-url
                     class="form-input ${this.pendingUrlError ? "error" : ""}"
                     data-l10n-id="ai-tasks-alert-pages"
-                    data-l10n-attrs="placeholder,label,description"
+                    data-l10n-attrs="placeholder,label"
                     data-l10n-args=${JSON.stringify({
                       maxPages: this._constants.TOTAL_NUM_URLS_IN_MONITOR,
                     })}

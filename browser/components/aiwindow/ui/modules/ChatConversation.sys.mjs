@@ -437,11 +437,12 @@ export class ChatConversation extends Conversation {
       this.emit("chat-conversation:message-update", currentMessage);
     }
 
-    if (currentMessage.memoriesApplied.length) {
+    // Only resolve used memories once the entire assistant turn is complete,
+    // including all tool calls
+    const citedMemoryIds = currentMessage.tokens?.existing_memory ?? [];
+    if (!result.pendingToolCalls?.length && citedMemoryIds.length) {
       currentMessage.memoriesApplied =
-        await lazy.MemoriesManager.getMemoriesByID(
-          new Set(currentMessage.memoriesApplied)
-        );
+        await lazy.MemoriesManager.resolveUsedMemories(citedMemoryIds);
 
       this.emit("chat-conversation:message-update", currentMessage);
     }

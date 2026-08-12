@@ -684,10 +684,6 @@
   .urlbarView-row:not([has-action], [has-url], [restyled-search]) & {
     display: none;
   }
-
-  #searchbar-new & {
-    display: none;
-  }
 }
 
 /* Action labels */
@@ -718,7 +714,9 @@
     opacity: 0.6;
   }
 
-  .urlbarView-row:not([has-action], [has-url], [restyled-search]) > .urlbarView-row-inner > .urlbarView-no-wrap > & {
+  /* A dynamic row's action element comes from the provider's view template, so
+     it isn't wrapped in .urlbarView-no-wrap; match it as a descendant. */
+  .urlbarView-row:not([has-action], [has-url], [restyled-search]) & {
     display: none;
   }
 
@@ -736,10 +734,6 @@
        visible even when the chiclet is hidden due to action-override. */
     padding-inline: 0 !important;
     border-inline: 0;
-  }
-
-  #searchbar-new & {
-    display: none;
   }
 }
 

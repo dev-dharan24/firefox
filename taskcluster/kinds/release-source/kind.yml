@@ -28,6 +28,7 @@ task-defaults:
     attributes:
         shippable: true
     run:
+        clone-with: hg
         using: mozharness
         actions: [package-source]
         script: "mozharness/scripts/fx_desktop_build.py"

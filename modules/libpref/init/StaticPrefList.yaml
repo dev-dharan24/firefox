@@ -9710,6 +9710,13 @@
   mirror: always
   set_spidermonkey_pref: startup
 
+  # Experimental support for Promise.allKeyed in JavaScript.
+- name: javascript.options.experimental.promise_allkeyed
+  type: bool
+  value: true
+  mirror: always
+  set_spidermonkey_pref: startup
+
 #ifdef NIGHTLY_BUILD
   # Experimental support for Async Iterator Helpers in JavaScript.
 -   name: javascript.options.experimental.async_iterator_helpers
@@ -9734,13 +9741,6 @@
 
   # Experimental support for import bytes in JavaScript.
 - name: javascript.options.experimental.import_bytes
-  type: bool
-  value: false
-  mirror: always
-  set_spidermonkey_pref: startup
-
-  # Experimental support for Promise.allKeyed in JavaScript.
-- name: javascript.options.experimental.promise_allkeyed
   type: bool
   value: false
   mirror: always
@@ -12004,6 +12004,12 @@
 # Prefs starting with "mathml."
 #---------------------------------------------------------------------------
 
+# Enable MathMLAnchorElement dom interface (MathML <a> element).
+- name: mathml.a.element.enabled
+  type: bool
+  value: @IS_NIGHTLY_BUILD@
+  mirror: always
+
 # Enable scale transform for stretchy MathML operators. See bug 414277.
 - name: mathml.scale_stretchy_operators.enabled
   type: bool
@@ -12486,7 +12492,14 @@
 
 # Specifies whether the PEMFactory can create PEMs for remote audio encoding
 # in the RDD or utility processes.
-- name: media.use-remote-encoder.audio
+- name: media.use-remote-encoder.audio.software
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+
+# Specifies whether the PEMFactory can create PEMs for remote video encoding
+# for platform implemented codecs in the RDD or GPU process.
+- name: media.use-remote-encoder.video.platform
   type: RelaxedAtomicBool
 #ifdef NIGHTLY_BUILD
   value: @IS_NOT_ANDROID@
@@ -12496,14 +12509,10 @@
   mirror: always
 
 # Specifies whether the PEMFactory can create PEMs for remote video encoding
-# in the RDD or GPU process.
-- name: media.use-remote-encoder.video
+# for pure software codecs in the RDD.
+- name: media.use-remote-encoder.video.software
   type: RelaxedAtomicBool
-#ifdef NIGHTLY_BUILD
-  value: @IS_NOT_ANDROID@
-#else
   value: false
-#endif
   mirror: always
 
 - name: media.gpu-process-decoder
@@ -14421,6 +14430,14 @@
 # When true, the hashing of the certificate will be done with the hashing
 # algorithm specified in the cert instead of SHA256.
 - name: network.auth.sspi_detect_hash
+  type: RelaxedAtomicBool
+  value: true
+  mirror: always
+
+# When true, Negotiate authentication sends a tls-server-end-point channel
+# binding token, as required by servers with Windows Extended Protection
+# enabled. Only has an effect when the SSPI auth module is in use.
+- name: network.auth.negotiate_channel_binding
   type: RelaxedAtomicBool
   value: true
   mirror: always
@@ -17623,6 +17640,13 @@
 - name: privacy.clearSiteDataHeader.cache.bfcache.enabled
   type: bool
   value: true
+  mirror: always
+
+# Retarget a top-level navigation to a site bound to a container into a new tab
+# in that container. Disabled by default.
+- name: privacy.containers.switchDuringNavigation.enabled
+  type: RelaxedAtomicBool
+  value: false
   mirror: always
 
 # First Party Isolation (double keying), disabled by default.

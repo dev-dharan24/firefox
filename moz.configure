@@ -104,12 +104,11 @@ set_define("ENABLE_TESTS", enable_tests)
 option(
     "--disable-legacy-l10n",
     env="MOZ_USE_LEGACY_L10N",
-    default=True,
     help="Disable the legacy (recursive-make) l10n driver",
 )
 
 
-set_config("MOZ_USE_LEGACY_L10N", True, when="--disable-legacy-l10n")
+set_config("MOZ_USE_LEGACY_L10N", True, when="--enable-legacy-l10n")
 
 
 @depends(enable_tests)
@@ -154,15 +153,28 @@ set_config("MOZ_DEBUG", moz_debug)
 set_define("MOZ_DEBUG", moz_debug)
 
 
+confvar(
+    "MOZ_DEV_EDITION",
+    nargs=1,
+    set_as_define=True,
+    help="Whether this a dev edition build",
+)
+
+
+@depends("MOZ_DEV_EDITION")
+def moz_dev_edition(dev_edition):
+    return bool(dev_edition) or None
+
+
 set_config(
     "MOZ_DIAGNOSTIC_ASSERT_ENABLED",
     True,
-    when=moz_debug | milestone.is_early_beta_or_earlier,
+    when=moz_debug | milestone.is_nightly | moz_dev_edition,
 )
 set_define(
     "MOZ_DIAGNOSTIC_ASSERT_ENABLED",
     True,
-    when=moz_debug | milestone.is_early_beta_or_earlier,
+    when=moz_debug | milestone.is_nightly | moz_dev_edition,
 )
 
 option(
@@ -215,7 +227,7 @@ option(
     help="Enable building modules in non unified context",
 )
 
-set_config("ENABLE_UNIFIED_BUILD", True, when="--disable-unified-build")
+set_config("ENABLE_UNIFIED_BUILD", True, when="--enable-unified-build")
 
 
 include("build/moz.configure/bootstrap.configure")

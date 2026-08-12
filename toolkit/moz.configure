@@ -3344,13 +3344,6 @@ set_config("MOZ_BACKGROUNDTASK_CLSID", moz_backgroundtask_clsid)
 
 
 confvar(
-    "MOZ_DEV_EDITION",
-    nargs=1,
-    set_as_define=True,
-    help="Whether this a dev edition build",
-)
-
-confvar(
     "MOZ_MACBUNDLE_ID",
     nargs=1,
     set_as_config=False,

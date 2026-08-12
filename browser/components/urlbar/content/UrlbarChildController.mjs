@@ -19,6 +19,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 /**
+ * @import {URIFixupPrimitives} from "chrome://browser/content/urlbar/UrlbarShared.mjs"
  * @import {UrlbarChild} from "../../../actors/UrlbarChild.sys.mjs"
  * @import {UrlbarInput} from "chrome://browser/content/urlbar/UrlbarInput.mjs"
  * @import {UrlbarParentController} from "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs"
@@ -72,6 +73,10 @@ export class UrlbarChildController {
   #listeners = new Set();
 
   #userSelectionBehavior = /** @type {"arrow"|"tab"|"none"} */ ("none");
+
+  // The id of the query whose results still have a consumer. Notifications
+  // carrying an older id belong to a query nobody is waiting for anymore.
+  #queryId = 0;
 
   // The content-side engagement-telemetry collector, created lazily on the
   // message path (where the parent stand-in has no `engagementEvent`).
@@ -200,7 +205,10 @@ export class UrlbarChildController {
   getHeuristicResult(queryContext) {
     return this.#parentController.getHeuristicResult(queryContext);
   }
-  resolveFallbackNavigation(details) {
+  async resolveFallbackNavigation(details) {
+    // The result this hands back is picked like a query's, and paste-and-go
+    // suppresses the query that would otherwise have waited for the store.
+    await this.#engineStoreReady();
     return this.#parentController.resolveFallbackNavigation(details);
   }
   addListener(listener) {
@@ -213,10 +221,15 @@ export class UrlbarChildController {
     this.#listeners.delete(listener);
   }
   notify(notification, ...params) {
+    if (
+      (notification === UrlbarShared.NOTIFICATIONS.QUERY_FIRST_RESULT ||
+        notification === UrlbarShared.NOTIFICATIONS.QUERY_RESULTS) &&
+      params[0].id < this.#queryId
+    ) {
+      return;
+    }
     // When the first results arrive, pre-warm a connection to the heuristic
-    // result. This runs content-side on both transports (the input has already
-    // reacted to the first result before we're notified) and reaches the
-    // parent's window the same way a mousedown speculative connect does.
+    // result.
     if (
       notification === UrlbarShared.NOTIFICATIONS.QUERY_RESULTS &&
       params[0].firstResultChanged
@@ -281,10 +294,44 @@ export class UrlbarChildController {
    * Starts a query and returns the parent controller's promise so callers (the
    * input's `lastQueryContextPromise`, which tests await) can track completion.
    *
+   * A query that would run before the engine store is populated is held back
+   * until it is. Results are produced by the providers in the parent, which use
+   * the search service directly, so a query dispatched before the store is
+   * ready can deliver results to a UI that has no engines to look up. Holding
+   * the query back is what keeps every result-handling path downstream of a
+   * populated store.
+   *
+   * @param {UrlbarQueryContext} queryContext
+   * @returns {Promise<UrlbarQueryContext>}
+   *   Resolves with the finished context, or with the untouched one if the
+   *   query was cancelled or superseded while waiting for the engine store.
+   */
+  startQuery(queryContext) {
+    this.#queryId = queryContext.id;
+
+    if (this.engineStore.initialized || this.engineStore.failed) {
+      return this.#dispatchQuery(queryContext);
+    }
+
+    // Arm the bufferer up front so an Enter typed during the wait is deferred
+    // too. Nothing can tear down the previous query in the meantime, which is
+    // the only thing #dispatchQuery's arm-after-dispatch ordering guards
+    // against.
+    this.#input.eventBufferer.queryStarting(queryContext);
+
+    return this.#engineStoreReady().then(() =>
+      this.#queryId == queryContext.id
+        ? this.#dispatchQuery(queryContext)
+        : queryContext
+    );
+  }
+  /**
+   * Hands a query to the parent controller.
+   *
    * @param {UrlbarQueryContext} queryContext
    * @returns {Promise<UrlbarQueryContext>} Resolves with the finished context.
    */
-  startQuery(queryContext) {
+  #dispatchQuery(queryContext) {
     let queryContextPromise = this.#parentController.startQuery(queryContext);
     // Arm the event bufferer as the query starts so a just-typed Enter is
     // deferred until results arrive; it can't wait for the QUERY_STARTED
@@ -294,8 +341,40 @@ export class UrlbarChildController {
     this.#input.eventBufferer.queryStarting(queryContext);
     return queryContextPromise;
   }
+  /**
+   * Waits for the engine store to be populated.
+   *
+   * @returns {Promise<void>}
+   *   Resolves once the store holds engines, or immediately if it never will
+   *   because the search service failed. It doesn't reject: waiting on a store
+   *   that can't be populated would keep the input from producing results at
+   *   all.
+   */
+  async #engineStoreReady() {
+    if (this.engineStore.initialized || this.engineStore.failed) {
+      return;
+    }
+    try {
+      await this.engineStore.init();
+    } catch {
+      // The search service failed.
+    }
+  }
   cancelQuery() {
+    // Nobody consumes the query's results anymore, and one still waiting for
+    // the engine store must not be dispatched at all.
+    this.#queryId++;
     return this.#parentController.cancelQuery();
+  }
+  /**
+   * Keeps the running query's results from reaching the listeners. The input
+   * calls this when it takes the query over after the first result -- entering
+   * search mode and restarting it -- since the results are about to be
+   * replaced. The query keeps running until the restart cancels it, which over
+   * the message path takes a round trip.
+   */
+  discardResults() {
+    this.#queryId++;
   }
   receiveResults(queryContext) {
     return this.#parentController.receiveResults(queryContext);
@@ -734,14 +813,14 @@ export class UrlbarChildController {
   /**
    * Gets URI fixup primitives for a string. Runs through the actor since the
    * content-web input can't reach `Services.uriFixup` (see
-   * `UrlbarChild.getFixupInfo`).
+   * `UrlbarChild.getFixupPrimitives`).
    *
    * @param {string} searchString
    *   The string to fix up.
-   * @returns {?{keywordAsSent: boolean, preferredURIDisplaySpec: ?string}}
+   * @returns {?URIFixupPrimitives}
    */
-  getFixupInfo(searchString) {
-    return this.#actor.getFixupInfo(searchString, this.#input.isPrivate);
+  getFixupPrimitives(searchString) {
+    return this.#actor.getFixupPrimitives(searchString, this.#input.isPrivate);
   }
 
   /**
