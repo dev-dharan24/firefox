@@ -18,6 +18,10 @@
     --tab-group-label-size: var(--tab-min-height);
   }
 
+  @media (-moz-native-theme) {
+    --tab-box-shadow-selected: var(--box-shadow-level-1);
+  }
+
   @media not -moz-pref("browser.nova.enabled") {
     --tab-min-height: 36px;
     --tab-group-label-size: 24px;

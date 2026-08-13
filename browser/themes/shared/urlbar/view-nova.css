@@ -407,8 +407,6 @@
   }
 }
 
-/* `pinned` is currently only set on top sites, which have `type="top_site"`, so
-   this rule is mutually exclusive with the other badge rules. */
 .urlbarView-row[pinned] > .urlbarView-row-inner {
   > .urlbarView-favicon {
     mask-image: url(chrome://browser/skin/urlbar/badge-pin.svg#ltr-mask);
