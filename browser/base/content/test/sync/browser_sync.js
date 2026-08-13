@@ -262,6 +262,21 @@ add_task(async function test_ui_state_signedin() {
 
   await checkProfilesButtons(manageAccountSeparator, true);
 
+  // The sign-out separator and button sit at the bottom of the secure sync
+  // section, directly below the connected devices list.
+  is(
+    document.getElementById("PanelUI-sign-out-separator")
+      .previousElementSibling,
+    document.getElementById("PanelUI-fxa-menu-devices-list"),
+    "The sign-out separator sits directly below the connected devices list"
+  );
+  is(
+    document.getElementById("PanelUI-fxa-menu-account-signout-button")
+      .previousElementSibling,
+    document.getElementById("PanelUI-sign-out-separator"),
+    "The sign-out button sits directly below the sign-out separator"
+  );
+
   checkFxAAvatar("signedin");
   gSync.relativeTimeFormat = origRelativeTimeFormat;
   await closeFxaPanel();

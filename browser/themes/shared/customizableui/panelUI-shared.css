@@ -879,6 +879,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
   }
 
   & .fxa-menu-signed-out-text {
+    min-width: 0;
     /* stylelint-disable-next-line stylelint-plugin-mozilla/use-design-tokens */
     gap: var(--dimension-2);
   }
@@ -952,8 +953,12 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
   align-self: center;
 }
 
-#appMenu-fxa-status2[fxastatus] > #appMenu-fxa-label2 > vbox > #appMenu-header-description,
-#appMenu-fxa-text {
+#appMenu-fxa-label2,
+#appMenu-fxa-label2 > vbox {
+  min-width: 0;
+}
+
+#appMenu-fxa-status2[fxastatus] > #appMenu-fxa-label2 > vbox > #appMenu-header-description {
   font-weight: var(--font-weight-semibold);
 }
 

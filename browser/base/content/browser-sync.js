@@ -1925,6 +1925,10 @@ var gSync = {
       document,
       "PanelUI-fxa-menu-signed-out-card"
     );
+    const signedOutSeparatorEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-separator"
+    );
     const signedInContainer = PanelMultiView.getViewNode(
       document,
       "PanelUI-signedin-panel"
@@ -1933,25 +1937,9 @@ var gSync = {
       document,
       "PanelUI-sign-out-separator"
     );
-    const profilesHeaderLabel = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-profiles-header-label"
-    );
-    const profileButtonsContainer = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-profile-buttons"
-    );
-    const profilesSeparator = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-profiles-separator"
-    );
     const manageAccountSeparator = PanelMultiView.getViewNode(
       document,
       "PanelUI-fxa-menu-manage-account-separator"
-    );
-    const secureSyncHeader = PanelMultiView.getViewNode(
-      document,
-      "PanelUI-fxa-menu-secure-sync-header"
     );
     const syncSetupEl = PanelMultiView.getViewNode(
       document,
@@ -1980,6 +1968,7 @@ var gSync = {
     manageAccountSeparator.hidden = true;
     signInPromoEl.hidden = true;
     signedOutCardEl.hidden = true;
+    signedOutSeparatorEl.hidden = true;
     menuHeaderDescriptionEl.hidden = false;
 
     // Expanded sign in copy experiment is only for signed out users
@@ -2018,10 +2007,6 @@ var gSync = {
     let headerTitleL10nId;
     let headerDescription;
 
-    // The profiles section (header and buttons) is only populated when the
-    // profiles feature is enabled; its surrounding separators follow suit.
-    const profilesShown = !!SelectableProfileService?.isEnabled;
-
     switch (state.status) {
       case UIState.STATUS_NOT_CONFIGURED:
         signOutSeparator.hidden = true;
@@ -2050,24 +2035,7 @@ var gSync = {
           }
         }
 
-        // Reposition profiles elements
-        profilesHeaderLabel.remove();
-        profileButtonsContainer.remove();
-        profilesSeparator.remove();
-        secureSyncHeader.remove();
-
-        // When signed out this is the single separator below the sign-in promo:
-        // it sits above the secure sync section, with the profiles section (when
-        // shown) slotting in between, so it stays visible regardless of profiles.
-        profilesSeparator.hidden = false;
-        secureSyncHeader.hidden = false;
-
-        signedInContainer.after(secureSyncHeader);
-        signedInContainer.after(profilesSeparator);
-        signedInContainer.after(profileButtonsContainer);
-        signedInContainer.after(profilesHeaderLabel);
-
-        secureSyncHeader.after(syncStatusBtn);
+        this._positionSecureSyncSection(signedInContainer);
 
         break;
 
@@ -2078,6 +2046,7 @@ var gSync = {
         headerDescription = state.displayName || state.email;
         mainWindowEl.style.removeProperty("--avatar-image-url");
         this._showFxASignedOutCard(signedOutCardEl, state);
+        this._positionSecureSyncSection(signedInContainer);
         break;
 
       case UIState.STATUS_NOT_VERIFIED:
@@ -2086,6 +2055,7 @@ var gSync = {
         headerTitleL10nId = "account-finish-account-setup";
         headerDescription = state.displayName || state.email;
         this._showFxASignedOutCard(signedOutCardEl, state);
+        this._positionSecureSyncSection(signedInContainer);
         break;
 
       case UIState.STATUS_SIGNED_IN:
@@ -2110,22 +2080,10 @@ var gSync = {
 
         // Reposition profiles elements
         manageAccountSeparator.remove();
-        profilesHeaderLabel.remove();
-        profileButtonsContainer.remove();
-        profilesSeparator.remove();
-        secureSyncHeader.remove();
-
+        this._positionSecureSyncSection(manageAccountButtonEl);
         // Single separator below the manage account button, above whichever
         // section comes next (profiles when shown, otherwise secure sync).
         manageAccountSeparator.hidden = false;
-        // Only divide the profiles section from secure sync when profiles show.
-        profilesSeparator.hidden = !profilesShown;
-        secureSyncHeader.hidden = false;
-
-        manageAccountButtonEl.after(secureSyncHeader);
-        manageAccountButtonEl.after(profilesSeparator);
-        manageAccountButtonEl.after(profileButtonsContainer);
-        manageAccountButtonEl.after(profilesHeaderLabel);
         // Inserted last so it lands directly below the manage account button,
         // separating it from the profiles section.
         manageAccountButtonEl.after(manageAccountSeparator);
@@ -2160,6 +2118,47 @@ var gSync = {
     menuHeaderDescriptionEl.removeAttribute("data-l10n-id");
   },
 
+  // Moves the Profiles and Secure sync sections directly below the header
+  // anchored by anchorEl, so the visible sync status button lands under the
+  // "Secure sync" header instead of above the Profiles section.
+  _positionSecureSyncSection(anchorEl) {
+    const profilesHeaderLabel = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-profiles-header-label"
+    );
+    const profileButtonsContainer = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-profile-buttons"
+    );
+    const profilesSeparator = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-profiles-separator"
+    );
+    const secureSyncHeader = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-secure-sync-header"
+    );
+    const syncStatusBtn = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-sync-status-button"
+    );
+
+    profilesHeaderLabel.remove();
+    profileButtonsContainer.remove();
+    profilesSeparator.remove();
+    secureSyncHeader.remove();
+
+    profilesSeparator.hidden = false;
+    secureSyncHeader.hidden = false;
+
+    anchorEl.after(secureSyncHeader);
+    anchorEl.after(profilesSeparator);
+    anchorEl.after(profileButtonsContainer);
+    anchorEl.after(profilesHeaderLabel);
+
+    secureSyncHeader.after(syncStatusBtn);
+  },
+
   // Shows a card with the remembered account's email, a status-specific reason,
   // and a button to sign back in.
   _showFxASignedOutCard(cardEl, state) {
@@ -2171,6 +2170,10 @@ var gSync = {
       document,
       "PanelUI-fxa-menu-signed-out-message"
     );
+    const separatorEl = PanelMultiView.getViewNode(
+      document,
+      "PanelUI-fxa-menu-signed-out-separator"
+    );
 
     emailEl.value = state.email ?? "";
     document.l10n.setAttributes(
@@ -2181,6 +2184,7 @@ var gSync = {
     );
 
     cardEl.hidden = false;
+    separatorEl.hidden = false;
   },
 
   updateAvatarURL(mainWindowEl, avatarURL, avatarIsDefault) {

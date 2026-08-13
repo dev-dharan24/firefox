@@ -17,6 +17,11 @@
 #include FT_TRUETYPE_TABLES_H
 #include FT_MULTIPLE_MASTERS_H
 
+#ifdef MOZ_FONTATIONS
+#  include "mozilla/MemoryMappedFile.h"
+#  include "mozilla/gfx/fontations_glue_generated.h"
+#endif
+
 #if defined(MOZ_SANDBOX) && defined(XP_LINUX)
 #  include "mozilla/SandboxBroker.h"
 #endif
@@ -120,6 +125,12 @@ class gfxFontconfigFontEntry final : public gfxFT2FontEntryBase {
 
   // pattern for a single face of a family
   RefPtr<FcPattern> mFontPattern;
+
+#ifdef MOZ_FONTATIONS
+  void InitSkrifaFont(FcPattern* aPattern);
+  mozilla::Atomic<mozilla::gfx::SkrifaFontRef*> mSkrifaFontFace;
+  mozilla::MemoryMappedFile mSkrifaFontFile;
+#endif
 
   // FTFace - initialized when needed. Once mFTFaceInitialized is true,
   // the face can be accessed without locking.

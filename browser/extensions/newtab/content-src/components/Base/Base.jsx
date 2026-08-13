@@ -925,7 +925,9 @@ export class BaseContent extends React.PureComponent {
       prefs["system.showWeather"] ||
       prefs.trainhopConfig?.weather?.enabled ||
       prefs.trainhopConfig?.widgetsSettings?.weatherVisible;
-    const mayHaveWebNotifications = prefs["system.showWebNotifications"];
+    const mayHaveWebNotifications =
+      prefs["system.showWebNotifications"] ||
+      prefs.trainhopConfig?.webNotifications?.enabled;
     const supportUrl = prefs["support.url"];
 
     // Widget toggle visibility is resolved by the shared registry helpers, which

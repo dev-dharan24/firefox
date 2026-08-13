@@ -150,6 +150,11 @@ browsertime-ref-hw:
     - browsertime-benchmark
     - browsertime-nav-bench
 
+devtools-compat:
+    - devtools-compat-same-version
+    - devtools-compat-beta
+    - devtools-compat-release
+
 awsy:
     - awsy
     - awsy-base

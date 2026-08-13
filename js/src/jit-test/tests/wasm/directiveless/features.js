@@ -74,7 +74,7 @@ let features = {
     test: () => WebAssembly.promising !== undefined
   },
   "wideArithmetic": {
-    status: NIGHTLY,
+    status: RELEASED,
     test: () => check(`(func unreachable i64.add128 unreachable)`)
   },
   "simd": {

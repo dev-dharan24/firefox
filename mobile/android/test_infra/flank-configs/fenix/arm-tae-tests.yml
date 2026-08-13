@@ -25,7 +25,6 @@ gcloud:
     - notPackage org.mozilla.fenix.experimentintegration
     - notPackage org.mozilla.fenix.ui.efficiency.devtools
     - package org.mozilla.fenix.ui.efficiency.tests
-    - package org.mozilla.fenix.ui.efficiency.generation.reachability.shards
 
   device:
     - model: MediumPhone.arm

@@ -2495,6 +2495,8 @@ tab-group {
     scrollbar-width: thin;
     scrollbar-color: var(--tab-vertical-scrollbar-color);
     overscroll-behavior-y: contain;
+    /* A wheel notch, an arrow key and a scrollbar arrow button move rows. */
+    -moz-line-scroll-amount: var(--tab-height-with-margin-padding);
   }
 }
 
@@ -2585,6 +2587,8 @@ tab-group {
     scrollbar-width: thin;
     scrollbar-color: var(--tab-vertical-scrollbar-color);
     overscroll-behavior-y: contain;
+    /* A wheel notch, an arrow key and a scrollbar arrow button move rows. */
+    -moz-line-scroll-amount: var(--tab-height-with-margin-padding);
   }
 
   .tabbrowser-tab:not(:hover) > .tab-stack > .tab-background:not([selected], [multiselected]) {

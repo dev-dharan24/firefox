@@ -24,6 +24,8 @@ import {
   WORLD_CUP_PREF,
   ADD_MEMORY,
   SEARCH_THE_WEB,
+  SEARCH_THE_WEB_FAST_PREF,
+  SEARCH_THE_WEB_TOOL_CONFIG_FAST,
   GET_SKILL,
 } from "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs";
 import { runSearchTheWeb } from "moz-src:///browser/components/aiwindow/models/search/SearchWorkflow.sys.mjs";
@@ -148,7 +150,8 @@ const TOOLS_WITH_PENDING_ACTION_LOG = new Set([SEARCH_THE_WEB]);
 
 /**
  * Removes any feature-gated tools whose enable pref is currently off, so the
- * model is never offered tools the build is not configured to support.
+ * model is never offered tools the build is not configured to support, and
+ * swaps in pref-selected variants of a tool's config.
  *
  * @param {object[]} tools
  * @returns {object[]}
@@ -157,6 +160,15 @@ function filterFeatureGatedTools(tools) {
   let filtered = tools;
   if (!Services.prefs.getBoolPref(WORLD_CUP_PREF, false)) {
     filtered = filtered.filter(t => !WORLD_CUP_TOOLS.has(t.function?.name));
+  }
+  // The two search_the_web paths return different shapes, so the description
+  // and parameters the model sees have to match the path that will run.
+  if (Services.prefs.getBoolPref(SEARCH_THE_WEB_FAST_PREF, false)) {
+    filtered = filtered.map(t =>
+      t.function?.name === SEARCH_THE_WEB
+        ? structuredClone(SEARCH_THE_WEB_TOOL_CONFIG_FAST)
+        : t
+    );
   }
   return filtered;
 }

@@ -1781,6 +1781,14 @@ class nsINode : public mozilla::dom::EventTarget {
     mozilla::SafeDoublyLinkedList<nsIMutationObserver> mMutationObservers;
 
     /**
+     * The node's event listener manager.  Nodes without slots keep it in
+     * nsINode::mSlotsOrListenerManager, documents in
+     * Document::mListenerManager.  Handled by nsINode::Traverse and
+     * DropNodeListenerManager, which cover the inline case too.
+     */
+    RefPtr<mozilla::EventListenerManager> mListenerManager;
+
+    /**
      * An object implementing NodeList for this content (childNodes)
      * @see NodeList
      * @see nsGenericHTMLElement::GetChildNodes
@@ -3072,17 +3080,25 @@ class nsINode : public mozilla::dom::EventTarget {
   // Must not return null.
   virtual nsINode::nsSlots* CreateSlots();
 
-  bool HasSlots() const { return mSlots != nullptr; }
+  bool HasSlots() const {
+    return !(mSlotsOrListenerManager & kListenerManagerBit);
+  }
 
-  nsSlots* GetExistingSlots() const { return mSlots; }
+  nsSlots* GetExistingSlots() const {
+    return HasSlots() ? reinterpret_cast<nsSlots*>(mSlotsOrListenerManager)
+                      : nullptr;
+  }
 
   nsSlots* Slots() {
     if (!HasSlots()) {
-      mSlots = CreateSlots();
-      MOZ_ASSERT(mSlots);
+      SetSlots(CreateSlots());
     }
     return GetExistingSlots();
   }
+
+  // Takes ownership of aSlots, moving any inline listener manager into it.
+  // There must be no slots yet.
+  void SetSlots(nsSlots* aSlots);
 
   /**
    * Invalidate cached child array inside mChildNodes
@@ -3191,8 +3207,29 @@ class nsINode : public mozilla::dom::EventTarget {
   // Pointer to our primary frame.  Might be null.
   nsIFrame* mPrimaryFrame = nullptr;
 
-  // Storage for more members that are usually not needed; allocated lazily.
-  nsSlots* mSlots;
+ private:
+  // The bit marks the listener manager, so that the very hot GetExistingSlots
+  // needs no masking.
+  static constexpr uintptr_t kListenerManagerBit = 1;
+
+  // The inline listener manager, null if there is none.  Requires no slots.
+  mozilla::EventListenerManager* GetInlineListenerManager() const {
+    MOZ_ASSERT(!HasSlots());
+    return reinterpret_cast<mozilla::EventListenerManager*>(
+        mSlotsOrListenerManager & ~kListenerManagerBit);
+  }
+
+  // The manager the node itself stores, ignoring Document::mListenerManager.
+  mozilla::EventListenerManager* GetNodeListenerManager() const;
+
+  // Disconnects the manager the node stores, if any, and clears
+  // NODE_HAS_LISTENERMANAGER.
+  void DropNodeListenerManager();
+
+  // Tagged union: with kListenerManagerBit set, a manually refcounted
+  // EventListenerManager*, which is null for most nodes; otherwise a non-null
+  // nsSlots*, which then owns the manager.  See SetSlots.
+  uintptr_t mSlotsOrListenerManager = kListenerManagerBit;
 };
 
 NON_VIRTUAL_ADDREF_RELEASE(nsINode)

@@ -527,6 +527,7 @@ export interface Modules {
   "moz-src:///toolkit/modules/DateTimePickerPanel.sys.mjs": typeof import("moz-src:///toolkit/modules/DateTimePickerPanel.sys.mjs"),
   "moz-src:///toolkit/modules/FaviconUtils.sys.mjs": typeof import("moz-src:///toolkit/modules/FaviconUtils.sys.mjs"),
   "moz-src:///toolkit/modules/PrefUtils.sys.mjs": typeof import("moz-src:///toolkit/modules/PrefUtils.sys.mjs"),
+  "moz-src:///toolkit/modules/RegionLocaleMap.sys.mjs": typeof import("moz-src:///toolkit/modules/RegionLocaleMap.sys.mjs"),
   "moz-src:///toolkit/modules/WebAuthnPromptHelper.sys.mjs": typeof import("moz-src:///toolkit/modules/WebAuthnPromptHelper.sys.mjs"),
   "moz-src:///toolkit/profile/ProfilesDatastoreService.sys.mjs": typeof import("moz-src:///toolkit/profile/ProfilesDatastoreService.sys.mjs"),
   "resource:///actors/AboutLoginsParent.sys.mjs": typeof import("resource:///actors/AboutLoginsParent.sys.mjs"),

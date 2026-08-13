@@ -346,8 +346,7 @@ nsINode::nsINode(already_AddRefed<mozilla::dom::NodeInfo> aNodeInfo)
       ,
       mChildCount(0),
       mPreviousOrLastSibling(nullptr),
-      mSubtreeRoot(this),
-      mSlots(nullptr) {
+      mSubtreeRoot(this) {
   SetIsOnMainThread();
 }
 #endif
@@ -593,7 +592,8 @@ nsINode::~nsINode() {
              "Node still in ChildIndexCache at destruction?");
   MOZ_ASSERT(ChildIndexCache::LastAccessedParent() != this,
              "ChildIndexCache still memoizing a node being destroyed?");
-  MOZ_ASSERT(!HasSlots(), "LastRelease was not called?");
+  MOZ_ASSERT(mSlotsOrListenerManager == kListenerManagerBit,
+             "LastRelease was not called?");
   MOZ_ASSERT(mSubtreeRoot == this, "Didn't restore state properly?");
 }
 
@@ -668,6 +668,48 @@ void* nsINode::AllocateSlots(size_t aSize) {
 nsINode::nsSlots* nsINode::CreateSlots() {
   void* mem = AllocateSlots(sizeof(nsSlots));
   return new (mem) nsSlots();
+}
+
+void nsINode::SetSlots(nsSlots* aSlots) {
+  MOZ_ASSERT(aSlots);
+  MOZ_ASSERT(!HasSlots());
+  MOZ_ASSERT(!(reinterpret_cast<uintptr_t>(aSlots) & kListenerManagerBit));
+  aSlots->mListenerManager = dont_AddRef(GetInlineListenerManager());
+  mSlotsOrListenerManager = reinterpret_cast<uintptr_t>(aSlots);
+}
+
+EventListenerManager* nsINode::GetNodeListenerManager() const {
+  EventListenerManager* elm;
+  if (nsSlots* slots = GetExistingSlots()) {
+    elm = slots->mListenerManager;
+  } else {
+    elm = GetInlineListenerManager();
+  }
+  MOZ_ASSERT(!elm || !IsDocument(),
+             "Document keeps its manager in Document::mListenerManager");
+  return elm;
+}
+
+void nsINode::DropNodeListenerManager() {
+  RefPtr<EventListenerManager> elm;
+  if (nsSlots* slots = GetExistingSlots()) {
+    elm = slots->mListenerManager.forget();
+  } else {
+    elm = dont_AddRef(GetInlineListenerManager());
+    mSlotsOrListenerManager = kListenerManagerBit;
+  }
+
+  if (!elm) {
+    // The flag matches the storage, except on documents which keep their
+    // manager in Document::mListenerManager.
+    MOZ_ASSERT_IF(!IsDocument(), !HasFlag(NODE_HAS_LISTENERMANAGER));
+    return;
+  }
+  UnsetFlags(NODE_HAS_LISTENERMANAGER);
+
+  // Disconnect only once out of the node, since it can run code which touches
+  // this node.  See bug 334177.
+  elm->Disconnect();
 }
 
 static const nsINode* GetClosestCommonInclusiveAncestorForRangeInSelection(
@@ -1248,8 +1290,12 @@ void nsINode::LastRelease() {
       }
     }
 
+    // The manager may live in the slots, so drop it before deleting those.
+    DropNodeListenerManager();
+    MOZ_ASSERT(!slots->mListenerManager);
+
     slots->~nsSlots();
-    mSlots = nullptr;
+    mSlotsOrListenerManager = kListenerManagerBit;
     free(slots);
   }
 
@@ -1278,22 +1324,8 @@ void nsINode::LastRelease() {
         imageElem->ClearForm(true);
       }
     }
-    if (HasFlag(NODE_HAS_LISTENERMANAGER)) {
-#ifdef DEBUG
-      if (nsContentUtils::IsInitialized()) {
-        EventListenerManager* manager =
-            nsContentUtils::GetExistingListenerManagerForNode(this);
-        if (!manager) {
-          NS_ERROR(
-              "Huh, our bit says we have a listener manager list, "
-              "but there's nothing in the hash!?!!");
-        }
-      }
-#endif
-
-      nsContentUtils::RemoveListenerManager(this);
-      UnsetFlags(NODE_HAS_LISTENERMANAGER);
-    }
+    // Drops the inline manager; nodes with slots dropped theirs above.
+    DropNodeListenerManager();
 
     if (Element* element = Element::FromNode(this)) {
       element->ClearAttributes();
@@ -1998,11 +2030,41 @@ nsresult nsINode::PostHandleEvent(EventChainPostVisitor& /*aVisitor*/) {
 }
 
 EventListenerManager* nsINode::GetOrCreateListenerManager() {
-  return nsContentUtils::GetListenerManagerForNode(this);
+  MOZ_ASSERT(!IsDocument(),
+             "Document should have created its own manager, see "
+             "Document::GetOrCreateListenerManager");
+  MOZ_ASSERT(GetNodeListenerManager() == GetExistingListenerManager(),
+             "A subclass which overrides GetExistingListenerManager must "
+             "override GetOrCreateListenerManager too");
+
+  if (EventListenerManager* elm = GetNodeListenerManager()) {
+    return elm;
+  }
+
+  if (!nsContentUtils::IsInitialized()) {
+    // We're already shut down, don't bother creating a manager.
+    return nullptr;
+  }
+
+  RefPtr<EventListenerManager> elm = new EventListenerManager(this);
+  nsContentUtils::AddNodeListenerManager(elm);
+
+  EventListenerManager* manager = elm;
+  MOZ_ASSERT(!(reinterpret_cast<uintptr_t>(manager) & kListenerManagerBit));
+  if (nsSlots* slots = GetExistingSlots()) {
+    slots->mListenerManager = std::move(elm);
+  } else {
+    MOZ_ASSERT(mSlotsOrListenerManager == kListenerManagerBit);
+    mSlotsOrListenerManager =
+        reinterpret_cast<uintptr_t>(elm.forget().take()) | kListenerManagerBit;
+  }
+
+  SetFlags(NODE_HAS_LISTENERMANAGER);
+  return manager;
 }
 
 EventListenerManager* nsINode::GetExistingListenerManager() const {
-  return nsContentUtils::GetExistingListenerManagerForNode(this);
+  return GetNodeListenerManager();
 }
 
 Nullable<WindowProxyHolder> nsINode::GetDocumentGlobalForBindings() {
@@ -2092,9 +2154,8 @@ bool nsINode::Traverse(nsINode* tmp, nsCycleCollectionTraversalCallback& cb) {
 #endif
   }
 
-  if (tmp->NodeType() != DOCUMENT_NODE &&
-      tmp->HasFlag(NODE_HAS_LISTENERMANAGER)) {
-    nsContentUtils::TraverseListenerManager(tmp, cb);
+  if (EventListenerManager* elm = tmp->GetNodeListenerManager()) {
+    CycleCollectionNoteChild(cb, elm, "mListenerManager");
   }
 
   return true;
@@ -2108,11 +2169,7 @@ void nsINode::Unlink(nsINode* tmp) {
     slots->Unlink(*tmp);
   }
 
-  if (tmp->NodeType() != DOCUMENT_NODE &&
-      tmp->HasFlag(NODE_HAS_LISTENERMANAGER)) {
-    nsContentUtils::RemoveListenerManager(tmp);
-    tmp->UnsetFlags(NODE_HAS_LISTENERMANAGER);
-  }
+  tmp->DropNodeListenerManager();
 
   if (tmp->HasProperties()) {
     tmp->RemoveProperty(nsGkAtoms::accessiblenode);

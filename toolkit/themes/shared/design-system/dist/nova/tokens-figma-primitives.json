@@ -12,7 +12,6 @@
   "button/padding/inline/small": "{Primitives$space/medium}",
   "button/size/icon/small": "{Primitives$size/item/medium}",
   "card/gap": "{Primitives$space/medium}",
-  "checkbox/border/radius": "{Primitives$border/radius/xsmall}",
   "icon/size/xsmall": "{Primitives$size/item/xsmall}",
   "icon/size/small": "{Primitives$size/item/small}",
   "icon/size/medium": 20,

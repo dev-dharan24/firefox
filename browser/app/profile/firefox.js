@@ -770,11 +770,17 @@ pref("places.semanticHistory.featureGate", true);
 #else
 pref("places.semanticHistory.featureGate", false);
 #endif
-pref("places.semanticHistory.supportedRegions", "[[\"AU\",[\"en-*\"]],[\"CA\",[\"en-*\"]],[\"GB\",[\"en-*\"]],[\"IE\",[\"en-*\"]],[\"NZ\",[\"en-*\"]],[\"PH\",[\"en-*\"]],[\"US\",[\"en-*\"]]]");
+pref("places.semanticHistory.supportedRegions", "[[\"AU\",[\"en-*\"]],[\"CA\",[\"en-*\"]],[\"GB\",[\"en-*\"]],[\"IE\",[\"en-*\"]],[\"NZ\",[\"en-*\"]],[\"PH\",[\"en-*\"]],[\"US\",[\"en-*\"]],[\"FR\",[\"en-*\",\"fr-*\"]]]");
 
 // Embedding family used by Places semantic history. "static" or "contextual".
-// Settable via Nimbus (semanticHistoryEmbeddingType).
-pref("places.semanticHistory.embeddingType", "static");
+// Settable via Nimbus (semanticHistoryEmbeddingType). An empty (or invalid)
+// value lets the family be picked from the home region, the locale and the OS.
+pref("places.semanticHistory.embeddingType", "");
+
+// Region / locale pairs that get multilingual (contextual) embeddings. Same
+// format as supportedRegions, except a "*" region matches any region, so the
+// entries below read as "France in English or French, or French anywhere".
+pref("places.semanticHistory.multilingualEmbeddingRegions", "[[\"FR\",[\"en-*\",\"fr-*\"]],[\"*\",[\"fr-*\"]]]");
 
 // Dev / debug overrides for the contextual engine. Not exposed via Nimbus.
 pref("browser.ml.embedGen.textEmbeddingSize", 384);
@@ -2378,6 +2384,10 @@ pref("browser.smartwindow.worldcup.timeoutMs", 2000);
 // Smart Window: Exa search endpoint, used by the search_the_web agentic flow (bug 2037948)
 pref("browser.smartwindow.searchQuery.endpointURL", "https://mlpa-prod-prod-mozilla.freetls.fastly.net/v1/search");
 pref("browser.smartwindow.searchQuery.apiKey", "");
+
+// Smart Window: when true, search_the_web returns Exa snippets straight to the
+// main assistant instead of generating an answer from background page reads.
+pref("browser.smartwindow.searchTheWebFast", false);
 
 // Smart Window Logging
 pref("browser.smartwindow.chatHistory.loglevel", "Error");

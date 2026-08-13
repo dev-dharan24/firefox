@@ -62,7 +62,7 @@ ai-tasks-alert-weekday-saturday =
 
 ai-tasks-alert-create-button = Create task
 ai-tasks-alert-cancel-button = Cancel
-ai-tasks-alert-save-button = Save
+ai-tasks-alert-save-button = Save changes
 ai-tasks-alert-delete-button =
   .aria-label = Delete alert
 ai-tasks-alert-edit-button = Edit

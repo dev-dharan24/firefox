@@ -58,6 +58,10 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs",
   generateConversationStartersSidebar:
     "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs",
+  generateResumeActivityConversationStarters:
+    "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs",
+  MAX_NUM_MEMORIES_FOR_RESUME_ACTIVITY:
+    "moz-src:///browser/components/aiwindow/models/ConversationSuggestions.sys.mjs",
   MemoriesManager:
     "moz-src:///browser/components/aiwindow/models/memories/MemoriesManager.sys.mjs",
   getAllModelsData:
@@ -173,6 +177,7 @@ const HISTORY_MENU_EVENTS = [
 ];
 const MAX_SIDEBAR_STARTER_CACHE_KEYS = 20;
 const MAX_TOP_SITES = 8;
+const MAX_PILL_COUNT = 3;
 
 // 1-6 are MLPA spec codes; 7 is set locally for Fastly-blocked 406s.
 const ERROR_TELEMETRY_NAME_BY_CODE = {
@@ -250,6 +255,8 @@ export class AIWindow extends MozLitElement {
   #removeClientErrorListeners = null;
   #swapDocShellsChromeWindow = null;
   #hasMemories = false;
+  // Resume starters are only eligible on the first fullpage load.
+  #canLoadResumeStarters = true;
   #selectedModelChoiceId = null;
   #hasModelChoiceOverride = false;
 
@@ -1288,6 +1295,34 @@ export class AIWindow extends MozLitElement {
         }
       }
 
+      let resumeStartersPromise = null;
+      const shouldLoadResumeStarters =
+        this.mode === MODE.FULLPAGE && this.#canLoadResumeStarters;
+
+      if (shouldLoadResumeStarters) {
+        this.#canLoadResumeStarters = false;
+
+        // Ensure #hasMemories is current before checking it.
+        if (!this.memoriesConversationPref && !this.memoriesHistoryPref) {
+          await this.#refreshHasMemories();
+        }
+        const memoriesEnabled =
+          this.#memoriesToggled ?? this.#memoriesIconShown;
+
+        if (memoriesEnabled) {
+          resumeStartersPromise =
+            lazy.generateResumeActivityConversationStarters();
+
+          // Reveal all slots together once merged below - showing static
+          // starters early would risk a pill's text swapping later.
+          this.#renderStarterPrompts(
+            Array(MAX_PILL_COUNT).fill({ type: "skeleton" }),
+            true,
+            false
+          );
+        }
+      }
+
       starters = await this.ownerDocument.l10n
         .formatValues(newTabStarterIds.map(({ l10nId }) => ({ id: l10nId })))
         .then(texts =>
@@ -1323,6 +1358,14 @@ export class AIWindow extends MozLitElement {
         if (sidebarStarters?.length) {
           starters = sidebarStarters;
         }
+      } else if (resumeStartersPromise) {
+        const resumeStarters = this.#resumeActivitiesToStarterPrompts(
+          await resumeStartersPromise
+        ).slice(0, lazy.MAX_NUM_MEMORIES_FOR_RESUME_ACTIVITY);
+
+        if (selectedTab === this.#getCurrentTab()) {
+          starters = [...resumeStarters, ...starters].slice(0, MAX_PILL_COUNT);
+        }
       }
     } catch (e) {
       lazy.log.error("[Prompts] Failed to load initial starters:", e);
@@ -1335,6 +1378,26 @@ export class AIWindow extends MozLitElement {
     }
   }
 
+  #resumeActivitiesToStarterPrompts(resumeActivities) {
+    return resumeActivities.flatMap(({ memory, content }) => {
+      if (!content.headline.trim()) {
+        return [];
+      }
+
+      return [
+        {
+          text: content.headline,
+          type: "resume",
+          previewIcons: content.previewTabs.map(({ url }) => ({
+            iconSrc: `page-icon:${url}`,
+          })),
+          memory,
+          content,
+        },
+      ];
+    });
+  }
+
   /**
    * Renders conversation starter prompts in the UI.
    * Sets the starters data and shows the prompts element.
@@ -1343,9 +1406,13 @@ export class AIWindow extends MozLitElement {
    * @param {boolean} [resolved=true] - Whether starter loading has settled;
    *   false for the transient clear before an async load, which keeps Top
    *   Sites hidden until the prompts row is ready.
+   * @param {boolean} [recordTelemetry=true] - Whether to record a
+   *   quick_prompt_displayed event for this render; false for the
+   *   transient skeleton render before resume starters resolve, so the
+   *   event isn't recorded twice for the same load.
    * @private
    */
-  #renderStarterPrompts(starters, resolved = true) {
+  #renderStarterPrompts(starters, resolved = true, recordTelemetry = true) {
     if (!this.isConnected) {
       return;
     }
@@ -1360,7 +1427,7 @@ export class AIWindow extends MozLitElement {
       this.startersResolved = true;
     }
 
-    if (this.showStarters) {
+    if (this.showStarters && recordTelemetry) {
       this.onQuickPromptDisplayed(this.#starters.length);
     }
     this.requestUpdate();
@@ -1886,8 +1953,25 @@ export class AIWindow extends MozLitElement {
    * @private
    */
   #handlePromptSelected = event => {
+    if (event.detail.type === "resume") {
+      this.#handleResumePromptSelected(event.detail);
+      return;
+    }
+
     this.onQuickPromptClicked(event.detail.text, true);
   };
+
+  #handleResumePromptSelected(resumePrompt) {
+    const contextMentions = resumePrompt.content.previewTabs.map(
+      ({ url, title }) => ({
+        type: "tab",
+        url,
+        label: title,
+        iconSrc: `page-icon:${url}`,
+      })
+    );
+    this.onQuickPromptClicked(resumePrompt.text, true, contextMentions);
+  }
 
   /**
    * Records a quick_prompt_displayed Glean event.
@@ -1910,8 +1994,10 @@ export class AIWindow extends MozLitElement {
    *
    * @param {string} text - The prompt text to submit
    * @param {boolean} starter - Whether this is a conversation starter
+   * @param {ContextWebsite[]} [contextMentionsOverride] - Website context
+   * supplied by the prompt
    */
-  onQuickPromptClicked(text, starter) {
+  onQuickPromptClicked(text, starter, contextMentionsOverride) {
     Glean.smartWindow.quickPromptClicked.record({
       location: this.mode,
       chat_id: this.conversationId,
@@ -1925,7 +2011,7 @@ export class AIWindow extends MozLitElement {
     const submitType = starter ? "starter" : "follow-up";
     this.submitChatMessage({
       text,
-      contextWebsites,
+      contextMentions: contextMentionsOverride ?? contextWebsites,
       contextPageUrl,
       submitType,
     });
