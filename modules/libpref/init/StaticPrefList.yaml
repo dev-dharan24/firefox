@@ -11463,6 +11463,13 @@
   value: false
   mirror: always
 
+# Whether we respect <button> and <input> align-content on blocks.
+# See https://github.com/w3c/csswg-drafts/issues/14190
+- name: layout.forms.button-input-align-content-block.enabled
+  type: bool
+  value: true
+  mirror: always
+
 # If enabled, textareas won't include 'overflow:auto' scrollbars in their
 # block-axis size (usually height).
 - name: layout.forms.textarea-sizing-excludes-auto-scrollbar.enabled
@@ -13660,11 +13667,7 @@
   # acceleration for decoding.
 -   name: media.navigator.mediadatadecoder_h264_enabled
     type: RelaxedAtomicBool
-  #if defined(_ARM64_) && defined(XP_WIN)
-    value: false
-  #else
     value: true
-  #endif
     mirror: always
 
 #if defined(MOZ_WIDGET_GTK)
@@ -15683,9 +15686,11 @@
 # When true, block LNA requests from insecure contexts (http:// origins that
 # are not localhost or .local). Uses IsPotentiallyTrustworthyOrigin to
 # determine if the origin is trustworthy.
+# The spec requires this, but it is disabled by default until Chrome ships the
+# same restriction, to avoid breaking sites that only work in Firefox.
 - name: network.lna.block_insecure_contexts
   type: RelaxedAtomicBool
-  value: true
+  value: false
   mirror: always
 
 

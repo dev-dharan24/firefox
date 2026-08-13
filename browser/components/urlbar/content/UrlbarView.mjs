@@ -4642,6 +4642,10 @@ export class UrlbarView {
   clearTopSitesCache() {
     this.queryContextCache.clearTopSitesCache();
   }
+
+  clearL10nCache() {
+    this.#l10nCache.clear();
+  }
 }
 
 /**

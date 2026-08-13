@@ -575,6 +575,9 @@ void Element::SetCustomElementRegistry(
   if (aCustomElementRegistry->IsScoped()) {
     SetCustomElementRegistryState(CustomElementRegistryState::Scoped);
     CustomElementRegistry::SetScopedRegistry(*this, *aCustomElementRegistry);
+    // https://html.spec.whatwg.org/#scoped-document-set
+    // Append element's node document to the registry's scoped document set.
+    aCustomElementRegistry->AddToScopedDocumentSet(OwnerDoc());
   } else {
     SetCustomElementRegistryState(CustomElementRegistryState::Global);
   }

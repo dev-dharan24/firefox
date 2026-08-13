@@ -35,6 +35,8 @@
     }
   }
 
+  --tab-group-label-container-size: var(--tab-group-label-size);
+
   --tab-group-counter-size: 24px;
   --split-view-padding-block: 2px;
   --split-view-tab-padding-inline: 2px;
@@ -177,6 +179,14 @@
 
   &[orient="vertical"] {
     --tab-group-label-highlight-radius: 4px;
+
+    @media -moz-pref("browser.nova.enabled") {
+      /* The hover highlight fills a full tab-height row and the tab group
+       * label is inset within it. */
+      --tab-group-label-hover-inset: var(--dimension-2);
+      --tab-group-label-container-size: var(--tab-min-height);
+      --tab-group-label-size: calc(var(--tab-group-label-container-size) - 2 * var(--tab-group-label-hover-inset));
+    }
   }
 }
 
@@ -1967,6 +1977,14 @@ tab-group {
     tab-group[collapsed][hasactivetab] > & {
       padding-block-end: var(--space-small);
     }
+
+    @media -moz-pref("browser.nova.enabled") {
+      margin-block-start: calc(var(--tab-margin-block) + var(--tab-padding-block-start));
+
+      tab-group[collapsed]:not([hasactivetab]) > & {
+        margin-block-end: calc(var(--tab-margin-block) + var(--tab-padding-block-end));
+      }
+    }
   }
 
   #tabbrowser-tabs[orient="horizontal"] tab-group:not([collapsed]) > &::after,
@@ -2077,9 +2095,21 @@ tab-group {
         padding-block: 4px;
       }
     }
+  }
 
-    #tabbrowser-tabs[orient="vertical"][expanded] & {
-      margin-inline-end: var(--space-medium);
+  #tabbrowser-tabs[orient="vertical"][expanded] & {
+    margin-inline-end: var(--space-medium);
+  }
+
+  /* Echo the shape of .tab-group-label, including its sharper bottom start
+   * corner.
+   */
+  @media -moz-pref("browser.nova.enabled") {
+    #tabbrowser-tabs[orient="vertical"] & {
+      block-size: var(--tab-group-label-container-size);
+      padding-inline: var(--tab-group-label-hover-inset);
+      border-radius: calc(var(--tab-group-label-container-size) / 2);
+      border-end-start-radius: calc(var(--tab-group-label-size) / 8 + var(--tab-group-label-hover-inset));
     }
   }
 
@@ -2092,6 +2122,10 @@ tab-group {
      * transition.
      */
     margin-inline: calc(var(--tab-inner-inline-margin) + (var(--tab-collapsed-background-width) - var(--tab-group-label-size)) / 2);
+
+    @media -moz-pref("browser.nova.enabled") {
+      margin-inline: var(--tab-inner-inline-margin);
+    }
   }
 
   tab-group[collapsed]:not([movingtabgroup]) &:hover,
@@ -2100,7 +2134,12 @@ tab-group {
       background-color: var(--tab-background-color-hover);
       box-shadow: 0 0 0 var(--tab-group-label-highlight-radius) var(--tab-background-color-hover);
     }
+
     @media -moz-pref("browser.nova.enabled") {
+      #tabbrowser-tabs[orient="vertical"][expanded] & {
+        background-color: var(--tab-background-color-hover);
+      }
+
       .tab-group-label {
         background-color: var(--tab-group-background-color-hover);
       }
@@ -2201,7 +2240,6 @@ tab-group {
   #tabbrowser-tabs[expanded] & {
     align-self: start;
     max-width: -moz-available;
-    margin-inline-end: var(--space-medium);
   }
 }
 
@@ -2691,6 +2729,13 @@ tab-group {
 #tabbrowser-tabs[orient="vertical"] {
   --tab-min-width: unset;
   --tab-inline-padding: calc((var(--tab-collapsed-width) - var(--icon-size)) / 2);
+  /* Space between a tab and the tabs above and below it, outside of
+   * --tab-margin-block. Anything else that occupies a row in the tab strip
+   * (i.e. a tab group label) needs to reserve the same space in order to
+   * preserve spacing rhythm.
+   */
+  --tab-padding-block-start: 3px;
+  --tab-padding-block-end: 2px;
 
   min-height: 0;
   display: flex;
@@ -2721,7 +2766,7 @@ tab-group {
   .tabbrowser-tab {
     flex: none;
     padding-inline: 0;
-    padding-block: 3px 2px;
+    padding-block: var(--tab-padding-block-start) var(--tab-padding-block-end);
 
     /* prevent the shadow of the close button from being cutoff by the toolbar on the first tab */
     &:nth-child(1 of :not([hidden], [pinned])) {
